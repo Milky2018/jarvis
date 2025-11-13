@@ -1,6 +1,7 @@
 {
   "name": "Milky2018/jarvis",
   "version": "0.1.0",
+  "source": "src",
   "deps": {
     "moonbitlang/async": "0.12.0",
     "moonbitlang/x": "0.4.36",

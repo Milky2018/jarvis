@@ -6,7 +6,8 @@
     "moonbitlang/async/http",
     "moonbitlang/async/io",
     "moonbitlang/async/process",
-    "moonbitlang/x/sys"
+    "moonbitlang/x/sys",
+    "TheWaWaR/clap"
   ],
   "native-stub": ["tty.c"]
 }

@@ -1,11 +1,3 @@
-- [x] 把只有一个有意义分支的 match 语句换成 guard 语句，参考 https://docs.moonbitlang.cn/language/fundamentals.html#guard-statement
-- [x] 现在 jarvis.mbt 太长了，将它的内容拆分到多个文件，记住，完全不要使用 `pub`，因为这些文件都属于同一个 package，不需要 `pub`
-- [x] 只留这么几个模型：claude-sonnet-4-5-20250929，claude-haiku-4-5-20251001，claude-opus-4-1-20250805
-- [x] 工具调用时，显示正在调用工具的信息（需要等待 Claude API 支持工具调用）
-- [x] extract_keywords 这个函数在干什么？能用更优雅的方式替代吗（已使用 HashSet 优化）
-- [ ] 整体 review 一下代码，进行适当的重构和优化（可在需要时进行）
-- [x] option + delete 删除单词；command + delete 删除整句话
-- [x] 添加一个 install.sh 脚本，把二进制放到 .local/bin/mdcourse
-- [x] 使用 github 的 workflow 写 CI，参考 https://github.com/moonbitlang/maria/tree/main/.github
-- [x] 使用 CI 创建 MacOS 上的二进制并分发 release
-- [x] 修复 Claude API 工具错误（已移除 OpenAI 风格的 tools 参数）
+- [x] 把源码文件移到 `./src` 目录，包括 `moon.pkg.json` 文件。在 `moon.mod.json` 中添加 `"source": "src"`
+- [x] 把现在手动解析 -e 参数的逻辑改为使用 TheWaWaR/clap,用法可以参考 https://github.com/TheWaWaR/clap.mbt/blob/master/README.md
+- [x] 整体 review 一下代码，进行适当的重构和优化

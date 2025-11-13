@@ -344,13 +344,57 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
 
 ///|
 async fn main {
-  // Parse command line arguments
-  let args = @sys.get_cli_args()
+  // Parse command line arguments using clap
+  let parser = @clap.Parser::new(
+    prog="jarvis",
+    description="AI assistant powered by Claude",
+    args={
+      "execute": @clap.Arg::flag(
+        short='e',
+        help="Execute a single prompt and exit",
+      ),
+      "prompt": @clap.Arg::positional(
+        nargs=@clap.Any,
+        help="Prompt to execute (requires -e flag)",
+      ),
+    },
+  )
 
-  // Simple argument parsing: check for -e flag
-  let execute_mode = args.length() >= 2 && (args[1] == "-e" || args[1] == "--execute")
-  let prompt = if execute_mode && args.length() >= 3 {
-    Some(args[2])
+  let value = @clap.SimpleValue::new(parser.prog)
+  let args = @sys.get_cli_args()
+  // Remove program name from args
+  let cli_args = if args.length() > 1 {
+    let result : Array[String] = []
+    for i = 1; i < args.length(); i = i + 1 {
+      result.push(args[i])
+    }
+    result
+  } else {
+    []
+  }
+
+  // Parse arguments
+  match parser.parse(value, cli_args) {
+    Some(help_msg) => {
+      // Help message requested or parse error
+      println(help_msg)
+      return
+    }
+    None => ()
+  }
+
+  // Check if execute mode
+  let execute_mode = value.flags.get("execute").unwrap_or(false)
+  let prompt = if execute_mode && value.positional_args.length() > 0 {
+    // Join all positional args as the prompt
+    let mut p = ""
+    for i = 0; i < value.positional_args.length(); i = i + 1 {
+      if i > 0 {
+        p = p + " "
+      }
+      p = p + value.positional_args[i]
+    }
+    Some(p)
   } else {
     None
   }

@@ -1,13 +1,6 @@
 ///|
-/// Send chat request with tools support
-async fn send_chat_request_with_tools(
-  config : Config,
-  messages : Array[Message],
-  tools : Array[Tool],
-  model : String,
-) -> ChatResponse raise JarvisError {
-  // Parse URL to extract host and path (same as send_chat_request)
-  let url = config.base_url()
+/// Parse URL into host and path components
+fn parse_url(url : String) -> (String, String) raise JarvisError {
   let host_and_path : StringView = if url.has_prefix("https://") {
     url[8:] catch {
       IndexOutOfBounds(_) | InvalidIndex(_) =>
@@ -44,6 +37,20 @@ async fn send_chat_request_with_tools(
   } else {
     "/v1/messages"
   }
+  (host, path)
+}
+
+///|
+/// Send chat request with tools support
+async fn send_chat_request_with_tools(
+  config : Config,
+  messages : Array[Message],
+  tools : Array[Tool],
+  model : String,
+) -> ChatResponse raise JarvisError {
+  // Parse URL to extract host and path
+  let url = config.base_url()
+  let (host, path) = parse_url(url)
 
   // Build request JSON with tools
   let request = ChatRequest::with_tools(messages, model, tools)
@@ -108,63 +115,23 @@ async fn send_chat_request_with_tools(
 async fn send_streaming_chat_request(
   config : Config,
   messages : Array[Message],
-  tools : Array[Tool],
+  _tools : Array[Tool],
   model : String,
 ) -> ChatResponse raise JarvisError {
   // Parse URL
   let url = config.base_url()
-  let host_and_path : StringView = if url.has_prefix("https://") {
-    url[8:] catch {
-      IndexOutOfBounds(_) | InvalidIndex(_) =>
-        raise StringViewError(
-          "Invalid URL format when removing HTTPS prefix\nURL: \{url}",
-        )
-    }
-  } else if url.has_prefix("http://") {
-    url[7:] catch {
-      IndexOutOfBounds(_) | InvalidIndex(_) =>
-        raise StringViewError(
-          "Invalid URL format when removing HTTP prefix\nURL: \{url}",
-        )
-    }
-  } else {
-    url[:]
-  }
-  let parts_view = host_and_path.split("/")
-  let parts_array : Array[String] = []
-  for part in parts_view {
-    parts_array.push(part.to_string())
-  }
-  let host = parts_array[0]
-  let path = if parts_array.length() > 1 {
-    let mut p = ""
-    for i = 1; i < parts_array.length(); i = i + 1 {
-      p = p + "/" + parts_array[i]
-    }
-    if p.is_empty() {
-      "/v1/messages"
-    } else {
-      p
-    }
-  } else {
-    "/v1/messages"
-  }
+  let (host, path) = parse_url(url)
 
   // Build request JSON with streaming enabled
   // Extract system messages
   let mut system_content = ""
   let non_system_messages : Array[Message] = []
   for msg in messages {
-    if msg.role == "system" {
-      match msg.content {
-        Some(content) => {
-          if system_content.is_empty() == false {
-            system_content = system_content + "\n\n"
-          }
-          system_content = system_content + content
-        }
-        None => ()
+    if msg.role == "system" && msg.content is Some(content) {
+      if system_content.is_empty() == false {
+        system_content = system_content + "\n\n"
       }
+      system_content = system_content + content
     } else {
       non_system_messages.push(msg)
     }
@@ -246,30 +213,31 @@ async fn send_streaming_chat_request(
       guard choices[0] is Object(choice_map) else { continue }
 
       // Extract delta content
-      match choice_map.get("delta") {
-        Some(Object(delta_map)) =>
-          match delta_map.get("content") {
-            Some(String(content)) => {
-              full_content = full_content + content
-              // Output immediately after parsing (ignore write errors)
-              let _ = @stdio.stdout.write(content) catch { _ => () }
-            }
-            _ => ()
-          }
-        _ => ()
+      if choice_map.get("delta") is Some(Object(delta_map)) {
+        if delta_map.get("content") is Some(String(content)) {
+          full_content = full_content + content
+          // Output immediately after parsing (ignore write errors)
+          let _ = @stdio.stdout.write(content) catch { _ => () }
+
+        }
       }
 
       // Extract finish reason
-      match choice_map.get("finish_reason") {
-        Some(String(reason)) => finish_reason = reason
-        _ => ()
+      if choice_map.get("finish_reason") is Some(String(reason)) {
+        finish_reason = reason
       }
     }
   }
 
   // Construct ChatResponse from accumulated data (Claude format)
   let content_blocks : Array[ContentBlock] = [
-    { type_: "text", text: Some(full_content), id: None, name: None, input: None },
+    {
+      type_: "text",
+      text: Some(full_content),
+      id: None,
+      name: None,
+      input: None,
+    },
   ]
   {
     id: "",

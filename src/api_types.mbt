@@ -1,3 +1,4 @@
+///|
 /// API Request/Response
 /// Request body for Claude API
 struct ChatRequest {
@@ -43,73 +44,23 @@ fn ChatRequest::with_tools(
     model,
     max_tokens: 4096,
     stream: false,
-    tools: Some(tools),  // Claude API supports tools with input_schema format
+    tools: Some(tools), // Claude API supports tools with input_schema format
     system: system_param,
   }
 }
 
 ///|
-/// Response types
-struct ChatResponseMessage {
-  role : String
-  content : String?
-  tool_calls : Array[ToolCall]?
-}
-
-///|
-impl @json.FromJson for ChatResponseMessage with from_json(json, path) raise @json.JsonDecodeError {
-  match json {
-    Object(map) => {
-      let role = match map.get("role") {
-        Some(String(s)) => s
-        _ =>
-          raise @json.JsonDecodeError((path.add_key("role"), "expected string"))
-      }
-      let content = match map.get("content") {
-        Some(Null) | None => None
-        Some(String(s)) => Some(s)
-        _ =>
-          raise @json.JsonDecodeError(
-            (path.add_key("content"), "expected string or null"),
-          )
-      }
-      let tool_calls = match map.get("tool_calls") {
-        Some(Array(arr)) => {
-          let calls : Array[ToolCall] = []
-          for i = 0; i < arr.length(); i = i + 1 {
-            calls.push(
-              @json.from_json(arr[i], path=path.add_index(i)) catch {
-                e => raise e
-              },
-            )
-          }
-          Some(calls)
-        }
-        Some(Null) | None => None
-        _ =>
-          raise @json.JsonDecodeError(
-            (path.add_key("tool_calls"), "expected array or null"),
-          )
-      }
-      ignore(role)
-      { role, content, tool_calls }
-    }
-    _ => raise @json.JsonDecodeError((path, "expected object"))
-  }
-}
-
-///|
-struct ChatResponseChoice {
-  index : Int
-  message : ChatResponseMessage
-  finish_reason : String
-} derive(FromJson)
-
-///|
 struct ResponseUsage {
   input_tokens : Int
   output_tokens : Int
-} derive(FromJson(fields(input_tokens(rename="input_tokens"), output_tokens(rename="output_tokens"))))
+} derive (
+  FromJson(
+    fields(
+      input_tokens(rename="input_tokens"),
+      output_tokens(rename="output_tokens"),
+    ),
+  ),
+)
 
 ///|
 struct ChatResponse {
@@ -161,7 +112,6 @@ impl @json.FromJson for ContentBlock with from_json(json, path) raise @json.Json
       let input = match map.get("input") {
         Some(obj) => Some(obj)
         None => None
-        _ => None
       }
       { type_, text, id, name, input }
     }
@@ -194,7 +144,9 @@ fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
 
 ///|
 /// Extract tool uses from Claude response
-fn ChatResponse::get_tool_uses(self : ChatResponse) -> Array[(String, String, Json)] {
+fn ChatResponse::get_tool_uses(
+  self : ChatResponse,
+) -> Array[(String, String, Json)] {
   let tool_uses : Array[(String, String, Json)] = []
   for block in self.content {
     if block.type_ == "tool_use" {
