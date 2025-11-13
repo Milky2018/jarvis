@@ -582,8 +582,14 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
       return Some("")
     } else if byte == ctrl_d_byte {
       if editor.buffer.is_empty() {
+        // Empty buffer: exit
         println("")
         return None
+      } else {
+        // Non-empty buffer: delete character under cursor (forward delete)
+        if editor.delete_forward() {
+          redraw_line(editor, prompt)
+        }
       }
     } else if byte == escape_byte {
       match read_escape_sequence() {
