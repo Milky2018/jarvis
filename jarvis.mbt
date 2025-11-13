@@ -5,6 +5,20 @@ struct Config {
   auth_token : String
 } derive(Show)
 
+///| ANSI Color codes
+let color_cyan = "\u001b[36m"
+let color_blue = "\u001b[34m"
+let color_green = "\u001b[32m"
+let color_yellow = "\u001b[33m"
+let color_red = "\u001b[31m"
+let color_reset = "\u001b[0m"
+let color_bold = "\u001b[1m"
+
+///| Print colored Jarvis prefix
+async fn print_jarvis_prefix() -> Unit {
+  @stdio.stdout.write(color_bold + color_cyan + "Jarvis" + color_reset + ": ")
+}
+
 fn Config::new(base_url : String, auth_token : String) -> Config {
   { base_url, auth_token }
 }
@@ -247,9 +261,8 @@ async fn read_line() -> String {
 async fn chat_loop(config : Config) -> Unit {
   let chat_history = ChatHistory::new()
   let command_history = CommandHistory::new(100)
-  println(
-    "Jarvis: Hello! I'm Jarvis, your AI assistant. How can I help you today?",
-  )
+  print_jarvis_prefix()
+  println("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
   println("(Type 'exit' or 'quit' to end the conversation)")
   println("")
   while true {
@@ -259,7 +272,8 @@ async fn chat_loop(config : Config) -> Unit {
           continue
         }
         if user_input == "exit" || user_input == "quit" {
-          println("Jarvis: Goodbye!")
+          print_jarvis_prefix()
+          println("Goodbye!")
           break
         }
 
@@ -270,7 +284,7 @@ async fn chat_loop(config : Config) -> Unit {
         // Send request (no prompt shown until response is ready)
         try {
           let response = send_chat_request(config, chat_history.messages)
-          print("Jarvis: ")
+          print_jarvis_prefix()
           println(response)
 
           // Add assistant message to history
@@ -278,34 +292,36 @@ async fn chat_loop(config : Config) -> Unit {
           chat_history.add(assistant_message)
         } catch {
           EnvVarNotSet(msg) => {
-            print("Jarvis: ")
+            print_jarvis_prefix()
             println("Error: Environment variable not set: \{msg}")
           }
           HttpError(msg) => {
-            print("Jarvis: ")
+            print_jarvis_prefix()
             println("Error: HTTP error: \{msg}")
           }
           InvalidResponse(msg) => {
-            print("Jarvis: ")
+            print_jarvis_prefix()
             println("Error: Invalid response: \{msg}")
           }
           JsonParseError(msg) => {
-            print("Jarvis: ")
+            print_jarvis_prefix()
             println("Error: JSON parse error: \{msg}")
           }
           StringViewError(msg) => {
-            print("Jarvis: ")
+            print_jarvis_prefix()
             println("Error: String view error: \{msg}")
           }
           _ => {
-            print("Jarvis: ")
+            print_jarvis_prefix()
             println("Error: Unknown error occurred")
           }
         }
         println("")
       }
       None => {
-        println("\nJarvis: Goodbye!")
+        println("")
+        print_jarvis_prefix()
+        println("Goodbye!")
         break
       }
     }
