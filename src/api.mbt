@@ -194,54 +194,95 @@ async fn send_streaming_chat_request(
   }
 
   // Read streaming response (SSE format)
-  // Note: read_all() waits for complete response, but we output chunks as we parse them
+  // Use true streaming: read chunks as they arrive
   let mut full_content = ""
   let mut finish_reason = ""
-  let body_text = client.read_all().text() catch {
+
+  // Buffer for reading chunks
+  let buffer = FixedArray::make(4096, b'\x00')
+  let mut accumulated_data = ""
+  let mut keep_reading = true
+
+  while keep_reading {
+    let bytes_read = client.read(buffer) catch {
       e =>
         raise HttpError(
           "Failed to read streaming response from \{host}\{path}: \{e}\n" +
           "Request body: \{json_body}",
         )
     }
+    if bytes_read == 0 {
+      break // End of stream
+    }
 
-  // Parse SSE format and output chunks
-  let lines : Array[String] = []
-  for line_view in body_text[:].split("\n") {
-    lines.push(line_view.to_string())
-  }
-  for line in lines {
-    if line.has_prefix("data: ") {
-      let json_str_view = line[6:] catch { _ => continue }
-      let json_str = json_str_view.to_string()
-      let trimmed = json_str[:].trim(chars=" \t\r\n").to_string()
-      if trimmed == "[DONE]" {
-        break
-      }
-      let chunk_json = @json.parse(json_str) catch { _ => continue }
+    // Convert bytes to string using Bytes::from_array
+    let buffer_view = buffer[:bytes_read]
+    let chunk_bytes = Bytes::from_array(buffer_view)
+    let chunk = chunk_bytes.to_string()
+    accumulated_data = accumulated_data + chunk
 
-      // Use guard statements to flatten nested match expressions
-      guard chunk_json is Object(map) else { continue }
-      guard map.get("choices") is Some(Array(choices)) else { continue }
-      guard choices.length() > 0 else { continue }
-      guard choices[0] is Object(choice_map) else { continue }
-
-      // Extract delta content
-      if choice_map.get("delta") is Some(Object(delta_map)) {
-        if delta_map.get("content") is Some(String(content)) {
-          full_content = full_content + content
-          // Output immediately after parsing (ignore write errors)
-          let _ = @stdio.stdout.write(content) catch { _ => () }
-
+    // Process complete lines (SSE format: "data: {json}\n\n")
+    let lines : Array[String] = []
+    let mut last_newline_pos = 0
+    for i = 0; i < accumulated_data.length(); i = i + 1 {
+      match accumulated_data.get_char(i) {
+        Some('\n') => {
+          let line_view = accumulated_data[last_newline_pos:i] catch { _ => continue }
+          let line = line_view.to_string().trim(chars=" \t\r\n").to_string()
+          if line.length() > 0 {
+            lines.push(line)
+          }
+          last_newline_pos = i + 1
         }
-      }
-
-      // Extract finish reason
-      if choice_map.get("finish_reason") is Some(String(reason)) {
-        finish_reason = reason
+        _ => ()
       }
     }
+
+    // Keep remaining incomplete line in buffer
+    if last_newline_pos > 0 {
+      let remaining_view = accumulated_data[last_newline_pos:] catch { _ => "" }
+      accumulated_data = remaining_view.to_string()
+    }
+
+    // Process each complete line
+    for line in lines {
+      if line.has_prefix("data: ") {
+        let json_str_view = line[6:] catch { _ => continue }
+        let json_str = json_str_view.to_string()
+        let trimmed = json_str[:].trim(chars=" \t\r\n").to_string()
+        if trimmed == "[DONE]" {
+          keep_reading = false
+          break
+        }
+        let chunk_json = @json.parse(json_str) catch { _ => continue }
+
+        // Use guard statements to flatten nested match expressions
+        guard chunk_json is Object(map) else { continue }
+        guard map.get("choices") is Some(Array(choices)) else { continue }
+        guard choices.length() > 0 else { continue }
+        guard choices[0] is Object(choice_map) else { continue }
+
+        // Extract delta content
+        if choice_map.get("delta") is Some(Object(delta_map)) {
+          if delta_map.get("content") is Some(String(content)) {
+            full_content = full_content + content
+            // Output immediately after parsing (ignore write errors)
+            let _ = @stdio.stdout.write(content) catch { _ => () }
+          }
+        }
+
+        // Extract finish reason
+        if choice_map.get("finish_reason") is Some(String(reason)) {
+          finish_reason = reason
+          keep_reading = false
+        }
+      }
+    }
+
+    // Check for interrupt during streaming
+    check_and_raise()
   }
+
 
   // Construct ChatResponse from accumulated data (Claude format)
   let content_blocks : Array[ContentBlock] = [
