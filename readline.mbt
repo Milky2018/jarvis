@@ -244,19 +244,6 @@ fn char_display_width(ch : Char) -> Int {
   }
 }
 
-///| Calculate display width of a string
-fn string_display_width(s : String) -> Int {
-  let mut width = 0
-  let len = s.length()
-  for i = 0; i < len; i = i + 1 {
-    match s.get_char(i) {
-      Some(ch) => width = width + char_display_width(ch)
-      None => ()
-    }
-  }
-  width
-}
-
 ///| Check if a character is a word separator
 fn is_word_separator(ch : Char) -> Bool {
   ch == ' ' || ch == '\t' || ch == '\n' || ch == '/' || ch == '\\' ||

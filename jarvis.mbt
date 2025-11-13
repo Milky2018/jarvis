@@ -7,10 +7,6 @@ struct Config {
 
 ///| ANSI Color codes
 let color_cyan = "\u001b[36m"
-let color_blue = "\u001b[34m"
-let color_green = "\u001b[32m"
-let color_yellow = "\u001b[33m"
-let color_red = "\u001b[31m"
 let color_reset = "\u001b[0m"
 let color_bold = "\u001b[1m"
 
@@ -112,10 +108,6 @@ struct ChatRequest {
   tools : Array[Tool]?
 } derive(ToJson)
 
-fn ChatRequest::new(messages : Array[Message], model : String) -> ChatRequest {
-  { messages, model, stream: false, tools: None }
-}
-
 fn ChatRequest::with_tools(
   messages : Array[Message],
   model : String,
@@ -126,7 +118,7 @@ fn ChatRequest::with_tools(
 
 ///| Response types
 struct ChatResponseMessage {
-  role : String
+  _role : String
   content : String?
   tool_calls : Array[ToolCall]?
 }
@@ -134,7 +126,7 @@ struct ChatResponseMessage {
 impl @json.FromJson for ChatResponseMessage with from_json(json, path) raise @json.JsonDecodeError {
   match json {
     Object(map) => {
-      let role = match map.get("role") {
+      let _role = match map.get("role") {
         Some(String(s)) => s
         _ => raise @json.JsonDecodeError((path.add_key("role"), "expected string"))
       }
@@ -157,46 +149,30 @@ impl @json.FromJson for ChatResponseMessage with from_json(json, path) raise @js
         _ => raise @json.JsonDecodeError((path.add_key("tool_calls"), "expected array or null"))
       }
 
-      { role, content, tool_calls }
+      { _role, content, tool_calls }
     }
     _ => raise @json.JsonDecodeError((path, "expected object"))
   }
 }
 
-fn ChatResponseMessage::has_tool_calls(self : ChatResponseMessage) -> Bool {
-  match self.tool_calls {
-    Some(calls) => calls.length() > 0
-    None => false
-  }
-}
-
 struct ChatResponseChoice {
-  index : Int
+  _index : Int
   message : ChatResponseMessage
-  finish_reason : String
-} derive(FromJson)
+  _finish_reason : String
+} derive(FromJson(fields(_index(rename="index"), _finish_reason(rename="finish_reason"))))
 
 struct ChatResponse {
-  id : String
-  object : String
-  created : Int
-  model : String
+  _id : String
+  _object : String
+  _created : Int
+  _model : String
   choices : Array[ChatResponseChoice]
-} derive(FromJson)
-
-fn ChatResponse::get_content(self : ChatResponse) -> String? {
-  if self.choices.length() > 0 {
-    self.choices[0].message.content
-  } else {
-    None
-  }
-}
+} derive(FromJson(fields(_id(rename="id"), _object(rename="object"), _created(rename="created"), _model(rename="model"))))
 ///|
 /// Main entry point for Jarvis
 suberror JarvisError {
   EnvVarNotSet(String)
   HttpError(String)
-  InvalidResponse(String)
   JsonParseError(String)
   StringViewError(String)
 }
@@ -213,121 +189,6 @@ async fn load_config() -> Config raise JarvisError {
     None => raise EnvVarNotSet("JARVIS_AUTH_TOKEN")
   }
   Config::new(base_url, auth_token)
-}
-
-///|
-async fn send_chat_request(
-  config : Config,
-  messages : Array[Message],
-) -> String raise JarvisError {
-  // Parse URL to extract host and path
-  let url = config.base_url()
-
-  // Remove protocol prefix
-  let host_and_path : StringView = if url.has_prefix("https://") {
-    url[8:] catch {
-      IndexOutOfBounds(_) | InvalidIndex(_) =>
-        raise StringViewError(
-          "Invalid URL format when removing HTTPS prefix\nURL: \{url}",
-        )
-    }
-  } else if url.has_prefix("http://") {
-    url[7:] catch {
-      IndexOutOfBounds(_) | InvalidIndex(_) =>
-        raise StringViewError(
-          "Invalid URL format when removing HTTP prefix\nURL: \{url}",
-        )
-    }
-  } else {
-    url[:]
-  }
-
-  // Split host and path - convert to Array[String]
-  let parts_view = host_and_path.split("/")
-  let parts_array : Array[String] = []
-  for part in parts_view {
-    parts_array.push(part.to_string())
-  }
-  let host = parts_array[0]
-  let path = if parts_array.length() > 1 {
-    let mut p = ""
-    for i = 1; i < parts_array.length(); i = i + 1 {
-      p = p + "/" + parts_array[i]
-    }
-    if p.is_empty() {
-      "/v1/chat/completions"
-    } else {
-      p
-    }
-  } else {
-    "/v1/chat/completions"
-  }
-
-  // Build request JSON
-  let request = ChatRequest::new(messages, "gpt-3.5-turbo")
-  let json_body = request.to_json().stringify()
-
-  // Create HTTP client
-  let client = @http.Client::connect(host, headers={
-    "Authorization": "Bearer \{config.auth_token()}",
-  }) catch {
-    e =>
-      raise HttpError(
-        "Failed to connect to host '\{host}': \{e}\nFull URL: \{url}",
-      )
-  }
-  defer client.close()
-
-  // Send POST request
-  let response = client.post(path, json_body, extra_headers={
-    "Content-Type": "application/json",
-  }) catch {
-    e =>
-      raise HttpError(
-        "Failed to send POST request to '\{host}\{path}': \{e}\nRequest body: \{json_body}",
-      )
-  }
-  if response.code != 200 {
-    let error_body = try {
-      client.read_all().text()
-    } catch {
-      _ => "[Failed to read error body]"
-    }
-    raise HttpError(
-      "HTTP request failed with status: \{response.code}\nResponse body: \{error_body}",
-    )
-  }
-
-  // Read response body
-  let body = client.read_all() catch {
-    e => raise HttpError("Failed to read response: \{e}")
-  }
-
-  // Parse JSON response
-  let json_obj = body.json() catch {
-    e => {
-      let text = try {
-        body.text()
-      } catch {
-        _ => "[Failed to read body text]"
-      }
-      raise JsonParseError("Failed to parse JSON: \{e}\nResponse body: \{text}")
-    }
-  }
-  let chat_response : ChatResponse = @json.from_json(json_obj) catch {
-    @json.JsonDecodeError(e) => {
-      let json_str = json_obj.stringify()
-      raise JsonParseError(
-        "Failed to decode response: \{e}\nJSON object: \{json_str}",
-      )
-    }
-  }
-
-  // Extract content
-  match chat_response.get_content() {
-    Some(content) => content
-    None => raise InvalidResponse("No content in response")
-  }
 }
 
 ///| Send chat request with tools support
@@ -512,29 +373,6 @@ fn get_available_tools() -> Array[Tool] {
 }
 
 ///|
-async fn print(text : String) -> Unit {
-  @stdio.stdout.write(text)
-}
-
-///|
-async fn read_line() -> String {
-  let mut result = ""
-  let buf = FixedArray::make(1, b'\x00')
-  while true {
-    let n = @stdio.stdin.read(buf)
-    if n == 0 {
-      break // EOF
-    }
-    let byte = buf[0]
-    if byte == b'\n' {
-      break
-    }
-    result = result + Int::unsafe_to_char(byte.to_int()).to_string()
-  }
-  result
-}
-
-///|
 async fn chat_loop(config : Config) -> Unit {
   let chat_history = ChatHistory::new()
   let command_history = CommandHistory::new(100)
@@ -637,10 +475,6 @@ async fn chat_loop(config : Config) -> Unit {
             print_jarvis_prefix()
             println("Error: HTTP error: \{msg}")
           }
-          InvalidResponse(msg) => {
-            print_jarvis_prefix()
-            println("Error: Invalid response: \{msg}")
-          }
           JsonParseError(msg) => {
             print_jarvis_prefix()
             println("Error: JSON parse error: \{msg}")
@@ -675,8 +509,6 @@ async fn main {
     EnvVarNotSet(msg) =>
       @stdio.stderr.write("Error: Environment variable not set: \{msg}\n")
     HttpError(msg) => @stdio.stderr.write("Error: HTTP error: \{msg}\n")
-    InvalidResponse(msg) =>
-      @stdio.stderr.write("Error: Invalid response: \{msg}\n")
     JsonParseError(msg) =>
       @stdio.stderr.write("Error: JSON parse error: \{msg}\n")
     StringViewError(msg) =>
