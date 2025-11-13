@@ -98,7 +98,7 @@ async fn handle_command(
         return true
       }
 
-      // Generate timestamp-based filename for archive
+      // Generate timestamp-based filename
       let (exit_code, output) = @process.collect_output_merged("sh", [
         "-c",
         "date +%Y%m%d_%H%M%S",
@@ -109,16 +109,13 @@ async fn handle_command(
         "unknown"
       }
 
-      // Save archived JSON with timestamp and title
-      let json_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".json"
-      chat_history.save(json_filename)
-
       // Save markdown summary using @fs API
+      // Note: conv_XXX.json already serves as the JSON archive, no need to duplicate
       let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
       try {
         @fs.write_file(md_filename, summary, create=0o644)
         print_jarvis_prefix()
-        println_async("Conversation archived as: \{timestamp}_\{title}")
+        println_async("Summary saved as: \{timestamp}_\{title}.md")
       } catch {
         e => {
           print_jarvis_prefix()
@@ -126,7 +123,17 @@ async fn handle_command(
         }
       }
 
+      // Get current file number before creating new one
+      let old_num_str = if chat_history.current_file_number < 10 {
+        "00\{chat_history.current_file_number}"
+      } else if chat_history.current_file_number < 100 {
+        "0\{chat_history.current_file_number}"
+      } else {
+        chat_history.current_file_number.to_string()
+      }
+
       // Create a new conversation file and switch to it (like auto-summarize)
+      // The old conv_XXX.json is automatically archived in place
       chat_history.create_new_file_after_summary()
       let num_str = if chat_history.current_file_number < 10 {
         "00\{chat_history.current_file_number}"
@@ -137,7 +144,8 @@ async fn handle_command(
       }
       print_jarvis_prefix()
       println_async("Created new conversation file: conv_\{num_str}.json")
-      println_async("(Continuing conversation in new file)")
+      print_jarvis_prefix()
+      println_async("(Previous conversation archived in conv_\{old_num_str}.json)")
 
       true
     }

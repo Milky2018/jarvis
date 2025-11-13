@@ -226,14 +226,16 @@ struct ContentBlock {
 
 **Summarize 功能**:
 - `:summarize` - 手动总结，生成详细 Markdown 文档
-  - 归档当前对话到 `~/.jarvis/<timestamp>_<title>.json` 和 `.md`
+  - 保存 Markdown 总结到 `~/.jarvis/<timestamp>_<title>.md`
+  - **创建新的 `conv_XXX.json` 文件并切换**
+  - 旧的 `conv_XXX.json` 自动成为归档（无需复制）
   - 包含: 对话主题、关键要点、重要决定、需要记住的信息
-  - **创建新的 `conv_XXX.json` 文件并切换**（与自动 summarize 一致）
   - 后续对话在新文件中继续
 - 自动总结 - 当 token 超过 80% 上下文限制时触发
   - 保留第 1 条消息 + 最近 8 条消息
   - 中间消息压缩为简短摘要
   - 自动创建新的 `conv_XXX.json` 文件并切换
+  - 旧的 `conv_XXX.json` 自动成为归档
 
 **支持的模型**:
 - `claude-sonnet-4-5-20250929` (默认)
