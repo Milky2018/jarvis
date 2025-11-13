@@ -201,6 +201,126 @@ fn ChatHistory::set_model(self : ChatHistory, model : String) -> Unit {
 }
 
 ///|
+/// Save conversation history to file
+async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
+  let json_obj : Json = {
+    "messages": self.messages.to_json(),
+    "model": self.current_model,
+  }
+  let json_str = json_obj.stringify()
+
+  // Write to file using shell command
+  let (exit_code, _) = @process.collect_output_merged("sh", [
+    "-c",
+    "echo '\{json_str}' > '\{filename}'",
+  ])
+  if exit_code != 0 {
+    print_jarvis_prefix()
+    println("Warning: Failed to save conversation")
+  }
+}
+
+///|
+/// Load conversation history from file
+async fn ChatHistory::load(filename : String) -> ChatHistory? {
+  // Check if file exists and read it
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c",
+    "cat '\{filename}' 2>/dev/null",
+  ])
+
+  if exit_code != 0 {
+    return None
+  }
+
+  let content = output.text()
+  let json_obj = try {
+    @json.parse(content)
+  } catch {
+    _ => return None
+  }
+
+  match json_obj {
+    Object(map) => {
+      let messages : Array[Message] = match map.get("messages") {
+        Some(arr) =>
+          try {
+            @json.from_json(arr)
+          } catch {
+            _ => return None
+          }
+        _ => return None
+      }
+      let model = match map.get("model") {
+        Some(String(s)) => s
+        _ => "claude-sonnet-4-5-20250929"
+      }
+      Some({
+        messages,
+        max_context_tokens: 4000,
+        current_model: model,
+        usage_stats: UsageStats::new(),
+      })
+    }
+    _ => None
+  }
+}
+
+///|
+/// Get .jarvis directory path
+fn get_jarvis_dir() -> String {
+  let home = @sys.get_env_vars().get("HOME").unwrap_or(".")
+  home + "/.jarvis"
+}
+
+///|
+/// Ensure .jarvis directory exists
+async fn ensure_jarvis_dir() -> Unit {
+  let dir = get_jarvis_dir()
+  let (_exit_code, _output) = @process.collect_output_merged("sh", [
+    "-c",
+    "mkdir -p '\{dir}'",
+  ])
+}
+
+///|
+/// Get conversation file path
+fn get_conversation_path(name : String) -> String {
+  get_jarvis_dir() + "/\{name}.json"
+}
+
+///|
+/// List all saved conversations
+async fn list_conversations() -> Array[String] {
+  let dir = get_jarvis_dir()
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c",
+    "cd '\{dir}' 2>/dev/null && ls -1 *.json 2>/dev/null | sed 's/\\.json$//' || true",
+  ])
+
+  if exit_code != 0 {
+    return []
+  }
+
+  let text = output.text()
+  let text_view = text[:].trim(chars=" \n\t\r")
+  let text_str = text_view.to_string()
+  if text_str.is_empty() {
+    return []
+  }
+
+  let lines : Array[String] = []
+  for line in text_view.split("\n") {
+    let trimmed_view = line.trim(chars=" \t\r")
+    let trimmed = trimmed_view.to_string()
+    if trimmed.is_empty() == false {
+      lines.push(trimmed)
+    }
+  }
+  lines
+}
+
+///|
 /// Estimate token count for a message (rough approximation: 1 token ≈ 4 chars)
 fn estimate_tokens(message : Message) -> Int {
   let mut total = 0
@@ -862,12 +982,70 @@ fn is_exit_command(input : String) -> Bool {
 
 ///|
 async fn chat_loop(config : Config) -> Unit {
-  let chat_history = ChatHistory::new()
+  // Ensure .jarvis directory exists
+  ensure_jarvis_dir()
+
+  // Check for existing conversations
+  let conversations = list_conversations()
+  let chat_history = if conversations.length() > 0 {
+    print_jarvis_prefix()
+    println("Found saved conversations:")
+    for i = 0; i < conversations.length() && i < 5; i = i + 1 {
+      println("  \{i + 1}. \{conversations[i]}")
+    }
+    println("")
+    print_jarvis_prefix()
+    println("Load a conversation? (enter number, 'n' for new, or press Enter for new)")
+    match readline_simple("Choice: ", CommandHistory::new(10)) {
+      Some(choice) => {
+        let choice_trimmed = choice[:].trim(chars=" \t\r\n").to_string()
+        if choice_trimmed.is_empty() || choice_trimmed == "n" || choice_trimmed ==
+          "N" {
+          ChatHistory::new()
+        } else {
+          // Try to parse as number (simple parsing)
+          let idx = match choice_trimmed {
+            "1" => 1
+            "2" => 2
+            "3" => 3
+            "4" => 4
+            "5" => 5
+            _ => 0
+          }
+          if idx > 0 && idx <= conversations.length() {
+            let conv_name = conversations[idx - 1]
+            let path = get_conversation_path(conv_name)
+            match ChatHistory::load(path) {
+              Some(loaded) => {
+                print_jarvis_prefix()
+                println("Loaded conversation: \{conv_name}")
+                loaded
+              }
+              None => {
+                print_jarvis_prefix()
+                println("Failed to load conversation, starting new one")
+                ChatHistory::new()
+              }
+            }
+          } else {
+            ChatHistory::new()
+          }
+        }
+      }
+      None => ChatHistory::new()
+    }
+  } else {
+    ChatHistory::new()
+  }
+
   let command_history = CommandHistory::new(100)
+  println("")
   print_jarvis_prefix()
   println("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
   println("(Type 'exit' or 'quit' to end the conversation)")
   println("")
+
+  let mut should_save = false
   while true {
     print_separator()
     match readline_simple("> ", command_history) {
@@ -879,6 +1057,7 @@ async fn chat_loop(config : Config) -> Unit {
 
         // Check for exit commands first
         if is_exit_command(user_input) {
+          should_save = true
           print_jarvis_prefix()
           println("Goodbye!")
           break
@@ -891,16 +1070,36 @@ async fn chat_loop(config : Config) -> Unit {
         }
 
         // Handle normal user input
+        should_save = true
         handle_user_input(config, chat_history, user_input)
         println("")
       }
       None => {
+        should_save = true
         println("")
         print_jarvis_prefix()
         println("Goodbye!")
         break
       }
     }
+  }
+
+  // Save conversation on exit if there were messages
+  if should_save && chat_history.messages.length() > 0 {
+    // Generate timestamp-based filename
+    let (exit_code, output) = @process.collect_output_merged("sh", [
+      "-c",
+      "date +%Y%m%d_%H%M%S",
+    ])
+    let timestamp = if exit_code == 0 {
+      output.text()[:].trim(chars=" \n\t\r").to_string()
+    } else {
+      "conversation"
+    }
+    let filename = get_conversation_path(timestamp)
+    chat_history.save(filename)
+    print_jarvis_prefix()
+    println("Conversation saved to: \{timestamp}")
   }
 }
 
