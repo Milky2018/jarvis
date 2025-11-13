@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Inspect MoonBit version
+        run: |
+          moon version --all
+
+      - name: Build project
+        run: |
+          moon install
+          moon build
+
+      - name: Check for warnings
+        run: |
+          moon check --deny-warn
+
+      - name: Upload binary artifact
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: jarvis-macos
+          path: target/native/release/build/jarvis
+          if-no-files-found: error

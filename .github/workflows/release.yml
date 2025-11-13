@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> $GITHUB_PATH
+
+      - name: Inspect MoonBit version
+        run: |
+          moon version --all
+
+      - name: Build project
+        run: |
+          moon install
+          moon build
+
+      - name: Prepare release binary
+        run: |
+          cp target/native/release/build/jarvis jarvis-macos
+          chmod +x jarvis-macos
+          tar -czf jarvis-macos.tar.gz jarvis-macos
+          shasum -a 256 jarvis-macos.tar.gz > jarvis-macos.tar.gz.sha256
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            jarvis-macos.tar.gz
+            jarvis-macos.tar.gz.sha256
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
