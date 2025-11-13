@@ -423,7 +423,49 @@ impl Plugin for WeatherPlugin {
 - Raycast: Productivity tool for macOS
 - Alfred: Application launcher for macOS
 
-### C. 术语表
+### C. 参考实现
+
+在开发 Jarvis 的过程中，我们参考了以下开源项目的实现：
+
+#### Maria 项目
+- **项目地址**: https://github.com/moonbitlang/maria
+- **参考版本**: f5d4629e74323aff79108ecfd8c3531f1562f3b9
+- **参考内容**:
+
+  1. **TTY 模块** (`internal/tty/`)
+     - 文件: `tty.mbt`, `tty.c`
+     - 功能: 终端控制、raw mode 设置
+     - 应用: 实现了 `tty.mbt` 和 `tty.c`，支持终端 raw mode
+     - 说明: 使 readline 能够正确捕获方向键等转义序列
+
+  2. **Readline 模块** (`internal/readline/`)
+     - 文件: `readline.mbt`
+     - 功能: 行编辑、历史记录、ANSI 转义序列解析
+     - 应用: 参考其转义序列解析和 raw mode 使用方式
+     - 说明: 实现了命令行历史记录和行内编辑功能
+
+#### 实现差异
+
+虽然参考了 Maria 项目，但 Jarvis 的实现有以下不同：
+
+1. **简化的错误处理**
+   - Maria 使用 `@errno` 包进行详细的错误处理
+   - Jarvis 使用简化的错误处理（直接 abort）
+
+2. **功能裁剪**
+   - Maria 的 readline 是完整的终端 UI 框架
+   - Jarvis 只实现了基本的行编辑功能
+
+3. **扩展功能**
+   - 添加了 UTF-8 多字节字符支持
+   - 添加了单词跳转功能（Option+箭头）
+   - 添加了行跳转快捷键（Command+箭头）
+
+#### 致谢
+
+感谢 MoonBit 团队开发的 Maria 项目，为我们提供了终端控制和行编辑的参考实现。
+
+### D. 术语表
 - **LLM**: Large Language Model, 大语言模型
 - **NLP**: Natural Language Processing, 自然语言处理
 - **CLI**: Command Line Interface, 命令行界面
