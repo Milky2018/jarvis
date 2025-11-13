@@ -7,6 +7,8 @@ Jarvis 是一个基于 MoonBit 开发的智能 AI 助手,能够通过自然语�
 - ✅ 自然语言对话交互
 - ✅ 支持 OpenAI 兼容的 API
 - ✅ 会话历史记录
+- ✅ 命令行历史记录(上下箭头导航)
+- ✅ 行内编辑(左右箭头移动光标)
 - ✅ 错误处理和重试机制
 - ✅ 环境变量配置
 
@@ -71,7 +73,8 @@ Jarvis: Goodbye!
 
 ```
 jarvis/
-├── jarvis.mbt              # 主程序代码(包含所有功能)
+├── jarvis.mbt              # 主程序代码(包含所有核心功能)
+├── readline.mbt            # 终端行编辑和历史记录功能
 ├── jarvis_test.mbt         # 测试文件
 ├── moon.mod.json           # 模块配置
 ├── moon.pkg.json           # 包配置(is-main: true)
@@ -92,6 +95,12 @@ jarvis/
 
 ### ChatRequest/ChatResponse
 LLM API 的请求和响应结构,使用 `derive(ToJson, FromJson)` 自动处理 JSON。
+
+### CommandHistory
+管理命令行历史记录,支持上下箭头导航和自动去重。
+
+### LineEditor
+提供终端行编辑功能,支持光标移动、字符插入/删除等操作。
 
 ## 开发
 

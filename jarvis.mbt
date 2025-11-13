@@ -69,7 +69,7 @@ struct ChatResponseChoice {
 struct ChatResponse {
   id : String
   object : String
-  created : Int64
+  created : Int
   model : String
   choices : Array[ChatResponseChoice]
 } derive(FromJson)
@@ -245,45 +245,52 @@ async fn read_line() -> String {
 
 ///|
 async fn chat_loop(config : Config) -> Unit {
-  let history = ChatHistory::new()
+  let chat_history = ChatHistory::new()
+  let command_history = CommandHistory::new(100)
   println(
     "Jarvis: Hello! I'm Jarvis, your AI assistant. How can I help you today?",
   )
   println("(Type 'exit' or 'quit' to end the conversation)")
   println("")
   while true {
-    print("> ")
-    let user_input = read_line()
-    if user_input.is_empty() {
-      continue
-    }
-    if user_input == "exit" || user_input == "quit" {
-      println("Jarvis: Goodbye!")
-      break
-    }
+    match readline_simple("> ", command_history) {
+      Some(user_input) => {
+        if user_input.is_empty() {
+          continue
+        }
+        if user_input == "exit" || user_input == "quit" {
+          println("Jarvis: Goodbye!")
+          break
+        }
 
-    // Add user message to history
-    let user_message = Message::new("user", user_input)
-    history.add(user_message)
+        // Add user message to history
+        let user_message = Message::new("user", user_input)
+        chat_history.add(user_message)
 
-    // Send request
-    print("Jarvis: ")
-    try {
-      let response = send_chat_request(config, history.messages)
-      println(response)
+        // Send request
+        print("Jarvis: ")
+        try {
+          let response = send_chat_request(config, chat_history.messages)
+          println(response)
 
-      // Add assistant message to history
-      let assistant_message = Message::new("assistant", response)
-      history.add(assistant_message)
-    } catch {
-      EnvVarNotSet(msg) =>
-        println("Error: Environment variable not set: \{msg}")
-      HttpError(msg) => println("Error: HTTP error: \{msg}")
-      InvalidResponse(msg) => println("Error: Invalid response: \{msg}")
-      JsonParseError(msg) => println("Error: JSON parse error: \{msg}")
-      StringViewError(msg) => println("Error: String view error: \{msg}")
+          // Add assistant message to history
+          let assistant_message = Message::new("assistant", response)
+          chat_history.add(assistant_message)
+        } catch {
+          EnvVarNotSet(msg) =>
+            println("Error: Environment variable not set: \{msg}")
+          HttpError(msg) => println("Error: HTTP error: \{msg}")
+          InvalidResponse(msg) => println("Error: Invalid response: \{msg}")
+          JsonParseError(msg) => println("Error: JSON parse error: \{msg}")
+          StringViewError(msg) => println("Error: String view error: \{msg}")
+        }
+        println("")
+      }
+      None => {
+        println("\nJarvis: Goodbye!")
+        break
+      }
     }
-    println("")
   }
 }
 
