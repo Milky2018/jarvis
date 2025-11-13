@@ -123,29 +123,8 @@ async fn handle_command(
         }
       }
 
-      // Get current file number before creating new one
-      let old_num_str = if chat_history.current_file_number < 10 {
-        "00\{chat_history.current_file_number}"
-      } else if chat_history.current_file_number < 100 {
-        "0\{chat_history.current_file_number}"
-      } else {
-        chat_history.current_file_number.to_string()
-      }
-
-      // Create a new conversation file and switch to it (like auto-summarize)
-      // The old conv_XXX.json is automatically archived in place
+      // Create new file and print notifications (shared logic with auto-compact)
       chat_history.create_new_file_after_summary()
-      let num_str = if chat_history.current_file_number < 10 {
-        "00\{chat_history.current_file_number}"
-      } else if chat_history.current_file_number < 100 {
-        "0\{chat_history.current_file_number}"
-      } else {
-        chat_history.current_file_number.to_string()
-      }
-      print_jarvis_prefix()
-      println_async("Created new conversation file: conv_\{num_str}.json")
-      print_jarvis_prefix()
-      println_async("(Previous conversation archived in conv_\{old_num_str}.json)")
 
       true
     }

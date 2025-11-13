@@ -62,12 +62,38 @@ async fn ChatHistory::save_to_numbered_file(self : ChatHistory) -> Unit {
 
 ///|
 /// Create a new conversation file after summarization
+///|
+/// Format conversation file number as 3-digit string
+fn format_conv_number(num : Int) -> String {
+  if num < 10 {
+    "00\{num}"
+  } else if num < 100 {
+    "0\{num}"
+  } else {
+    num.to_string()
+  }
+}
+
+///|
+/// Create new conversation file after summarization and print notifications
 async fn ChatHistory::create_new_file_after_summary(
   self : ChatHistory
 ) -> Unit {
-  // Get the current messages (which now include the summary)
+  let old_number = self.current_file_number
+  let old_num_str = format_conv_number(old_number)
+
+  // Create new file with current messages
   let next_number = create_new_conversation_file(self.messages)
   self.current_file_number = next_number
+  let num_str = format_conv_number(next_number)
+
+  // Print notifications
+  print_jarvis_prefix()
+  println_async("Created new conversation file: conv_\{num_str}.json")
+  if old_number > 0 {
+    print_jarvis_prefix()
+    println_async("(Previous conversation archived in conv_\{old_num_str}.json)")
+  }
 }
 
 ///|

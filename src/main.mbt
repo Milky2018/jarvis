@@ -220,17 +220,8 @@ async fn handle_user_input(
       print_jarvis_prefix()
       println_async("(Summarized old conversation history to manage context length)")
 
-      // Create a new conversation file after summarization
+      // Create new file and print notifications (shared logic with manual summarize)
       chat_history.create_new_file_after_summary()
-      let num_str = if chat_history.current_file_number < 10 {
-        "00\{chat_history.current_file_number}"
-      } else if chat_history.current_file_number < 100 {
-        "0\{chat_history.current_file_number}"
-      } else {
-        chat_history.current_file_number.to_string()
-      }
-      print_jarvis_prefix()
-      println_async("(Created new conversation file: conv_\{num_str}.json)")
     }
   } catch {
     e => {
@@ -268,13 +259,7 @@ async fn chat_loop(config : Config) -> Unit {
     Some((loaded_history, file_num)) => {
       loaded_history.current_file_number = file_num
       print_jarvis_prefix()
-      let num_str = if file_num < 10 {
-        "00\{file_num}"
-      } else if file_num < 100 {
-        "0\{file_num}"
-      } else {
-        file_num.to_string()
-      }
+      let num_str = format_conv_number(file_num)
       println_async("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
