@@ -1585,12 +1585,31 @@ async fn handle_tool_calls(
       }
 
       // Send tool results back as a user message
-      // Note: We need to convert tool_results to message content
-      // For now, let's convert to string and send as content
-      let results_json = tool_results.to_json().stringify()
+      // Claude API expects tool results as plain string for now
+      // Ideally should be content blocks, but Message structure needs updating
+      let mut results_text = ""
+      for i = 0; i < tool_uses.length(); i = i + 1 {
+        let (tool_id, tool_name, _) = tool_uses[i]
+        let result_json = tool_results[i]
+        // Extract the content from tool_result
+        match result_json {
+          Object(map) =>
+            match map.get("content") {
+              Some(String(content)) => {
+                if i > 0 {
+                  results_text = results_text + "\n\n"
+                }
+                results_text = results_text +
+                  "Tool: \{tool_name} (ID: \{tool_id})\nResult: \{content}"
+              }
+              _ => ()
+            }
+          _ => ()
+        }
+      }
       let user_msg_with_results = {
         role: "user",
-        content: Some(results_json),
+        content: Some(results_text),
         tool_calls: None,
         tool_call_id: None,
         name: None,
