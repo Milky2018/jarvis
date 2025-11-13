@@ -150,10 +150,9 @@ fn UsageStats::add_request(
   // Calculate cost based on model (prices per 1M tokens in USD)
   let (input_price, output_price) = match model {
     "claude-sonnet-4-5-20250929" => (3.0, 15.0) // $3/$15 per 1M tokens
-    "gpt-4o" => (2.5, 10.0) // $2.5/$10 per 1M tokens
-    "gpt-4-turbo" => (10.0, 30.0) // $10/$30 per 1M tokens
-    "gpt-4" => (30.0, 60.0) // $30/$60 per 1M tokens
-    "gpt-3.5-turbo" => (0.5, 1.5) // $0.5/$1.5 per 1M tokens
+    "glm-4.5" => (1.0, 1.0) // $1/$1 per 1M tokens (estimated)
+    "gemini-2.5-pro" => (1.25, 5.0) // $1.25/$5 per 1M tokens (estimated)
+    "gpt-5-chat" => (5.0, 15.0) // $5/$15 per 1M tokens (estimated)
     _ => (3.0, 15.0) // Default to Claude pricing
   }
   let cost = input_tokens.to_double() / 1000000.0 * input_price +
@@ -661,12 +660,9 @@ async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
       print_jarvis_prefix()
       println("Available models:")
       println("  claude-sonnet-4-5-20250929  - Claude Sonnet 4.5 (default)")
-      println("  gpt-3.5-turbo               - Fast, cost-effective")
-      println("  gpt-4                       - More capable, higher quality")
-      println(
-        "  gpt-4-turbo                 - GPT-4 with optimized performance",
-      )
-      println("  gpt-4o                      - Latest GPT-4 optimized model")
+      println("  glm-4.5                     - GLM-4.5")
+      println("  gemini-2.5-pro              - Google Gemini 2.5 Pro")
+      println("  gpt-5-chat                  - GPT-5 Chat")
       println("")
       println("Use ':model <name>' to switch models")
       true
