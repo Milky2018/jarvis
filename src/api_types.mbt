@@ -80,44 +80,7 @@ struct ContentBlock {
   id : String?
   name : String?
   input : Json?
-}
-
-///|
-impl @json.FromJson for ContentBlock with from_json(json, path) raise @json.JsonDecodeError {
-  match json {
-    Object(map) => {
-      let type_ = match map.get("type") {
-        Some(String(s)) => s
-        _ =>
-          raise @json.JsonDecodeError((path.add_key("type"), "expected string"))
-      }
-      let text = match map.get("text") {
-        Some(String(s)) => Some(s)
-        Some(Null) | None => None
-        _ =>
-          raise @json.JsonDecodeError(
-            (path.add_key("text"), "expected string or null"),
-          )
-      }
-      let id = match map.get("id") {
-        Some(String(s)) => Some(s)
-        Some(Null) | None => None
-        _ => None
-      }
-      let name = match map.get("name") {
-        Some(String(s)) => Some(s)
-        Some(Null) | None => None
-        _ => None
-      }
-      let input = match map.get("input") {
-        Some(obj) => Some(obj)
-        None => None
-      }
-      { type_, text, id, name, input }
-    }
-    _ => raise @json.JsonDecodeError((path, "expected object"))
-  }
-}
+} derive(FromJson(fields(type_(rename="type"))))
 
 ///|
 /// Extract text content from Claude response

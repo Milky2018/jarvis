@@ -20,21 +20,6 @@ fn Message::new(role : String, content : String) -> Message {
 }
 
 ///|
-fn Message::tool(
-  content : String,
-  tool_call_id : String,
-  name : String,
-) -> Message {
-  {
-    role: "tool",
-    content: Some(content),
-    tool_calls: None,
-    tool_call_id: Some(tool_call_id),
-    name: Some(name),
-  }
-}
-
-///|
 /// Tool call structures
 struct ToolCall {
   id : String

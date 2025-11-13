@@ -1,3 +1,0 @@
-- [x] 把源码文件移到 `./src` 目录，包括 `moon.pkg.json` 文件。在 `moon.mod.json` 中添加 `"source": "src"`
-- [x] 把现在手动解析 -e 参数的逻辑改为使用 TheWaWaR/clap,用法可以参考 https://github.com/TheWaWaR/clap.mbt/blob/master/README.md
-- [x] 整体 review 一下代码，进行适当的重构和优化
