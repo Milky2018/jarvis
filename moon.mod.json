@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "deps": {
     "moonbitlang/async": "0.12.0",
-    "moonbitlang/x": "0.4.36"
+    "moonbitlang/x": "0.4.36",
+    "TheWaWaR/clap": "0.2.6"
   },
   "readme": "README.mbt.md",
   "repository": "",

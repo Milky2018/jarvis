@@ -1793,10 +1793,46 @@ async fn chat_loop(config : Config) -> Unit {
 }
 
 ///|
+/// Execute a single prompt and exit (for -e flag)
+async fn execute_prompt(config : Config, prompt : String) -> Unit {
+  ensure_jarvis_dir()
+  let chat_history = ChatHistory::new()
+
+  print_jarvis_prefix()
+  println("Processing: \{prompt}")
+  println("")
+
+  handle_user_input(config, chat_history, prompt)
+}
+
+///|
 async fn main {
+  // Parse command line arguments
+  let args = @sys.get_cli_args()
+
+  // Simple argument parsing: check for -e flag
+  let execute_mode = args.length() >= 2 && (args[1] == "-e" || args[1] == "--execute")
+  let prompt = if execute_mode && args.length() >= 3 {
+    Some(args[2])
+  } else {
+    None
+  }
+
   try {
     let config = load_config()
-    chat_loop(config)
+
+    // Check if -e flag is used
+    match prompt {
+      Some(p) => execute_prompt(config, p)
+      None => {
+        if execute_mode {
+          @stdio.stderr.write("Error: -e flag requires a prompt argument\n")
+          @stdio.stderr.write("Usage: jarvis -e \"<prompt>\"\n")
+        } else {
+          chat_loop(config)
+        }
+      }
+    }
   } catch {
     EnvVarNotSet(msg) =>
       @stdio.stderr.write("Error: Environment variable not set: \{msg}\n")
