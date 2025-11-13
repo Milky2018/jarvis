@@ -1188,11 +1188,24 @@ async fn handle_tool_calls(
           continue
         }
         _ => {
-          // No tool calls, display the content
+          // No tool calls in structured format, check if content contains XML tool calls
           match content {
-            Some(content) => {
+            Some(content_str) if content_str.contains("<function_calls>") => {
+              // Content contains XML-style tool calls, this is not standard
               print_jarvis_prefix()
-              println(content)
+              println(
+                "Warning: API returned tool calls in XML format instead of structured format.",
+              )
+              println(
+                "This API provider may not fully support OpenAI-style tool calling.",
+              )
+              println("Content: \{content_str}")
+              break
+            }
+            Some(content_str) => {
+              // Normal content, display it
+              print_jarvis_prefix()
+              println(content_str)
             }
             None => {
               print_jarvis_prefix()
