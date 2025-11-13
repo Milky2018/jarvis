@@ -267,22 +267,40 @@ async fn chat_loop(config : Config) -> Unit {
         let user_message = Message::new("user", user_input)
         chat_history.add(user_message)
 
-        // Send request
-        print("Jarvis: ")
+        // Send request (no prompt shown until response is ready)
         try {
           let response = send_chat_request(config, chat_history.messages)
+          print("Jarvis: ")
           println(response)
 
           // Add assistant message to history
           let assistant_message = Message::new("assistant", response)
           chat_history.add(assistant_message)
         } catch {
-          EnvVarNotSet(msg) =>
+          EnvVarNotSet(msg) => {
+            print("Jarvis: ")
             println("Error: Environment variable not set: \{msg}")
-          HttpError(msg) => println("Error: HTTP error: \{msg}")
-          InvalidResponse(msg) => println("Error: Invalid response: \{msg}")
-          JsonParseError(msg) => println("Error: JSON parse error: \{msg}")
-          StringViewError(msg) => println("Error: String view error: \{msg}")
+          }
+          HttpError(msg) => {
+            print("Jarvis: ")
+            println("Error: HTTP error: \{msg}")
+          }
+          InvalidResponse(msg) => {
+            print("Jarvis: ")
+            println("Error: Invalid response: \{msg}")
+          }
+          JsonParseError(msg) => {
+            print("Jarvis: ")
+            println("Error: JSON parse error: \{msg}")
+          }
+          StringViewError(msg) => {
+            print("Jarvis: ")
+            println("Error: String view error: \{msg}")
+          }
+          _ => {
+            print("Jarvis: ")
+            println("Error: Unknown error occurred")
+          }
         }
         println("")
       }

@@ -282,10 +282,13 @@ async fn read_escape_sequence() -> String? {
   }
 }
 
-///| Main readline function with simplified approach (no raw mode for now)
+///| Main readline function with raw mode enabled
 pub async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
   let editor = LineEditor::new(history)
   let buf = FixedArray::make(1, b'\x00')
+
+  // Enable raw mode for stdin
+  set_raw_mode(@stdio.stdin.fd())
 
   @stdio.stdout.write(prompt)
 

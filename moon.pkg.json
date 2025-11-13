@@ -6,5 +6,6 @@
     "moonbitlang/async/http",
     "moonbitlang/async/io",
     "moonbitlang/x/sys"
-  ]
+  ],
+  "native-stub": ["tty.c"]
 }
