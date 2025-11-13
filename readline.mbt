@@ -614,12 +614,26 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
         }
         Some("left") => {
           if editor.move_left() {
-            move_cursor_left(1)
+            // Move cursor left by the display width of the character we just moved past
+            match editor.buffer.get_char(editor.cursor_pos) {
+              Some(ch) => {
+                let width = char_display_width(ch)
+                move_cursor_left(width)
+              }
+              None => move_cursor_left(1)
+            }
           }
         }
         Some("right") => {
           if editor.move_right() {
-            move_cursor_right(1)
+            // Move cursor right by the display width of the character we just moved past
+            match editor.buffer.get_char(editor.cursor_pos - 1) {
+              Some(ch) => {
+                let width = char_display_width(ch)
+                move_cursor_right(width)
+              }
+              None => move_cursor_right(1)
+            }
           }
         }
         Some("home") => {
