@@ -219,6 +219,18 @@ async fn handle_user_input(
     if summarized {
       print_jarvis_prefix()
       println("(Summarized old conversation history to manage context length)")
+
+      // Create a new conversation file after summarization
+      chat_history.create_new_file_after_summary()
+      let num_str = if chat_history.current_file_number < 10 {
+        "00\{chat_history.current_file_number}"
+      } else if chat_history.current_file_number < 100 {
+        "0\{chat_history.current_file_number}"
+      } else {
+        chat_history.current_file_number.to_string()
+      }
+      print_jarvis_prefix()
+      println("(Created new conversation file: conv_\{num_str}.json)")
     }
   } catch {
     e => {
@@ -231,6 +243,9 @@ async fn handle_user_input(
   // Tool calling loop
   let tools = get_available_tools()
   handle_tool_calls(config, chat_history, tools)
+
+  // Save conversation after each interaction
+  chat_history.save_to_numbered_file()
 }
 
 ///|
@@ -248,24 +263,38 @@ async fn chat_loop(config : Config) -> Unit {
   // Ensure .jarvis directory exists
   ensure_jarvis_dir()
 
-  // Try to load the latest unsummarized conversation
-  let chat_history = match find_latest_unsummarized_conversation() {
-    Some(conversation_name) => {
-      let path = get_conversation_path(conversation_name)
-      match ChatHistory::load(path) {
-        Some(loaded) => {
-          print_jarvis_prefix()
-          println("Continuing from previous conversation: \{conversation_name}")
-          loaded
-        }
-        None => {
-          print_jarvis_prefix()
-          println("Failed to load previous conversation, starting new one")
-          ChatHistory::new()
-        }
+  // Try to load the latest conversation using numbered files
+  let chat_history = match load_latest_conversation() {
+    Some((loaded_history, file_num)) => {
+      loaded_history.current_file_number = file_num
+      print_jarvis_prefix()
+      let num_str = if file_num < 10 {
+        "00\{file_num}"
+      } else if file_num < 100 {
+        "0\{file_num}"
+      } else {
+        file_num.to_string()
       }
+      println("Loaded conversation from conv_\{num_str}.json")
+      loaded_history
     }
-    None => ChatHistory::new()
+    None => {
+      // Create new conversation with initial system message
+      let initial_msg = Message::new(
+        "system",
+        "You are Jarvis, a helpful AI assistant. You can execute shell commands when needed.",
+      )
+      let history = ChatHistory::new()
+      history.add(initial_msg)
+
+      // Create the first conversation file
+      let file_num = create_new_conversation_file(history.messages)
+      history.current_file_number = file_num
+
+      print_jarvis_prefix()
+      println("Created new conversation: conv_001.json")
+      history
+    }
   }
   let command_history = CommandHistory::new(100)
   println("")
@@ -273,7 +302,6 @@ async fn chat_loop(config : Config) -> Unit {
   println("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
   println("(Type 'exit' or 'quit' to end the conversation)")
   println("")
-  let mut should_save = false
   while true {
     print_separator()
     match readline_simple("> ", command_history) {
@@ -285,7 +313,6 @@ async fn chat_loop(config : Config) -> Unit {
 
         // Check for exit commands first
         if is_exit_command(user_input) {
-          should_save = true
           print_jarvis_prefix()
           println("Goodbye!")
           break
@@ -298,12 +325,10 @@ async fn chat_loop(config : Config) -> Unit {
         }
 
         // Handle normal user input
-        should_save = true
         handle_user_input(config, chat_history, user_input)
         println("")
       }
       None => {
-        should_save = true
         println("")
         print_jarvis_prefix()
         println("Goodbye!")
@@ -312,22 +337,8 @@ async fn chat_loop(config : Config) -> Unit {
     }
   }
 
-  // Save conversation on exit if there were messages (without summary)
-  if should_save && chat_history.messages.length() > 0 {
-    // Generate timestamp-based filename
-    let (exit_code, output) = @process.collect_output_merged("sh", [
-      "-c", "date +%Y%m%d_%H%M%S",
-    ])
-    let timestamp = if exit_code == 0 {
-      output.text()[:].trim(chars=" \n\t\r").to_string()
-    } else {
-      "conversation"
-    }
-    let filename = get_conversation_path(timestamp)
-    chat_history.save(filename)
-    print_jarvis_prefix()
-    println("Conversation saved (use :summarize to generate summary)")
-  }
+  // Save conversation on exit (no longer needed, saved after each interaction)
+  // Just print goodbye message
 }
 
 ///|

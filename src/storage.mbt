@@ -88,26 +88,6 @@ fn get_conversation_path(name : String) -> String {
   get_jarvis_dir() + "/\{name}.json"
 }
 
-///|
-/// Find the latest conversation that hasn't been summarized
-async fn find_latest_unsummarized_conversation() -> String? {
-  let dir = get_jarvis_dir()
-  // List all JSON files sorted by modification time (newest first)
-  let (exit_code, output) = @process.collect_output_merged("sh", [
-    "-c",
-    "cd '\{dir}' 2>/dev/null && for f in $(ls -1t *.json 2>/dev/null); do base=${f%.json}; if [ ! -f \"${base}.md\" ]; then echo \"$base\"; exit 0; fi; done",
-  ])
-  if exit_code != 0 {
-    return None
-  }
-  let text = output.text()
-  let trimmed = text[:].trim(chars=" \n\t\r").to_string()
-  if trimmed.is_empty() {
-    None
-  } else {
-    Some(trimmed)
-  }
-}
 
 ///|
 /// Get all memory summaries from .jarvis directory
