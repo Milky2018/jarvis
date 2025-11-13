@@ -222,6 +222,41 @@ fn LineEditor::clear(self : LineEditor) -> Unit {
   self.cursor_pos = 0
 }
 
+///| Calculate display width of a character
+/// Most CJK characters have width 2, ASCII has width 1
+fn char_display_width(ch : Char) -> Int {
+  let code = ch.to_int()
+  // CJK Unified Ideographs: 0x4E00-0x9FFF
+  // CJK Extension A: 0x3400-0x4DBF
+  // Hangul Syllables: 0xAC00-0xD7AF
+  // Hiragana: 0x3040-0x309F
+  // Katakana: 0x30A0-0x30FF
+  // Full-width forms: 0xFF00-0xFFEF
+  if (code >= 0x4E00 && code <= 0x9FFF) ||
+     (code >= 0x3400 && code <= 0x4DBF) ||
+     (code >= 0xAC00 && code <= 0xD7AF) ||
+     (code >= 0x3040 && code <= 0x309F) ||
+     (code >= 0x30A0 && code <= 0x30FF) ||
+     (code >= 0xFF00 && code <= 0xFFEF) {
+    2
+  } else {
+    1
+  }
+}
+
+///| Calculate display width of a string
+fn string_display_width(s : String) -> Int {
+  let mut width = 0
+  let len = s.length()
+  for i = 0; i < len; i = i + 1 {
+    match s.get_char(i) {
+      Some(ch) => width = width + char_display_width(ch)
+      None => ()
+    }
+  }
+  width
+}
+
 ///| Check if a character is a word separator
 fn is_word_separator(ch : Char) -> Bool {
   ch == ' ' || ch == '\t' || ch == '\n' || ch == '/' || ch == '\\' ||
@@ -337,9 +372,17 @@ async fn redraw_line(editor : LineEditor, prompt : String) -> Unit {
   clear_to_end()
   @stdio.stdout.write(prompt + editor.buffer)
 
-  let chars_after_cursor = editor.buffer.length() - editor.cursor_pos
-  if chars_after_cursor > 0 {
-    move_cursor_left(chars_after_cursor)
+  // Calculate display width of characters after cursor
+  let mut display_width_after = 0
+  for i = editor.cursor_pos; i < editor.buffer.length(); i = i + 1 {
+    match editor.buffer.get_char(i) {
+      Some(ch) => display_width_after = display_width_after + char_display_width(ch)
+      None => ()
+    }
+  }
+
+  if display_width_after > 0 {
+    move_cursor_left(display_width_after)
   }
 }
 
