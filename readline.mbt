@@ -222,6 +222,115 @@ fn LineEditor::clear(self : LineEditor) -> Unit {
   self.cursor_pos = 0
 }
 
+///| Check if a character is a word separator
+fn is_word_separator(ch : Char) -> Bool {
+  ch == ' ' || ch == '\t' || ch == '\n' || ch == '/' || ch == '\\' ||
+  ch == '.' || ch == ',' || ch == ';' || ch == ':' || ch == '-' ||
+  ch == '_' || ch == '=' || ch == '+' || ch == '*' || ch == '&' ||
+  ch == '|' || ch == '<' || ch == '>' || ch == '(' || ch == ')' ||
+  ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '\'' ||
+  ch == '"' || ch == '`' || ch == '!' || ch == '?' || ch == '@' ||
+  ch == '#' || ch == '$' || ch == '%' || ch == '^'
+}
+
+///| Move cursor forward by one word
+fn LineEditor::move_word_forward(self : LineEditor) -> Bool {
+  if self.cursor_pos >= self.buffer.length() {
+    return false
+  }
+
+  let mut pos = self.cursor_pos
+  let len = self.buffer.length()
+
+  // Skip current word separators
+  while pos < len {
+    match self.buffer.get_char(pos) {
+      Some(ch) => {
+        if is_word_separator(ch) == false {
+          break
+        }
+        pos = pos + 1
+      }
+      None => break
+    }
+  }
+
+  // Skip word characters
+  while pos < len {
+    match self.buffer.get_char(pos) {
+      Some(ch) => {
+        if is_word_separator(ch) {
+          break
+        }
+        pos = pos + 1
+      }
+      None => break
+    }
+  }
+
+  if pos != self.cursor_pos {
+    self.cursor_pos = pos
+    true
+  } else {
+    false
+  }
+}
+
+///| Move cursor backward by one word
+fn LineEditor::move_word_backward(self : LineEditor) -> Bool {
+  if self.cursor_pos == 0 {
+    return false
+  }
+
+  let mut pos = self.cursor_pos - 1
+
+  // Skip current word separators
+  while pos > 0 {
+    match self.buffer.get_char(pos) {
+      Some(ch) => {
+        if is_word_separator(ch) == false {
+          break
+        }
+        pos = pos - 1
+      }
+      None => break
+    }
+  }
+
+  // Skip word characters
+  while pos > 0 {
+    match self.buffer.get_char(pos) {
+      Some(ch) => {
+        if is_word_separator(ch) {
+          pos = pos + 1
+          break
+        }
+        pos = pos - 1
+      }
+      None => break
+    }
+  }
+
+  // Handle the case where we reached the beginning
+  match self.buffer.get_char(pos) {
+    Some(ch) => {
+      if pos == 0 && is_word_separator(ch) == false {
+        // We're at the start of a word at position 0
+        self.cursor_pos = 0
+        return true
+      }
+    }
+    None => ()
+  }
+
+  if pos != self.cursor_pos {
+    self.cursor_pos = pos
+    true
+  } else {
+    false
+  }
+}
+
 ///| Redraw line
 async fn redraw_line(editor : LineEditor, prompt : String) -> Unit {
   move_to_start()
@@ -256,6 +365,43 @@ async fn read_escape_sequence() -> String? {
       b'D' => Some("left")
       b'H' => Some("home")
       b'F' => Some("end")
+      b'1' => {
+        // Check for modified keys like ESC[1;3C (Option+Right)
+        let n3 = @stdio.stdin.read(buf)
+        if n3 == 0 {
+          return None
+        }
+        if buf[0] == b';' {
+          let n4 = @stdio.stdin.read(buf)
+          if n4 == 0 {
+            return None
+          }
+          let modifier = buf[0]
+          let n5 = @stdio.stdin.read(buf)
+          if n5 == 0 {
+            return None
+          }
+          let key = buf[0]
+          // modifier: 3 = Option, 9 = Command
+          if modifier == b'3' {
+            match key {
+              b'C' => Some("option-right")  // Option+Right
+              b'D' => Some("option-left")   // Option+Left
+              _ => None
+            }
+          } else if modifier == b'9' {
+            match key {
+              b'C' => Some("cmd-right")     // Command+Right
+              b'D' => Some("cmd-left")      // Command+Left
+              _ => None
+            }
+          } else {
+            None
+          }
+        } else {
+          None
+        }
+      }
       b'3' => {
         let n3 = @stdio.stdin.read(buf)
         if n3 > 0 && buf[0] == b'~' {
@@ -277,6 +423,12 @@ async fn read_escape_sequence() -> String? {
       b'F' => Some("end")
       _ => None
     }
+  } else if buf[0] == b'b' {
+    // Option+Left alternative sequence
+    Some("option-left")
+  } else if buf[0] == b'f' {
+    // Option+Right alternative sequence
+    Some("option-right")
   } else {
     None
   }
@@ -439,6 +591,26 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
         }
         Some("delete") => {
           if editor.delete_forward() {
+            redraw_line(editor, prompt)
+          }
+        }
+        Some("option-left") => {
+          if editor.move_word_backward() {
+            redraw_line(editor, prompt)
+          }
+        }
+        Some("option-right") => {
+          if editor.move_word_forward() {
+            redraw_line(editor, prompt)
+          }
+        }
+        Some("cmd-left") => {
+          if editor.move_to_start() {
+            redraw_line(editor, prompt)
+          }
+        }
+        Some("cmd-right") => {
+          if editor.move_to_end() {
             redraw_line(editor, prompt)
           }
         }
