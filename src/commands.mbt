@@ -97,22 +97,33 @@ async fn handle_command(
         println_async("Failed to generate summary")
         return true
       }
-      // Save JSON with title as filename
-      let json_filename = get_conversation_path(title)
-      chat_history.save(json_filename)
-      // Save markdown summary
-      let md_filename = get_jarvis_dir() + "/" + title + ".md"
-      let escaped_summary = summary.replace(old="'", new="'\\''")
-      let (exit_code, _) = @process.collect_output_merged("sh", [
+
+      // Generate timestamp-based filename to avoid conflicts
+      let (exit_code, output) = @process.collect_output_merged("sh", [
         "-c",
-        "echo '\{escaped_summary}' > '\{md_filename}'",
+        "date +%Y%m%d_%H%M%S",
       ])
-      if exit_code == 0 {
-        print_jarvis_prefix()
-        println_async("Conversation summarized and saved as: \{title}")
+      let timestamp = if exit_code == 0 {
+        output.text()[:].trim(chars=" \n\t\r").to_string()
       } else {
+        "unknown"
+      }
+
+      // Save JSON with timestamp and title
+      let json_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".json"
+      chat_history.save(json_filename)
+
+      // Save markdown summary using @fs API
+      let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
+      try {
+        @fs.write_file(md_filename, summary, create=0o644)
         print_jarvis_prefix()
-        println_async("Warning: Failed to save summary file")
+        println_async("Conversation summarized and saved as: \{timestamp}_\{title}")
+      } catch {
+        e => {
+          print_jarvis_prefix()
+          println_async("Warning: Failed to save summary file: \{e}")
+        }
       }
       true
     }

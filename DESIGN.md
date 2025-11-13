@@ -219,10 +219,19 @@ struct ContentBlock {
 | `:model [name]` | 查看/切换模型 |
 | `:models` | 列出可用模型 |
 | `:cost` | 显示使用统计和成本 |
-| `:summarize` | 手动触发对话总结 |
+| `:summarize`, `:sum` | 手动生成对话总结并保存为 Markdown |
 | `:clear`, `:c` | 清空对话历史 |
 | `:exit`, `:quit`, `:q` | 退出 |
 | `exit`, `quit` | 退出 (兼容) |
+
+**Summarize 功能**:
+- `:summarize` - 手动总结，生成详细 Markdown 文档
+  - 保存为 `~/.jarvis/<timestamp>_<title>.json` 和 `.md`
+  - 包含: 对话主题、关键要点、重要决定、需要记住的信息
+- 自动总结 - 当 token 超过 80% 上下文限制时触发
+  - 保留第 1 条消息 + 最近 8 条消息
+  - 中间消息压缩为简短摘要
+  - 自动创建新的 `conv_XXX.json` 文件
 
 **支持的模型**:
 - `claude-sonnet-4-5-20250929` (默认)

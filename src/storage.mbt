@@ -79,11 +79,6 @@ async fn load_latest_conversation() -> (ChatHistory, Int)? {
   }
 }
 
-///|
-/// Get conversation file path (deprecated, kept for compatibility)
-fn get_conversation_path(name : String) -> String {
-  get_jarvis_dir() + "/\{name}.json"
-}
 
 
 ///|
