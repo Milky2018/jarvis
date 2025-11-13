@@ -1,0 +1,63 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis"
+
+import(
+  "moonbitlang/core/json"
+)
+
+// Values
+
+// Errors
+type JarvisError
+impl Show for JarvisError
+
+// Types and methods
+type ChatHistory
+
+type ChatRequest
+impl ToJson for ChatRequest
+
+type ChatResponse
+impl @json.FromJson for ChatResponse
+
+type ChatResponseChoice
+impl @json.FromJson for ChatResponseChoice
+
+type ChatResponseMessage
+
+type CommandHistory
+
+type Config
+impl Show for Config
+
+type FunctionCall
+impl ToJson for FunctionCall
+impl @json.FromJson for FunctionCall
+
+type FunctionDef
+impl ToJson for FunctionDef
+
+type LineEditor
+
+type Message
+impl ToJson for Message
+impl @json.FromJson for Message
+
+type ResponseUsage
+impl @json.FromJson for ResponseUsage
+
+type Size
+
+type Tool
+impl ToJson for Tool
+
+type ToolCall
+impl ToJson for ToolCall
+impl @json.FromJson for ToolCall
+
+type UsageStats
+
+// Type aliases
+
+// Traits
+

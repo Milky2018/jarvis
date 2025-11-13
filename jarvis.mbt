@@ -141,8 +141,10 @@ fn UsageStats::add_request(
   self : UsageStats,
   input_tokens : Int,
   output_tokens : Int,
+  total_tokens : Int,
   model : String,
 ) -> Unit {
+  ignore(total_tokens)
   self.total_requests = self.total_requests + 1
   self.total_input_tokens = self.total_input_tokens + input_tokens
   self.total_output_tokens = self.total_output_tokens + output_tokens
@@ -201,8 +203,12 @@ fn ChatHistory::set_model(self : ChatHistory, model : String) -> Unit {
 }
 
 ///|
-/// Save conversation history to file
-async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
+/// Save conversation history to file and generate markdown summary
+async fn ChatHistory::save(
+  self : ChatHistory,
+  filename : String,
+  config : Config,
+) -> Unit {
   let json_obj : Json = {
     "messages": self.messages.to_json(),
     "model": self.current_model,
@@ -217,6 +223,97 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   if exit_code != 0 {
     print_jarvis_prefix()
     println("Warning: Failed to save conversation")
+    return
+  }
+
+  // Generate markdown summary
+  generate_summary(self, filename, config)
+}
+
+///|
+/// Generate markdown summary of the conversation
+async fn generate_summary(
+  chat_history : ChatHistory,
+  json_filename : String,
+  config : Config,
+) -> Unit {
+  // Build conversation text
+  let mut conversation_text = ""
+  for msg in chat_history.messages {
+    let role_text = match msg.role {
+      "user" => "用户"
+      "assistant" => "Jarvis"
+      _ => msg.role
+    }
+    let content = match msg.content {
+      Some(c) => if c.length() > 500 { c[:500].to_string() + "..." } else { c }
+      None => "[无内容]"
+    }
+    conversation_text = conversation_text + "**\{role_text}**: \{content}\n\n"
+  }
+
+  // Create prompt for summarization
+  let summary_messages : Array[Message] = [
+    {
+      role: "user",
+      content: Some(
+        "请总结以下对话内容，用 Markdown 格式输出。包括：\n1. 对话主题\n2. 关键要点（用bullet points）\n3. 重要决定或结论\n4. 需要记住的信息\n\n对话内容：\n\n" +
+        conversation_text,
+      ),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+  ]
+
+  // Call API to generate summary
+  let response = send_chat_request_with_tools(
+    config,
+    summary_messages,
+    [],
+    chat_history.current_model,
+  ) catch {
+    _ => {
+      print_jarvis_prefix()
+      println("Warning: Failed to generate conversation summary")
+      return
+    }
+  }
+  let summary = match response.choices.get(0) {
+    Some(choice) =>
+      match choice.message.content {
+        Some(s) => s
+        None => {
+          print_jarvis_prefix()
+          println("Warning: Empty summary content")
+          return
+        }
+      }
+    None => {
+      print_jarvis_prefix()
+      println("Warning: Empty summary response")
+      return
+    }
+  }
+
+  // Save summary to markdown file
+  let md_filename = if json_filename.has_suffix(".json") {
+    let len = json_filename.length()
+    json_filename[:len - 5].to_string() + ".md"
+  } else {
+    json_filename + ".md"
+  }
+  let escaped_summary = summary.replace(old="'", new="'\\''")
+  let (exit_code, _) = @process.collect_output_merged("sh", [
+    "-c",
+    "echo '\{escaped_summary}' > '\{md_filename}'",
+  ])
+  if exit_code != 0 {
+    print_jarvis_prefix()
+    println("Warning: Failed to save conversation summary")
+  } else {
+    print_jarvis_prefix()
+    println("Conversation summary saved")
   }
 }
 
@@ -228,27 +325,15 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
     "-c",
     "cat '\{filename}' 2>/dev/null",
   ])
-
   if exit_code != 0 {
     return None
   }
-
   let content = output.text()
-  let json_obj = try {
-    @json.parse(content)
-  } catch {
-    _ => return None
-  }
-
+  let json_obj = @json.parse(content) catch { _ => return None }
   match json_obj {
     Object(map) => {
       let messages : Array[Message] = match map.get("messages") {
-        Some(arr) =>
-          try {
-            @json.from_json(arr)
-          } catch {
-            _ => return None
-          }
+        Some(arr) => @json.from_json(arr) catch { _ => return None }
         _ => return None
       }
       let model = match map.get("model") {
@@ -281,6 +366,7 @@ async fn ensure_jarvis_dir() -> Unit {
     "-c",
     "mkdir -p '\{dir}'",
   ])
+
 }
 
 ///|
@@ -297,18 +383,15 @@ async fn list_conversations() -> Array[String] {
     "-c",
     "cd '\{dir}' 2>/dev/null && ls -1 *.json 2>/dev/null | sed 's/\\.json$//' || true",
   ])
-
   if exit_code != 0 {
     return []
   }
-
   let text = output.text()
   let text_view = text[:].trim(chars=" \n\t\r")
   let text_str = text_view.to_string()
   if text_str.is_empty() {
     return []
   }
-
   let lines : Array[String] = []
   for line in text_view.split("\n") {
     let trimmed_view = line.trim(chars=" \t\r")
@@ -851,6 +934,7 @@ async fn handle_tool_calls(
           chat_history.usage_stats.add_request(
             u.prompt_tokens,
             u.completion_tokens,
+            u.total_tokens,
             chat_history.current_model,
           )
         None => ()
@@ -995,12 +1079,15 @@ async fn chat_loop(config : Config) -> Unit {
     }
     println("")
     print_jarvis_prefix()
-    println("Load a conversation? (enter number, 'n' for new, or press Enter for new)")
+    println(
+      "Load a conversation? (enter number, 'n' for new, or press Enter for new)",
+    )
     match readline_simple("Choice: ", CommandHistory::new(10)) {
       Some(choice) => {
         let choice_trimmed = choice[:].trim(chars=" \t\r\n").to_string()
-        if choice_trimmed.is_empty() || choice_trimmed == "n" || choice_trimmed ==
-          "N" {
+        if choice_trimmed.is_empty() ||
+          choice_trimmed == "n" ||
+          choice_trimmed == "N" {
           ChatHistory::new()
         } else {
           // Try to parse as number (simple parsing)
@@ -1037,14 +1124,12 @@ async fn chat_loop(config : Config) -> Unit {
   } else {
     ChatHistory::new()
   }
-
   let command_history = CommandHistory::new(100)
   println("")
   print_jarvis_prefix()
   println("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
   println("(Type 'exit' or 'quit' to end the conversation)")
   println("")
-
   let mut should_save = false
   while true {
     print_separator()
@@ -1088,8 +1173,7 @@ async fn chat_loop(config : Config) -> Unit {
   if should_save && chat_history.messages.length() > 0 {
     // Generate timestamp-based filename
     let (exit_code, output) = @process.collect_output_merged("sh", [
-      "-c",
-      "date +%Y%m%d_%H%M%S",
+      "-c", "date +%Y%m%d_%H%M%S",
     ])
     let timestamp = if exit_code == 0 {
       output.text()[:].trim(chars=" \n\t\r").to_string()
@@ -1097,7 +1181,7 @@ async fn chat_loop(config : Config) -> Unit {
       "conversation"
     }
     let filename = get_conversation_path(timestamp)
-    chat_history.save(filename)
+    chat_history.save(filename, config)
     print_jarvis_prefix()
     println("Conversation saved to: \{timestamp}")
   }
