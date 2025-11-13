@@ -6,6 +6,7 @@ struct ChatHistory {
   max_context_tokens : Int // Maximum tokens for context (e.g., 4096)
   mut current_model : String // Current model to use
   usage_stats : UsageStats // Track API usage
+  mut current_file_number : Int // Current conversation file number
 }
 
 ///|
@@ -15,6 +16,7 @@ fn ChatHistory::new() -> ChatHistory {
     max_context_tokens: 4000,
     current_model: "claude-sonnet-4-5-20250929",
     usage_stats: UsageStats::new(),
+    current_file_number: 0, // Will be set when loading/creating conversation
   } // Leave some room for response
 }
 
@@ -46,6 +48,26 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
     print_jarvis_prefix()
     println("Warning: Failed to save conversation")
   }
+}
+
+///|
+/// Save conversation to numbered file
+async fn ChatHistory::save_to_numbered_file(self : ChatHistory) -> Unit {
+  if self.current_file_number == 0 {
+    return // Not initialized yet
+  }
+  let path = get_conversation_file_path(self.current_file_number)
+  self.save(path)
+}
+
+///|
+/// Create a new conversation file after summarization
+async fn ChatHistory::create_new_file_after_summary(
+  self : ChatHistory
+) -> Unit {
+  // Get the current messages (which now include the summary)
+  let next_number = create_new_conversation_file(self.messages)
+  self.current_file_number = next_number
 }
 
 ///|
@@ -194,6 +216,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         max_context_tokens: 4000,
         current_model: model,
         usage_stats: UsageStats::new(),
+        current_file_number: 0, // Will be set by caller
       })
     }
     _ => None
