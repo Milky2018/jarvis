@@ -653,12 +653,12 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
   while true {
     let n = @stdio.stdin.read(buf)
     if n == 0 {
-      println("")
+      println_async("")
       return None
     }
     let byte = buf[0]
     if byte == enter_byte || byte == newline_byte {
-      println("")
+      println_async("")
       let result = editor.buffer
       history.add(result)
       return Some(result)
@@ -667,13 +667,13 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
         redraw_line(editor, prompt)
       }
     } else if byte == ctrl_c_byte {
-      println("^C")
+      println_async("^C")
       editor.clear()
       return Some("")
     } else if byte == ctrl_d_byte {
       if editor.buffer.is_empty() {
         // Empty buffer: exit
-        println("")
+        println_async("")
         return None
         // Non-empty buffer: delete character under cursor (forward delete)
       } else if editor.delete_forward() {

@@ -30,7 +30,7 @@ async fn handle_tool_calls(
           tools,
           chat_history.current_model,
         )
-        println("") // Add newline after streaming
+        println_async("") // Add newline after streaming
         resp
       } else {
         // Subsequent requests: non-streaming
@@ -65,12 +65,12 @@ async fn handle_tool_calls(
           Some(content_str) =>
             if used_streaming == false {
               print_jarvis_prefix()
-              println(content_str)
+              println_async(content_str)
             }
           None =>
             if used_streaming == false {
               print_jarvis_prefix()
-              println("Error: No content in response")
+              println_async("Error: No content in response")
             }
         }
         // No tool calls, add message to history and break
@@ -91,7 +91,7 @@ async fn handle_tool_calls(
         Some(content_str) =>
           if content_str.is_empty() == false {
             print_jarvis_prefix()
-            println(content_str)
+            println_async(content_str)
           }
         None => ()
       }
@@ -158,28 +158,28 @@ async fn handle_tool_calls(
     }
     if max_iterations == 0 {
       print_jarvis_prefix()
-      println("Warning: Maximum tool calling iterations reached")
+      println_async("Warning: Maximum tool calling iterations reached")
     }
   } catch {
     EnvVarNotSet(msg) => {
       print_jarvis_prefix()
-      println("Error: Environment variable not set: \{msg}")
+      println_async("Error: Environment variable not set: \{msg}")
     }
     HttpError(msg) => {
       print_jarvis_prefix()
-      println("Error: HTTP error: \{msg}")
+      println_async("Error: HTTP error: \{msg}")
     }
     JsonParseError(msg) => {
       print_jarvis_prefix()
-      println("Error: JSON parse error: \{msg}")
+      println_async("Error: JSON parse error: \{msg}")
     }
     StringViewError(msg) => {
       print_jarvis_prefix()
-      println("Error: String view error: \{msg}")
+      println_async("Error: String view error: \{msg}")
     }
     _ => {
       print_jarvis_prefix()
-      println("Error: Unknown error occurred")
+      println_async("Error: Unknown error occurred")
     }
   }
 }
@@ -201,7 +201,7 @@ async fn handle_user_input(
   // If we found relevant memories, inject them as a system message
   if relevant_memories.is_empty() == false {
     print_jarvis_prefix()
-    println("(Found relevant memories from past conversations)")
+    println_async("(Found relevant memories from past conversations)")
     let memory_message = Message::new(
       "system",
       "以下是与当前话题相关的历史记忆：" + relevant_memories,
@@ -218,7 +218,7 @@ async fn handle_user_input(
     let summarized = chat_history.manage_history(config)
     if summarized {
       print_jarvis_prefix()
-      println("(Summarized old conversation history to manage context length)")
+      println_async("(Summarized old conversation history to manage context length)")
 
       // Create a new conversation file after summarization
       chat_history.create_new_file_after_summary()
@@ -230,13 +230,13 @@ async fn handle_user_input(
         chat_history.current_file_number.to_string()
       }
       print_jarvis_prefix()
-      println("(Created new conversation file: conv_\{num_str}.json)")
+      println_async("(Created new conversation file: conv_\{num_str}.json)")
     }
   } catch {
     e => {
       // If history management fails, just log and continue
       print_jarvis_prefix()
-      println("Warning: History management failed: \{e}")
+      println_async("Warning: History management failed: \{e}")
     }
   }
 
@@ -275,7 +275,7 @@ async fn chat_loop(config : Config) -> Unit {
       } else {
         file_num.to_string()
       }
-      println("Loaded conversation from conv_\{num_str}.json")
+      println_async("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
     None => {
@@ -292,16 +292,16 @@ async fn chat_loop(config : Config) -> Unit {
       history.current_file_number = file_num
 
       print_jarvis_prefix()
-      println("Created new conversation: conv_001.json")
+      println_async("Created new conversation: conv_001.json")
       history
     }
   }
   let command_history = CommandHistory::new(100)
-  println("")
+  println_async("")
   print_jarvis_prefix()
-  println("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
-  println("(Type 'exit' or 'quit' to end the conversation)")
-  println("")
+  println_async("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
+  println_async("(Type 'exit' or 'quit' to end the conversation)")
+  println_async("")
   while true {
     print_separator()
     match readline_simple("> ", command_history) {
@@ -314,24 +314,24 @@ async fn chat_loop(config : Config) -> Unit {
         // Check for exit commands first
         if is_exit_command(user_input) {
           print_jarvis_prefix()
-          println("Goodbye!")
+          println_async("Goodbye!")
           break
         }
 
         // Handle special commands
         if handle_command(user_input, chat_history, config) {
-          println("")
+          println_async("")
           continue
         }
 
         // Handle normal user input
         handle_user_input(config, chat_history, user_input)
-        println("")
+        println_async("")
       }
       None => {
-        println("")
+        println_async("")
         print_jarvis_prefix()
-        println("Goodbye!")
+        println_async("Goodbye!")
         break
       }
     }
@@ -347,8 +347,8 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
   ensure_jarvis_dir()
   let chat_history = ChatHistory::new()
   print_jarvis_prefix()
-  println("Processing: \{prompt}")
-  println("")
+  println_async("Processing: \{prompt}")
+  println_async("")
   handle_user_input(config, chat_history, prompt)
 }
 
@@ -386,7 +386,7 @@ async fn main {
   match parser.parse(value, cli_args) {
     Some(help_msg) => {
       // Help message requested or parse error
-      println(help_msg)
+      println_async(help_msg)
       return
     }
     None => ()

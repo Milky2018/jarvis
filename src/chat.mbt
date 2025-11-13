@@ -45,7 +45,7 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   } catch {
     e => {
       print_jarvis_prefix()
-      println("Warning: Failed to save conversation: \{e}")
+      println_async("Warning: Failed to save conversation: \{e}")
     }
   }
 }
@@ -130,7 +130,7 @@ async fn generate_summary_with_title(
 ) -> (String, String) {
   // Generate title first
   print_jarvis_prefix()
-  println("Generating conversation title...")
+  println_async("Generating conversation title...")
   let title = generate_conversation_title(chat_history, config)
 
   // Build conversation text
@@ -150,7 +150,7 @@ async fn generate_summary_with_title(
 
   // Create prompt for summarization
   print_jarvis_prefix()
-  println("Generating summary...")
+  println_async("Generating summary...")
   let summary_messages : Array[Message] = [
     {
       role: "user",
@@ -173,7 +173,7 @@ async fn generate_summary_with_title(
   ) catch {
     _ => {
       print_jarvis_prefix()
-      println("Warning: Failed to generate conversation summary")
+      println_async("Warning: Failed to generate conversation summary")
       return ("", "")
     }
   }
@@ -181,7 +181,7 @@ async fn generate_summary_with_title(
     Some(s) => s
     None => {
       print_jarvis_prefix()
-      println("Warning: Empty summary content")
+      println_async("Warning: Empty summary content")
       return ("", "")
     }
   }

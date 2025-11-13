@@ -22,6 +22,10 @@ async fn print_jarvis_prefix() -> Unit {
   @stdio.stdout.write(color_bold + color_cyan + "Jarvis" + color_reset + ": ")
 }
 
+async fn println_async(s : String) -> Unit {
+  @stdio.stdout.write(s + "\n")
+} 
+
 ///|
 /// Print horizontal separator line
 async fn print_separator() -> Unit {
@@ -31,7 +35,7 @@ async fn print_separator() -> Unit {
   for i = 0; i < size.col; i = i + 1 {
     line = line + "─"
   }
-  println(line)
+  println_async(line)
 }
 
 ///|
