@@ -230,17 +230,13 @@ async fn generate_conversation_title(
   }
   for i = 0; i < limit; i = i + 1 {
     let msg = chat_history.messages[i]
-    match msg.content {
-      Some(c) => {
-        let short = if c.length() > 100 {
-          c[:100].to_string() + "..."
-        } else {
-          c
-        }
-        preview = preview + short + "\n"
-      }
-      None => ()
+    guard msg.content is Some(c) else { continue }
+    let short = if c.length() > 100 {
+      c[:100].to_string() + "..."
+    } else {
+      c
     }
+    preview = preview + short + "\n"
   }
   let title_messages : Array[Message] = [
     {
@@ -631,10 +627,8 @@ async fn search_relevant_memories(
 /// Estimate token count for a message (rough approximation: 1 token ≈ 4 chars)
 fn estimate_tokens(message : Message) -> Int {
   let mut total = 0
-  match message.content {
-    Some(content) => total = total + content.length() / 4
-    None => ()
-  }
+  guard message.content is Some(content) else { return 10 }
+  total = total + content.length() / 4
   // Add overhead for role, tool calls, etc.
   total + 10
 }
@@ -659,10 +653,8 @@ async fn summarize_messages(
   let summary_prompt = {
     let mut text = "Please summarize the following conversation history concisely, focusing on key points and context:\n\n"
     for msg in messages {
-      match msg.content {
-        Some(content) => text = text + msg.role + ": " + content + "\n\n"
-        None => ()
-      }
+      guard msg.content is Some(content) else { continue }
+      text = text + msg.role + ": " + content + "\n\n"
     }
     text + "Provide a brief summary in 2-3 sentences."
   }
