@@ -6,6 +6,7 @@
     "moonbitlang/async/http",
     "moonbitlang/async/io",
     "moonbitlang/async/process",
+    "moonbitlang/async/fs",
     "moonbitlang/x/sys",
     "TheWaWaR/clap"
   ],

@@ -56,18 +56,10 @@ async fn create_new_conversation_file(
   let next_number = get_latest_conversation_number() + 1
   let path = get_conversation_file_path(next_number)
 
-  // Save the initial messages
+  // Save the initial messages using native fs API
   let json_obj : Json = { "messages": initial_messages.to_json() }
   let json_str = json_obj.stringify()
-
-  // Use printf %s to safely write the JSON string
-  let (_exit_code, _) = @process.collect_output_merged("sh", [
-    "-c",
-    "printf '%s' \"$1\" > \"$2\"",
-    "sh",
-    json_str,
-    path,
-  ])
+  @fs.write_file(path, json_str, create=0o644) catch { _ => () }
 
   next_number
 }

@@ -39,21 +39,13 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   }
   let json_str = json_obj.stringify()
 
-  // Use printf %s to safely write the JSON string
-  // This avoids shell interpretation of special characters
-  let (exit_code, output) = @process.collect_output_merged("sh", [
-    "-c",
-    "printf '%s' \"$1\" > \"$2\"",
-    "sh",
-    json_str,
-    filename,
-  ])
-  if exit_code != 0 {
-    print_jarvis_prefix()
-    println("Warning: Failed to save conversation (exit code: \{exit_code})")
-    let error_msg = output.text()
-    if error_msg.is_empty() == false {
-      println("Error: \{error_msg}")
+  // Use native fs API to write file
+  try {
+    @fs.write_file(filename, json_str, create=0o644)
+  } catch {
+    e => {
+      print_jarvis_prefix()
+      println("Warning: Failed to save conversation: \{e}")
     }
   }
 }
