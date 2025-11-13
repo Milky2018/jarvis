@@ -30,7 +30,7 @@ if ! moon build; then
 fi
 
 # Find the built binary
-BINARY_PATH="${SCRIPT_DIR}/target/native/release/build/jarvis"
+BINARY_PATH="${SCRIPT_DIR}/target/native/release/build/jarvis.exe"
 if [[ ! -f "${BINARY_PATH}" ]]; then
     echo -e "${RED}Error: Binary not found at ${BINARY_PATH}${NC}"
     exit 1

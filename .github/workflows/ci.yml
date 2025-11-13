@@ -28,6 +28,7 @@ jobs:
 
       - name: Build project
         run: |
+          moon update
           moon install
           moon build
 
@@ -40,5 +41,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: jarvis-macos
-          path: target/native/release/build/jarvis
+          path: target/native/release/build/jarvis.exe
           if-no-files-found: error

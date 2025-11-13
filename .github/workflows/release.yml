@@ -24,12 +24,13 @@ jobs:
 
       - name: Build project
         run: |
+          moon update
           moon install
           moon build
 
       - name: Prepare release binary
         run: |
-          cp target/native/release/build/jarvis jarvis-macos
+          cp target/native/release/build/jarvis.exe jarvis-macos
           chmod +x jarvis-macos
           tar -czf jarvis-macos.tar.gz jarvis-macos
           shasum -a 256 jarvis-macos.tar.gz > jarvis-macos.tar.gz.sha256
