@@ -1069,61 +1069,8 @@ async fn chat_loop(config : Config) -> Unit {
   // Ensure .jarvis directory exists
   ensure_jarvis_dir()
 
-  // Check for existing conversations
-  let conversations = list_conversations()
-  let chat_history = if conversations.length() > 0 {
-    print_jarvis_prefix()
-    println("Found saved conversations:")
-    for i = 0; i < conversations.length() && i < 5; i = i + 1 {
-      println("  \{i + 1}. \{conversations[i]}")
-    }
-    println("")
-    print_jarvis_prefix()
-    println(
-      "Load a conversation? (enter number, 'n' for new, or press Enter for new)",
-    )
-    match readline_simple("Choice: ", CommandHistory::new(10)) {
-      Some(choice) => {
-        let choice_trimmed = choice[:].trim(chars=" \t\r\n").to_string()
-        if choice_trimmed.is_empty() ||
-          choice_trimmed == "n" ||
-          choice_trimmed == "N" {
-          ChatHistory::new()
-        } else {
-          // Try to parse as number (simple parsing)
-          let idx = match choice_trimmed {
-            "1" => 1
-            "2" => 2
-            "3" => 3
-            "4" => 4
-            "5" => 5
-            _ => 0
-          }
-          if idx > 0 && idx <= conversations.length() {
-            let conv_name = conversations[idx - 1]
-            let path = get_conversation_path(conv_name)
-            match ChatHistory::load(path) {
-              Some(loaded) => {
-                print_jarvis_prefix()
-                println("Loaded conversation: \{conv_name}")
-                loaded
-              }
-              None => {
-                print_jarvis_prefix()
-                println("Failed to load conversation, starting new one")
-                ChatHistory::new()
-              }
-            }
-          } else {
-            ChatHistory::new()
-          }
-        }
-      }
-      None => ChatHistory::new()
-    }
-  } else {
-    ChatHistory::new()
-  }
+  // Always start with a new conversation
+  let chat_history = ChatHistory::new()
   let command_history = CommandHistory::new(100)
   println("")
   print_jarvis_prefix()
