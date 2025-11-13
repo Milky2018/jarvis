@@ -39,14 +39,21 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   }
   let json_str = json_obj.stringify()
 
+  // Escape single quotes for shell command
+  let escaped_json = json_str.replace(old="'", new="'\\''")
+
   // Write to file using shell command
-  let (exit_code, _) = @process.collect_output_merged("sh", [
+  let (exit_code, output) = @process.collect_output_merged("sh", [
     "-c",
-    "echo '\{json_str}' > '\{filename}'",
+    "echo '\{escaped_json}' > '\{filename}'",
   ])
   if exit_code != 0 {
     print_jarvis_prefix()
-    println("Warning: Failed to save conversation")
+    println("Warning: Failed to save conversation (exit code: \{exit_code})")
+    let error_msg = output.text()
+    if error_msg.is_empty() == false {
+      println("Error: \{error_msg}")
+    }
   }
 }
 
