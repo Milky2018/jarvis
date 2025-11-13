@@ -98,7 +98,7 @@ async fn handle_command(
         return true
       }
 
-      // Generate timestamp-based filename to avoid conflicts
+      // Generate timestamp-based filename for archive
       let (exit_code, output) = @process.collect_output_merged("sh", [
         "-c",
         "date +%Y%m%d_%H%M%S",
@@ -109,7 +109,7 @@ async fn handle_command(
         "unknown"
       }
 
-      // Save JSON with timestamp and title
+      // Save archived JSON with timestamp and title
       let json_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".json"
       chat_history.save(json_filename)
 
@@ -118,13 +118,27 @@ async fn handle_command(
       try {
         @fs.write_file(md_filename, summary, create=0o644)
         print_jarvis_prefix()
-        println_async("Conversation summarized and saved as: \{timestamp}_\{title}")
+        println_async("Conversation archived as: \{timestamp}_\{title}")
       } catch {
         e => {
           print_jarvis_prefix()
           println_async("Warning: Failed to save summary file: \{e}")
         }
       }
+
+      // Create a new conversation file and switch to it (like auto-summarize)
+      chat_history.create_new_file_after_summary()
+      let num_str = if chat_history.current_file_number < 10 {
+        "00\{chat_history.current_file_number}"
+      } else if chat_history.current_file_number < 100 {
+        "0\{chat_history.current_file_number}"
+      } else {
+        chat_history.current_file_number.to_string()
+      }
+      print_jarvis_prefix()
+      println_async("Created new conversation file: conv_\{num_str}.json")
+      println_async("(Continuing conversation in new file)")
+
       true
     }
     "exit" | "quit" | "q" => {
