@@ -282,6 +282,77 @@ async fn read_escape_sequence() -> String? {
   }
 }
 
+///| Read a UTF-8 character from stdin
+async fn read_utf8_char(first_byte : Byte) -> Char? {
+  // Single byte (ASCII)
+  if first_byte < b'\x80' {
+    return Some(Int::unsafe_to_char(first_byte.to_int()))
+  }
+
+  // Multi-byte UTF-8
+  let buf = FixedArray::make(1, b'\x00')
+
+  // 2-byte sequence (110xxxxx 10xxxxxx)
+  if first_byte >= b'\xC0' && first_byte < b'\xE0' {
+    let n = @stdio.stdin.read(buf)
+    if n == 0 {
+      return None
+    }
+    let code_point = ((first_byte.to_int() & 0x1F) << 6) |
+                     (buf[0].to_int() & 0x3F)
+    return Some(Int::unsafe_to_char(code_point))
+  }
+
+  // 3-byte sequence (1110xxxx 10xxxxxx 10xxxxxx)
+  if first_byte >= b'\xE0' && first_byte < b'\xF0' {
+    let n1 = @stdio.stdin.read(buf)
+    if n1 == 0 {
+      return None
+    }
+    let byte2 = buf[0]
+
+    let n2 = @stdio.stdin.read(buf)
+    if n2 == 0 {
+      return None
+    }
+    let byte3 = buf[0]
+
+    let code_point = ((first_byte.to_int() & 0x0F) << 12) |
+                     ((byte2.to_int() & 0x3F) << 6) |
+                     (byte3.to_int() & 0x3F)
+    return Some(Int::unsafe_to_char(code_point))
+  }
+
+  // 4-byte sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
+  if first_byte >= b'\xF0' && first_byte < b'\xF8' {
+    let n1 = @stdio.stdin.read(buf)
+    if n1 == 0 {
+      return None
+    }
+    let byte2 = buf[0]
+
+    let n2 = @stdio.stdin.read(buf)
+    if n2 == 0 {
+      return None
+    }
+    let byte3 = buf[0]
+
+    let n3 = @stdio.stdin.read(buf)
+    if n3 == 0 {
+      return None
+    }
+    let byte4 = buf[0]
+
+    let code_point = ((first_byte.to_int() & 0x07) << 18) |
+                     ((byte2.to_int() & 0x3F) << 12) |
+                     ((byte3.to_int() & 0x3F) << 6) |
+                     (byte4.to_int() & 0x3F)
+    return Some(Int::unsafe_to_char(code_point))
+  }
+
+  None
+}
+
 ///| Main readline function with raw mode enabled
 pub async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
   let editor = LineEditor::new(history)
@@ -373,14 +444,18 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
         }
         _ => ()
       }
-    } else if byte >= b' ' && byte < b'\x7f' {
-      let ch = Int::unsafe_to_char(byte.to_int())
-      editor.insert_char(ch)
-
-      if editor.cursor_pos == editor.buffer.length() {
-        @stdio.stdout.write(ch.to_string())
-      } else {
-        redraw_line(editor, prompt)
+    } else if byte >= b'\x80' || (byte >= b' ' && byte < b'\x7f') {
+      // UTF-8 character (multi-byte or ASCII printable)
+      match read_utf8_char(byte) {
+        Some(ch) => {
+          editor.insert_char(ch)
+          if editor.cursor_pos == editor.buffer.length() {
+            @stdio.stdout.write(ch.to_string())
+          } else {
+            redraw_line(editor, prompt)
+          }
+        }
+        None => ()
       }
     }
   }
