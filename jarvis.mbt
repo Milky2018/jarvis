@@ -118,12 +118,37 @@ struct FunctionDef {
 } derive(ToJson)
 
 ///|
+/// Usage statistics for API calls
+struct UsageStats {
+  mut total_requests : Int
+  mut total_input_tokens : Int
+  mut total_output_tokens : Int
+}
+
+///|
+fn UsageStats::new() -> UsageStats {
+  { total_requests: 0, total_input_tokens: 0, total_output_tokens: 0 }
+}
+
+///|
+fn UsageStats::add_request(
+  self : UsageStats,
+  input_tokens : Int,
+  output_tokens : Int
+) -> Unit {
+  self.total_requests = self.total_requests + 1
+  self.total_input_tokens = self.total_input_tokens + input_tokens
+  self.total_output_tokens = self.total_output_tokens + output_tokens
+}
+
+///|
 /// Chat history
 /// Manages conversation history
 struct ChatHistory {
   messages : Array[Message]
   max_context_tokens : Int // Maximum tokens for context (e.g., 4096)
   mut current_model : String // Current model to use
+  usage_stats : UsageStats // Track API usage
 }
 
 ///|
@@ -132,6 +157,7 @@ fn ChatHistory::new() -> ChatHistory {
     messages: [],
     max_context_tokens: 4000,
     current_model: "claude-sonnet-4-5-20250929",
+    usage_stats: UsageStats::new(),
   } // Leave some room for response
 }
 
@@ -189,7 +215,7 @@ async fn summarize_messages(
   let response = send_chat_request_with_tools(
     config, summary_messages, tools, model,
   )
-  let { choices, id: _, object: _, created: _, model: _ } = response
+  let { choices, usage: _, id: _, object: _, created: _, model: _ } = response
   if choices.length() == 0 {
     return "Previous conversation history (summary unavailable)"
   }
@@ -343,12 +369,20 @@ struct ChatResponseChoice {
 } derive(FromJson)
 
 ///|
+struct ResponseUsage {
+  prompt_tokens : Int
+  completion_tokens : Int
+  total_tokens : Int
+} derive(FromJson)
+
+///|
 struct ChatResponse {
   id : String
   object : String
   created : Int
   model : String
   choices : Array[ChatResponseChoice]
+  usage : ResponseUsage?
 } derive(FromJson)
 
 ///|
@@ -573,6 +607,7 @@ async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
       println("  :help, :h           - Show this help message")
       println("  :model [name]       - Show or set current model")
       println("  :models             - List available models")
+      println("  :cost               - Show API usage statistics")
       println("  :clear              - Clear conversation history")
       println("  :exit, :quit, :q    - Exit Jarvis")
       println("  exit, quit          - Also exits Jarvis")
@@ -615,6 +650,18 @@ async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
       println("Conversation history cleared")
       true
     }
+    "cost" => {
+      let stats = chat_history.usage_stats
+      print_jarvis_prefix()
+      println("API Usage Statistics:")
+      println("  Total requests:    \{stats.total_requests}")
+      println("  Input tokens:      \{stats.total_input_tokens}")
+      println("  Output tokens:     \{stats.total_output_tokens}")
+      println(
+        "  Total tokens:      \{stats.total_input_tokens + stats.total_output_tokens}",
+      )
+      true
+    }
     "exit" | "quit" | "q" => {
       print_jarvis_prefix()
       println("Goodbye!")
@@ -648,7 +695,17 @@ async fn handle_tool_calls(
         tools,
         chat_history.current_model,
       )
-      let { choices, id: _, object: _, created: _, model: _ } = response
+      let { choices, usage, id: _, object: _, created: _, model: _ } = response
+
+      // Record usage statistics
+      match usage {
+        Some(u) =>
+          chat_history.usage_stats.add_request(
+            u.prompt_tokens,
+            u.completion_tokens,
+          )
+        None => ()
+      }
 
       // Check if there are tool calls
       if choices.length() == 0 {
