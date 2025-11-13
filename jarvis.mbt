@@ -19,6 +19,16 @@ async fn print_jarvis_prefix() -> Unit {
   @stdio.stdout.write(color_bold + color_cyan + "Jarvis" + color_reset + ": ")
 }
 
+///| Print horizontal separator line
+async fn print_separator() -> Unit {
+  let size = window_size()
+  let mut line = ""
+  for i = 0; i < size.col; i = i + 1 {
+    line = line + "─"
+  }
+  println(line)
+}
+
 fn Config::new(base_url : String, auth_token : String) -> Config {
   { base_url, auth_token }
 }
@@ -266,8 +276,10 @@ async fn chat_loop(config : Config) -> Unit {
   println("(Type 'exit' or 'quit' to end the conversation)")
   println("")
   while true {
+    print_separator()
     match readline_simple("> ", command_history) {
       Some(user_input) => {
+        print_separator()
         if user_input.is_empty() {
           continue
         }

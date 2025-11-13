@@ -10,6 +10,19 @@
 
 MOONBIT_FFI_EXPORT
 int32_t
+moonbit_jarvis_tty_get_win_size(int32_t *size) {
+  struct winsize ws;
+  int result = ioctl(STDIN_FILENO, TIOCGWINSZ, &ws);
+  if (result == -1) {
+    return errno;
+  }
+  size[0] = ws.ws_row;
+  size[1] = ws.ws_col;
+  return 0;
+}
+
+MOONBIT_FFI_EXPORT
+int32_t
 moonbit_jarvis_tty_set_raw_mode(int32_t fd) {
   int32_t flags = fcntl(fd, F_GETFL);
   flags |= O_NONBLOCK;
