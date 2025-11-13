@@ -1018,6 +1018,162 @@ async fn send_chat_request_with_tools(
 }
 
 ///|
+/// Send streaming chat request (returns content incrementally)
+async fn send_streaming_chat_request(
+  config : Config,
+  messages : Array[Message],
+  tools : Array[Tool],
+  model : String,
+) -> (ChatResponse, Array[String]) raise JarvisError {
+  // Parse URL
+  let url = config.base_url()
+  let host_and_path : StringView = if url.has_prefix("https://") {
+    url[8:] catch {
+      IndexOutOfBounds(_) | InvalidIndex(_) =>
+        raise StringViewError(
+          "Invalid URL format when removing HTTPS prefix\nURL: \{url}",
+        )
+    }
+  } else if url.has_prefix("http://") {
+    url[7:] catch {
+      IndexOutOfBounds(_) | InvalidIndex(_) =>
+        raise StringViewError(
+          "Invalid URL format when removing HTTP prefix\nURL: \{url}",
+        )
+    }
+  } else {
+    url[:]
+  }
+  let parts_view = host_and_path.split("/")
+  let parts_array : Array[String] = []
+  for part in parts_view {
+    parts_array.push(part.to_string())
+  }
+  let host = parts_array[0]
+  let path = if parts_array.length() > 1 {
+    let mut p = ""
+    for i = 1; i < parts_array.length(); i = i + 1 {
+      p = p + "/" + parts_array[i]
+    }
+    if p.is_empty() {
+      "/v1/chat/completions"
+    } else {
+      p
+    }
+  } else {
+    "/v1/chat/completions"
+  }
+
+  // Build request JSON with streaming enabled
+  let request_with_stream : Json = {
+    "model": model,
+    "messages": messages.to_json(),
+    "tools": tools.to_json(),
+    "stream": true,
+  }
+  let json_body = request_with_stream.stringify()
+
+  // Create HTTP client
+  let client = @http.Client::connect(host, headers={
+    "Authorization": "Bearer \{config.auth_token()}",
+  }) catch {
+    e =>
+      raise HttpError(
+        "Failed to connect to host '\{host}': \{e}\nFull URL: \{url}",
+      )
+  }
+  defer client.close()
+
+  // Send POST request
+  let response = client.post(path, json_body, extra_headers={
+    "Content-Type": "application/json",
+  }) catch {
+    e =>
+      raise HttpError(
+        "Failed to send POST request to '\{host}\{path}': \{e}\nRequest body: \{json_body}",
+      )
+  }
+  if response.code != 200 {
+    let error_body = client.read_all().text() catch {
+        _ => "[Failed to read error body]"
+      }
+    raise HttpError(
+      "HTTP request failed with status: \{response.code}\nResponse body: \{error_body}",
+    )
+  }
+
+  // Read streaming response (SSE format)
+  let mut full_content = ""
+  let tool_calls : Array[ToolCall]? = None
+  let mut finish_reason = ""
+  let chunks : Array[String] = [] // Collect chunks for streaming output
+  let body_text = client.read_all().text() catch {
+      e => raise HttpError("Failed to read response: \{e}")
+    }
+
+  // Parse SSE format: data: {...}\n\n
+  for line_view in body_text[:].split("\n") {
+    let line = line_view.to_string()
+    if line.has_prefix("data: ") {
+      let json_str_view = line[6:] catch {
+          IndexOutOfBounds(_) | InvalidIndex(_) => continue
+        }
+      let json_str = json_str_view.to_string()
+      if json_str[:].trim(chars=" \t\r\n").to_string() == "[DONE]" {
+        break
+      }
+      let chunk_json = @json.parse(json_str) catch { _ => continue }
+      match chunk_json {
+        Object(map) =>
+          // Extract delta content
+          match map.get("choices") {
+            Some(Array(choices)) if choices.length() > 0 =>
+              match choices[0] {
+                Object(choice_map) => {
+                  match choice_map.get("delta") {
+                    Some(Object(delta_map)) =>
+                      match delta_map.get("content") {
+                        Some(String(content)) => {
+                          full_content = full_content + content
+                          chunks.push(content) // Collect chunk
+                        }
+                        _ => ()
+                      }
+                    _ => ()
+                  }
+                  match choice_map.get("finish_reason") {
+                    Some(String(reason)) => finish_reason = reason
+                    _ => ()
+                  }
+                }
+                _ => ()
+              }
+            _ => ()
+          }
+        _ => ()
+      }
+    }
+  }
+
+  // Construct ChatResponse from accumulated data
+  let message = ChatResponseMessage::{
+    role: "assistant",
+    content: Some(full_content),
+    tool_calls,
+  }
+  let choice = ChatResponseChoice::{ message, index: 0, finish_reason }
+  let response = {
+    choices: [choice],
+    usage: None,
+    id: "",
+    object: "",
+    created: 0,
+    model,
+  }
+  (response, chunks)
+}
+
+///|
 /// Tool execution
 async fn execute_shell_command(command : String) -> String {
   try {
@@ -1225,17 +1381,47 @@ async fn handle_tool_calls(
   tools : Array[Tool],
 ) -> Unit {
   let mut max_iterations = 10 // Prevent infinite loops
+  let mut first_request = true // Use streaming for first request only
+  let mut used_streaming = false // Track if we used streaming
   try {
     while max_iterations > 0 {
       max_iterations = max_iterations - 1
 
-      // Send request with tools
-      let response = send_chat_request_with_tools(
-        config,
-        chat_history.messages,
-        tools,
-        chat_history.current_model,
-      )
+      // Send request (use streaming for first request)
+      let response = if first_request && tools.length() > 0 {
+        // First request with tools: use non-streaming to check for tool calls
+        send_chat_request_with_tools(
+          config,
+          chat_history.messages,
+          tools,
+          chat_history.current_model,
+        )
+      } else if first_request {
+        // First request without tools: use streaming
+        print_jarvis_prefix()
+        used_streaming = true
+        let (resp, chunks) = send_streaming_chat_request(
+          config,
+          chat_history.messages,
+          tools,
+          chat_history.current_model,
+        )
+        // Print chunks
+        for chunk in chunks {
+          @stdio.stdout.write(chunk)
+        }
+        println("") // Add newline after streaming
+        resp
+      } else {
+        // Subsequent requests: non-streaming
+        send_chat_request_with_tools(
+          config,
+          chat_history.messages,
+          tools,
+          chat_history.current_model,
+        )
+      }
+      first_request = false
       let { choices, usage, id: _, object: _, created: _, model: _ } = response
 
       // Record usage statistics
@@ -1304,15 +1490,17 @@ async fn handle_tool_calls(
               println("Content: \{content_str}")
               break
             }
-            Some(content_str) => {
-              // Normal content, display it
-              print_jarvis_prefix()
-              println(content_str)
-            }
-            None => {
-              print_jarvis_prefix()
-              println("Error: No content in response")
-            }
+            Some(content_str) =>
+              // Normal content, display it only if we didn't use streaming
+              if used_streaming == false {
+                print_jarvis_prefix()
+                println(content_str)
+              }
+            None =>
+              if used_streaming == false {
+                print_jarvis_prefix()
+                println("Error: No content in response")
+              }
           }
           break
         }
