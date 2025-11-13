@@ -118,7 +118,7 @@ fn ChatRequest::with_tools(
 
 ///| Response types
 struct ChatResponseMessage {
-  _role : String
+  role : String
   content : String?
   tool_calls : Array[ToolCall]?
 }
@@ -126,7 +126,7 @@ struct ChatResponseMessage {
 impl @json.FromJson for ChatResponseMessage with from_json(json, path) raise @json.JsonDecodeError {
   match json {
     Object(map) => {
-      let _role = match map.get("role") {
+      let role = match map.get("role") {
         Some(String(s)) => s
         _ => raise @json.JsonDecodeError((path.add_key("role"), "expected string"))
       }
@@ -149,25 +149,26 @@ impl @json.FromJson for ChatResponseMessage with from_json(json, path) raise @js
         _ => raise @json.JsonDecodeError((path.add_key("tool_calls"), "expected array or null"))
       }
 
-      { _role, content, tool_calls }
+      ignore(role)
+      { role, content, tool_calls }
     }
     _ => raise @json.JsonDecodeError((path, "expected object"))
   }
 }
 
 struct ChatResponseChoice {
-  _index : Int
+  index : Int
   message : ChatResponseMessage
-  _finish_reason : String
-} derive(FromJson(fields(_index(rename="index"), _finish_reason(rename="finish_reason"))))
+  finish_reason : String
+} derive(FromJson)
 
 struct ChatResponse {
-  _id : String
-  _object : String
-  _created : Int
-  _model : String
+  id : String
+  object : String
+  created : Int
+  model : String
   choices : Array[ChatResponseChoice]
-} derive(FromJson(fields(_id(rename="id"), _object(rename="object"), _created(rename="created"), _model(rename="model"))))
+} derive(FromJson)
 ///|
 /// Main entry point for Jarvis
 suberror JarvisError {
@@ -408,31 +409,33 @@ async fn chat_loop(config : Config) -> Unit {
 
             // Send request with tools
             let response = send_chat_request_with_tools(config, chat_history.messages, tools)
+            let { choices, id: _, object: _, created: _, model: _ } = response
 
             // Check if there are tool calls
-            if response.choices.length() == 0 {
+            if choices.length() == 0 {
               print_jarvis_prefix()
               println("Error: Empty response from API")
               break
             }
 
-            let message = response.choices[0].message
+            let { message, index: _, finish_reason: _ } = choices[0]
+            let { content, tool_calls, role: _ } = message
 
             // Add assistant message to history (even if it has tool_calls)
             let assistant_msg = {
               role: "assistant",
-              content: message.content,
-              tool_calls: message.tool_calls,
+              content,
+              tool_calls,
               tool_call_id: None,
               name: None
             }
             chat_history.add(assistant_msg)
 
             // Check if we have tool calls
-            match message.tool_calls {
-              Some(tool_calls) if tool_calls.length() > 0 => {
+            match tool_calls {
+              Some(calls) if calls.length() > 0 => {
                 // Execute each tool call
-                for tool_call in tool_calls {
+                for tool_call in calls {
                   print_jarvis_prefix()
                   println("Executing tool: \{tool_call.function.name}")
 
@@ -447,7 +450,7 @@ async fn chat_loop(config : Config) -> Unit {
               }
               _ => {
                 // No tool calls, display the content
-                match message.content {
+                match content {
                   Some(content) => {
                     print_jarvis_prefix()
                     println(content)
