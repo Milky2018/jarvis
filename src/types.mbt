@@ -1,3 +1,4 @@
+///|
 /// Message types
 /// Represents a chat message
 struct Message {

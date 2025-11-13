@@ -20,22 +20,17 @@ impl ToJson for ChatRequest
 type ChatResponse
 impl @json.FromJson for ChatResponse
 
-type ChatResponseChoice
-impl @json.FromJson for ChatResponseChoice
-
-type ChatResponseMessage
-
 type CommandHistory
 
 type Config
 impl Show for Config
 
+type ContentBlock
+impl @json.FromJson for ContentBlock
+
 type FunctionCall
 impl ToJson for FunctionCall
 impl @json.FromJson for FunctionCall
-
-type FunctionDef
-impl ToJson for FunctionDef
 
 type LineEditor
 

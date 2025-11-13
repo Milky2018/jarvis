@@ -1,3 +1,4 @@
+///|
 /// Chat history
 /// Manages conversation history
 struct ChatHistory {
@@ -63,11 +64,7 @@ async fn generate_conversation_title(
   for i = 0; i < limit; i = i + 1 {
     let msg = chat_history.messages[i]
     guard msg.content is Some(c) else { continue }
-    let short = if c.length() > 100 {
-      c[:100].to_string() + "..."
-    } else {
-      c
-    }
+    let short = if c.length() > 100 { c[:100].to_string() + "..." } else { c }
     preview = preview + short + "\n"
   }
   let title_messages : Array[Message] = [
@@ -313,4 +310,3 @@ async fn ChatHistory::manage_history(
   }
   true // Indicate that summarization happened
 }
-

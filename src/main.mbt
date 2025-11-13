@@ -1,3 +1,4 @@
+///|
 async fn handle_tool_calls(
   config : Config,
   chat_history : ChatHistory,
@@ -334,11 +335,9 @@ async fn chat_loop(config : Config) -> Unit {
 async fn execute_prompt(config : Config, prompt : String) -> Unit {
   ensure_jarvis_dir()
   let chat_history = ChatHistory::new()
-
   print_jarvis_prefix()
   println("Processing: \{prompt}")
   println("")
-
   handle_user_input(config, chat_history, prompt)
 }
 
@@ -359,7 +358,6 @@ async fn main {
       ),
     },
   )
-
   let value = @clap.SimpleValue::new(parser.prog)
   let args = @sys.get_cli_args()
   // Remove program name from args
@@ -398,21 +396,19 @@ async fn main {
   } else {
     None
   }
-
   try {
     let config = load_config()
 
     // Check if -e flag is used
     match prompt {
       Some(p) => execute_prompt(config, p)
-      None => {
+      None =>
         if execute_mode {
           @stdio.stderr.write("Error: -e flag requires a prompt argument\n")
           @stdio.stderr.write("Usage: jarvis -e \"<prompt>\"\n")
         } else {
           chat_loop(config)
         }
-      }
     }
   } catch {
     EnvVarNotSet(msg) =>

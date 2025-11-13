@@ -90,19 +90,8 @@ async fn get_all_memories() -> Array[(String, String)] {
 fn extract_keywords(text : String) -> Array[String] {
   // Define stop words set for better performance
   let stop_words = @hashset.from_array([
-    "的",
-    "了",
-    "是",
-    "我",
-    "你",
-    "在",
-    "有",
-    "和",
-    "this",
-    "that",
-    "the",
-    "and",
-    "for",
+    "的", "了", "是", "我", "你", "在", "有", "和", "this", "that", "the",
+    "and", "for",
   ])
   let keywords : Array[String] = []
   let text_lower = text.to_lower()
@@ -249,4 +238,3 @@ async fn search_relevant_memories(
   }
   relevant_memories
 }
-

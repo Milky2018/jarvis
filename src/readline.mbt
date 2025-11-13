@@ -432,10 +432,7 @@ fn LineEditor::delete_word_backward(self : LineEditor) -> Bool {
 
   // Handle the case where we reached the beginning
   match self.buffer.get_char(pos) {
-    Some(ch) =>
-      if pos == 0 && is_word_separator(ch) == false {
-        pos = 0
-      }
+    Some(ch) => if pos == 0 && is_word_separator(ch) == false { pos = 0 }
     None => ()
   }
   if pos != start_pos {

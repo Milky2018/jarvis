@@ -25,7 +25,7 @@ async fn execute_shell_command(command : String) -> String {
 /// Execute tool with Claude API format (takes tool name and input JSON directly)
 async fn execute_tool_claude(tool_name : String, input : Json) -> String {
   match tool_name {
-    "execute_command" => {
+    "execute_command" =>
       // Extract command from input JSON
       match input {
         Object(map) =>
@@ -40,7 +40,6 @@ async fn execute_tool_claude(tool_name : String, input : Json) -> String {
           }
         _ => "Error: Input must be a JSON object"
       }
-    }
     _ => "Error: Unknown tool '\{tool_name}'"
   }
 }

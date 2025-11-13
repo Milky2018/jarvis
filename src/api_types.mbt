@@ -110,6 +110,11 @@ fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
 fn ChatResponse::get_tool_uses(
   self : ChatResponse,
 ) -> Array[(String, String, Json)] {
+  ignore(self.id)
+  ignore(self.model)
+  ignore(self.role)
+  ignore(self.stop_reason)
+  ignore(self.type_)
   let tool_uses : Array[(String, String, Json)] = []
   for block in self.content {
     if block.type_ == "tool_use" {

@@ -1,3 +1,4 @@
+///|
 async fn handle_command(
   input : String,
   chat_history : ChatHistory,
@@ -46,9 +47,15 @@ async fn handle_command(
     "models" => {
       print_jarvis_prefix()
       println("Available models:")
-      println("  claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)")
-      println("  claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)")
-      println("  claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)")
+      println(
+        "  claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)",
+      )
+      println(
+        "  claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)",
+      )
+      println(
+        "  claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)",
+      )
       println("")
       println("Use ':model <name>' to switch models")
       true
