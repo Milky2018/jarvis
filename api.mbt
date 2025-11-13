@@ -238,34 +238,30 @@ async fn send_streaming_chat_request(
         break
       }
       let chunk_json = @json.parse(json_str) catch { _ => continue }
-      match chunk_json {
-        Object(map) =>
-          match map.get("choices") {
-            Some(Array(choices)) if choices.length() > 0 =>
-              match choices[0] {
-                Object(choice_map) => {
-                  match choice_map.get("delta") {
-                    Some(Object(delta_map)) =>
-                      match delta_map.get("content") {
-                        Some(String(content)) => {
-                          full_content = full_content + content
-                          // Output immediately after parsing (ignore write errors)
-                          let _ = @stdio.stdout.write(content) catch { _ => () }
 
-                        }
-                        _ => ()
-                      }
-                    _ => ()
-                  }
-                  match choice_map.get("finish_reason") {
-                    Some(String(reason)) => finish_reason = reason
-                    _ => ()
-                  }
-                }
-                _ => ()
-              }
+      // Use guard statements to flatten nested match expressions
+      guard chunk_json is Object(map) else { continue }
+      guard map.get("choices") is Some(Array(choices)) else { continue }
+      guard choices.length() > 0 else { continue }
+      guard choices[0] is Object(choice_map) else { continue }
+
+      // Extract delta content
+      match choice_map.get("delta") {
+        Some(Object(delta_map)) =>
+          match delta_map.get("content") {
+            Some(String(content)) => {
+              full_content = full_content + content
+              // Output immediately after parsing (ignore write errors)
+              let _ = @stdio.stdout.write(content) catch { _ => () }
+            }
             _ => ()
           }
+        _ => ()
+      }
+
+      // Extract finish reason
+      match choice_map.get("finish_reason") {
+        Some(String(reason)) => finish_reason = reason
         _ => ()
       }
     }
