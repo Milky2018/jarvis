@@ -81,13 +81,20 @@ async fn send_chat_request_with_tools(
         _ => "[Failed to read error body]"
       }
     raise HttpError(
-      "HTTP request failed with status: \{response.code}\nResponse body: \{error_body}",
+      "HTTP request failed with status: \{response.code}\n" +
+      "Request URL: https://\{host}\{path}\n" +
+      "Request body: \{json_body}\n" +
+      "Response body: \{error_body}",
     )
   }
 
   // Read response body
   let body = client.read_all() catch {
-    e => raise HttpError("Failed to read response: \{e}")
+    e =>
+      raise HttpError(
+        "Failed to read response body from \{host}\{path}: \{e}\n" +
+        "Request body: \{json_body}",
+      )
   }
 
   // Parse JSON response
@@ -179,7 +186,10 @@ async fn send_streaming_chat_request(
         _ => "[Failed to read error body]"
       }
     raise HttpError(
-      "HTTP request failed with status: \{response.code}\nResponse body: \{error_body}",
+      "HTTP request failed with status: \{response.code}\n" +
+      "Request URL: https://\{host}\{path}\n" +
+      "Request body: \{json_body}\n" +
+      "Response body: \{error_body}",
     )
   }
 
@@ -188,7 +198,11 @@ async fn send_streaming_chat_request(
   let mut full_content = ""
   let mut finish_reason = ""
   let body_text = client.read_all().text() catch {
-      e => raise HttpError("Failed to read response: \{e}")
+      e =>
+        raise HttpError(
+          "Failed to read streaming response from \{host}\{path}: \{e}\n" +
+          "Request body: \{json_body}",
+        )
     }
 
   // Parse SSE format and output chunks

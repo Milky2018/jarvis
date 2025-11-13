@@ -270,14 +270,6 @@ fn estimate_total_tokens(messages : Array[Message]) -> Int {
 }
 
 ///|
-/// Calculate and return token usage percentage
-fn ChatHistory::get_token_usage_percent(self : ChatHistory) -> Int {
-  let total = estimate_total_tokens(self.messages)
-  let percent = total * 100 / self.max_context_tokens
-  percent
-}
-
-///|
 /// Print token usage status with color coding
 async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
   let total = estimate_total_tokens(self.messages)
