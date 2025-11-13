@@ -1,0 +1,3 @@
+- [x] 模型列表更改为如下几个模型：claude-sonnet-4-5-20250929、glm-4.5、gemini-2.5-pro、gpt-5-chat
+- [x] 增加历史记录功能，保存在工作目录的 `.jarvis` 目录下
+- [x] 程序进入时，`.jarvis` 中如果有 conversation，询问用户是否从某个 conversation 继续
