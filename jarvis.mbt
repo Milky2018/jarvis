@@ -419,34 +419,6 @@ fn get_conversation_path(name : String) -> String {
 }
 
 ///|
-/// List all saved conversations
-async fn list_conversations() -> Array[String] {
-  let dir = get_jarvis_dir()
-  let (exit_code, output) = @process.collect_output_merged("sh", [
-    "-c",
-    "cd '\{dir}' 2>/dev/null && ls -1 *.json 2>/dev/null | sed 's/\\.json$//' || true",
-  ])
-  if exit_code != 0 {
-    return []
-  }
-  let text = output.text()
-  let text_view = text[:].trim(chars=" \n\t\r")
-  let text_str = text_view.to_string()
-  if text_str.is_empty() {
-    return []
-  }
-  let lines : Array[String] = []
-  for line in text_view.split("\n") {
-    let trimmed_view = line.trim(chars=" \t\r")
-    let trimmed = trimmed_view.to_string()
-    if trimmed.is_empty() == false {
-      lines.push(trimmed)
-    }
-  }
-  lines
-}
-
-///|
 /// Find the latest conversation that hasn't been summarized
 async fn find_latest_unsummarized_conversation() -> String? {
   let dir = get_jarvis_dir()
@@ -1018,13 +990,13 @@ async fn send_chat_request_with_tools(
 }
 
 ///|
-/// Send streaming chat request (returns content incrementally)
+/// Send streaming chat request (outputs content in real-time)
 async fn send_streaming_chat_request(
   config : Config,
   messages : Array[Message],
   tools : Array[Tool],
   model : String,
-) -> (ChatResponse, Array[String]) raise JarvisError {
+) -> ChatResponse raise JarvisError {
   // Parse URL
   let url = config.base_url()
   let host_and_path : StringView = if url.has_prefix("https://") {
@@ -1103,29 +1075,30 @@ async fn send_streaming_chat_request(
   }
 
   // Read streaming response (SSE format)
+  // Note: read_all() waits for complete response, but we output chunks as we parse them
   let mut full_content = ""
   let tool_calls : Array[ToolCall]? = None
   let mut finish_reason = ""
-  let chunks : Array[String] = [] // Collect chunks for streaming output
   let body_text = client.read_all().text() catch {
       e => raise HttpError("Failed to read response: \{e}")
     }
 
-  // Parse SSE format: data: {...}\n\n
+  // Parse SSE format and output chunks
+  let lines : Array[String] = []
   for line_view in body_text[:].split("\n") {
-    let line = line_view.to_string()
+    lines.push(line_view.to_string())
+  }
+  for line in lines {
     if line.has_prefix("data: ") {
-      let json_str_view = line[6:] catch {
-          IndexOutOfBounds(_) | InvalidIndex(_) => continue
-        }
+      let json_str_view = line[6:] catch { _ => continue }
       let json_str = json_str_view.to_string()
-      if json_str[:].trim(chars=" \t\r\n").to_string() == "[DONE]" {
+      let trimmed = json_str[:].trim(chars=" \t\r\n").to_string()
+      if trimmed == "[DONE]" {
         break
       }
       let chunk_json = @json.parse(json_str) catch { _ => continue }
       match chunk_json {
         Object(map) =>
-          // Extract delta content
           match map.get("choices") {
             Some(Array(choices)) if choices.length() > 0 =>
               match choices[0] {
@@ -1135,7 +1108,9 @@ async fn send_streaming_chat_request(
                       match delta_map.get("content") {
                         Some(String(content)) => {
                           full_content = full_content + content
-                          chunks.push(content) // Collect chunk
+                          // Output immediately after parsing (ignore write errors)
+                          let _ = @stdio.stdout.write(content) catch { _ => () }
+
                         }
                         _ => ()
                       }
@@ -1162,15 +1137,7 @@ async fn send_streaming_chat_request(
     tool_calls,
   }
   let choice = ChatResponseChoice::{ message, index: 0, finish_reason }
-  let response = {
-    choices: [choice],
-    usage: None,
-    id: "",
-    object: "",
-    created: 0,
-    model,
-  }
-  (response, chunks)
+  { choices: [choice], usage: None, id: "", object: "", created: 0, model }
 }
 
 ///|
@@ -1400,16 +1367,12 @@ async fn handle_tool_calls(
         // First request without tools: use streaming
         print_jarvis_prefix()
         used_streaming = true
-        let (resp, chunks) = send_streaming_chat_request(
+        let resp = send_streaming_chat_request(
           config,
           chat_history.messages,
           tools,
           chat_history.current_model,
         )
-        // Print chunks
-        for chunk in chunks {
-          @stdio.stdout.write(chunk)
-        }
         println("") // Add newline after streaming
         resp
       } else {

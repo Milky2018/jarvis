@@ -1,2 +1,6 @@
 - [ ] 工具调用时，显示正在调用工具的信息
+- [ ] 现在 jarvis.mbt 太长了，将它的内容拆分到多个文件，记住，完全不要使用 `pub`，因为这些文件都属于同一个 package，不需要 `pub` 
+- [ ] extract_keywords 这个函数在干什么？能用更优雅的方式替代吗
+- [ ] 整体 review 一下代码，进行适当的重构和优化
+- [ ] option + delete 删除单词；command + delete 删除整句话
 - [ ] 
