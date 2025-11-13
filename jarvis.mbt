@@ -446,7 +446,49 @@ async fn get_all_memories() -> Array[(String, String)] {
 }
 
 ///|
-/// Search for relevant memories based on user input
+/// Extract keywords from user input (simple approach: split by space and filter)
+fn extract_keywords(text : String) -> Array[String] {
+  let keywords : Array[String] = []
+  let text_lower = text.to_lower()
+
+  // Split by common delimiters
+  for word_view in text_lower[:].split(" ") {
+    let word = word_view.to_string()
+    // Filter out very short words and common Chinese/English stop words
+    if word.length() >= 2 &&
+      word != "的" &&
+      word != "了" &&
+      word != "是" &&
+      word != "我" &&
+      word != "你" &&
+      word != "在" &&
+      word != "有" &&
+      word != "和" &&
+      word != "this" &&
+      word != "that" &&
+      word != "the" &&
+      word != "and" &&
+      word != "for" {
+      keywords.push(word)
+    }
+  }
+  keywords
+}
+
+///|
+/// Check if content contains any of the keywords
+fn contains_keywords(content : String, keywords : Array[String]) -> Bool {
+  let content_lower = content.to_lower()
+  for keyword in keywords {
+    if content_lower.contains(keyword) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Search for relevant memories based on user input (keyword-based filtering)
 async fn search_relevant_memories(
   user_input : String,
   config : Config,
@@ -457,10 +499,47 @@ async fn search_relevant_memories(
     return ""
   }
 
-  // Build a prompt to find relevant memories
-  let mut memories_text = ""
+  // Extract keywords from user input
+  let keywords = extract_keywords(user_input)
+  if keywords.length() == 0 {
+    return ""
+  }
+
+  // Filter memories by keyword matching
+  let filtered_memories : Array[(String, String)] = []
   for i = 0; i < memories.length(); i = i + 1 {
     let (filename, content) = memories[i]
+    if contains_keywords(content, keywords) {
+      filtered_memories.push((filename, content))
+    }
+  }
+
+  // If no matches, return early
+  if filtered_memories.length() == 0 {
+    return ""
+  }
+
+  // If only 1-2 matches, return them directly without AI
+  if filtered_memories.length() <= 2 {
+    let mut relevant_memories = ""
+    for i = 0; i < filtered_memories.length(); i = i + 1 {
+      let (filename, content) = filtered_memories[i]
+      relevant_memories = relevant_memories +
+        "\n\n--- 相关记忆 [\{filename}] ---\n" +
+        content
+    }
+    return relevant_memories
+  }
+
+  // If more than 2 matches, use AI to rank them (limit to first 10)
+  let mut memories_text = ""
+  let limit = if filtered_memories.length() > 10 {
+    10
+  } else {
+    filtered_memories.length()
+  }
+  for i = 0; i < limit; i = i + 1 {
+    let (filename, content) = filtered_memories[i]
     // Limit each memory to 300 chars for the search
     let preview = if content.length() > 300 {
       content[:300].to_string() + "..."
@@ -473,7 +552,7 @@ async fn search_relevant_memories(
     {
       role: "user",
       content: Some(
-        "用户说：\{user_input}\n\n以下是历史对话的总结：\n\n\{memories_text}\n\n请判断哪些历史对话与用户当前的话题相关。如果有相关的，请回复相关的编号（用逗号分隔，如\"1,3,5\"）。如果没有相关的，请只回复\"无\"。",
+        "用户说：\{user_input}\n\n以下是可能相关的历史对话总结：\n\n\{memories_text}\n\n请选出最相关的1-3个对话编号（用逗号分隔，如\"1,3\"）。如果都不相关，请回复\"无\"。",
       ),
       tool_calls: None,
       tool_call_id: None,
@@ -522,8 +601,8 @@ async fn search_relevant_memories(
       "10" => 10
       _ => 0
     }
-    if idx > 0 && idx <= memories.length() {
-      let (filename, content) = memories[idx - 1]
+    if idx > 0 && idx <= limit {
+      let (filename, content) = filtered_memories[idx - 1]
       relevant_memories = relevant_memories +
         "\n\n--- 相关记忆 [\{filename}] ---\n" +
         content
