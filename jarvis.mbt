@@ -152,10 +152,9 @@ fn UsageStats::add_request(
   // Calculate cost based on model (prices per 1M tokens in USD)
   let (input_price, output_price) = match model {
     "claude-sonnet-4-5-20250929" => (3.0, 15.0) // $3/$15 per 1M tokens
-    "glm-4.5" => (1.0, 1.0) // $1/$1 per 1M tokens (estimated)
-    "gemini-2.5-pro" => (1.25, 5.0) // $1.25/$5 per 1M tokens (estimated)
-    "gpt-5-chat" => (5.0, 15.0) // $5/$15 per 1M tokens (estimated)
-    _ => (3.0, 15.0) // Default to Claude pricing
+    "claude-haiku-4-5-20251001" => (0.8, 4.0) // $0.8/$4 per 1M tokens
+    "claude-opus-4-1-20250805" => (15.0, 75.0) // $15/$75 per 1M tokens
+    _ => (3.0, 15.0) // Default to Sonnet pricing
   }
   let cost = input_tokens.to_double() / 1000000.0 * input_price +
     output_tokens.to_double() / 1000000.0 * output_price
@@ -269,19 +268,15 @@ async fn generate_conversation_title(
   ) catch {
     _ => return "conversation"
   }
-  match response.choices.get(0) {
-    Some(choice) =>
-      match choice.message.content {
-        Some(s) => {
-          let trimmed = s[:].trim(chars=" \n\t\r\"\'").to_string()
-          // Replace invalid filename characters
-          trimmed
-          .replace(old="/", new="_")
-          .replace(old=":", new="_")
-          .replace(old="\\", new="_")
-        }
-        None => "conversation"
-      }
+  match response.get_text_content() {
+    Some(s) => {
+      let trimmed = s[:].trim(chars=" \n\t\r\"\'").to_string()
+      // Replace invalid filename characters
+      trimmed
+      .replace(old="/", new="_")
+      .replace(old=":", new="_")
+      .replace(old="\\", new="_")
+    }
     None => "conversation"
   }
 }
@@ -341,19 +336,11 @@ async fn generate_summary_with_title(
       return ("", "")
     }
   }
-  let summary = match response.choices.get(0) {
-    Some(choice) =>
-      match choice.message.content {
-        Some(s) => s
-        None => {
-          print_jarvis_prefix()
-          println("Warning: Empty summary content")
-          return ("", "")
-        }
-      }
+  let summary = match response.get_text_content() {
+    Some(s) => s
     None => {
       print_jarvis_prefix()
-      println("Warning: Empty summary response")
+      println("Warning: Empty summary content")
       return ("", "")
     }
   }
@@ -484,27 +471,30 @@ async fn get_all_memories() -> Array[(String, String)] {
 ///|
 /// Extract keywords from user input (simple approach: split by space and filter)
 fn extract_keywords(text : String) -> Array[String] {
+  // Define stop words set for better performance
+  let stop_words = @hashset.from_array([
+    "的",
+    "了",
+    "是",
+    "我",
+    "你",
+    "在",
+    "有",
+    "和",
+    "this",
+    "that",
+    "the",
+    "and",
+    "for",
+  ])
   let keywords : Array[String] = []
   let text_lower = text.to_lower()
 
-  // Split by common delimiters
+  // Split by space and filter
   for word_view in text_lower[:].split(" ") {
     let word = word_view.to_string()
-    // Filter out very short words and common Chinese/English stop words
-    if word.length() >= 2 &&
-      word != "的" &&
-      word != "了" &&
-      word != "是" &&
-      word != "我" &&
-      word != "你" &&
-      word != "在" &&
-      word != "有" &&
-      word != "和" &&
-      word != "this" &&
-      word != "that" &&
-      word != "the" &&
-      word != "and" &&
-      word != "for" {
+    // Keep words that are >= 2 chars and not stop words
+    if word.length() >= 2 && stop_words.contains(word) == false {
       keywords.push(word)
     }
   }
@@ -603,12 +593,8 @@ async fn search_relevant_memories(
   ) catch {
     _ => return ""
   }
-  let relevant_indices = match response.choices.get(0) {
-    Some(choice) =>
-      match choice.message.content {
-        Some(s) => s
-        None => return ""
-      }
+  let relevant_indices = match response.get_text_content() {
+    Some(s) => s
     None => return ""
   }
   if relevant_indices.contains("无") {
@@ -691,13 +677,7 @@ async fn summarize_messages(
   let response = send_chat_request_with_tools(
     config, summary_messages, tools, model,
   )
-  let { choices, usage: _, id: _, object: _, created: _, model: _ } = response
-  if choices.length() == 0 {
-    return "Previous conversation history (summary unavailable)"
-  }
-  let { message, index: _, finish_reason: _ } = choices[0]
-  let { content, tool_calls: _, role: _ } = message
-  match content {
+  match response.get_text_content() {
     Some(text) => text
     None => "Previous conversation history (summary unavailable)"
   }
@@ -770,12 +750,14 @@ async fn ChatHistory::manage_history(
 
 ///|
 /// API Request/Response
-/// Request body for LLM API
+/// Request body for Claude API
 struct ChatRequest {
   model : String
   messages : Array[Message]
+  max_tokens : Int
   stream : Bool
   tools : Array[Tool]?
+  system : String?
 } derive(ToJson)
 
 ///|
@@ -784,7 +766,37 @@ fn ChatRequest::with_tools(
   model : String,
   tools : Array[Tool],
 ) -> ChatRequest {
-  { messages, model, stream: false, tools: Some(tools) }
+  // Extract system messages
+  let mut system_content = ""
+  let non_system_messages : Array[Message] = []
+  for msg in messages {
+    if msg.role == "system" {
+      match msg.content {
+        Some(content) => {
+          if system_content.is_empty() == false {
+            system_content = system_content + "\n\n"
+          }
+          system_content = system_content + content
+        }
+        None => ()
+      }
+    } else {
+      non_system_messages.push(msg)
+    }
+  }
+  let system_param = if system_content.is_empty() {
+    None
+  } else {
+    Some(system_content)
+  }
+  {
+    messages: non_system_messages,
+    model,
+    max_tokens: 4096,
+    stream: false,
+    tools: None,  // Claude API doesn't support OpenAI-style function tools
+    system: system_param,
+  }
 }
 
 ///|
@@ -846,20 +858,46 @@ struct ChatResponseChoice {
 
 ///|
 struct ResponseUsage {
-  prompt_tokens : Int
-  completion_tokens : Int
-  total_tokens : Int
-} derive(FromJson)
+  input_tokens : Int
+  output_tokens : Int
+} derive(FromJson(fields(input_tokens(rename="input_tokens"), output_tokens(rename="output_tokens"))))
 
 ///|
 struct ChatResponse {
   id : String
-  object : String
-  created : Int
+  type_ : String
+  role : String
+  content : Array[ContentBlock]
   model : String
-  choices : Array[ChatResponseChoice]
+  stop_reason : String?
   usage : ResponseUsage?
-} derive(FromJson)
+} derive(FromJson(fields(type_(rename="type"))))
+
+///|
+struct ContentBlock {
+  type_ : String
+  text : String
+} derive(FromJson(fields(type_(rename="type"))))
+
+///|
+/// Extract text content from Claude response
+fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
+  if self.content.length() == 0 {
+    return None
+  }
+  // Concatenate all text blocks
+  let mut result = ""
+  for block in self.content {
+    if block.type_ == "text" {
+      result = result + block.text
+    }
+  }
+  if result.is_empty() {
+    None
+  } else {
+    Some(result)
+  }
+}
 
 ///|
 /// Main entry point for Jarvis
@@ -923,12 +961,12 @@ async fn send_chat_request_with_tools(
       p = p + "/" + parts_array[i]
     }
     if p.is_empty() {
-      "/v1/chat/completions"
+      "/v1/messages"
     } else {
       p
     }
   } else {
-    "/v1/chat/completions"
+    "/v1/messages"
   }
 
   // Build request JSON with tools
@@ -1028,20 +1066,48 @@ async fn send_streaming_chat_request(
       p = p + "/" + parts_array[i]
     }
     if p.is_empty() {
-      "/v1/chat/completions"
+      "/v1/messages"
     } else {
       p
     }
   } else {
-    "/v1/chat/completions"
+    "/v1/messages"
   }
 
   // Build request JSON with streaming enabled
-  let request_with_stream : Json = {
-    "model": model,
-    "messages": messages.to_json(),
-    "tools": tools.to_json(),
-    "stream": true,
+  // Extract system messages
+  let mut system_content = ""
+  let non_system_messages : Array[Message] = []
+  for msg in messages {
+    if msg.role == "system" {
+      match msg.content {
+        Some(content) => {
+          if system_content.is_empty() == false {
+            system_content = system_content + "\n\n"
+          }
+          system_content = system_content + content
+        }
+        None => ()
+      }
+    } else {
+      non_system_messages.push(msg)
+    }
+  }
+  let request_with_stream : Json = if system_content.is_empty() {
+    {
+      "model": model,
+      "messages": non_system_messages.to_json(),
+      "max_tokens": 4096,
+      "stream": true,
+    }
+  } else {
+    {
+      "model": model,
+      "messages": non_system_messages.to_json(),
+      "max_tokens": 4096,
+      "stream": true,
+      "system": system_content,
+    }
   }
   let json_body = request_with_stream.stringify()
 
@@ -1077,7 +1143,6 @@ async fn send_streaming_chat_request(
   // Read streaming response (SSE format)
   // Note: read_all() waits for complete response, but we output chunks as we parse them
   let mut full_content = ""
-  let tool_calls : Array[ToolCall]? = None
   let mut finish_reason = ""
   let body_text = client.read_all().text() catch {
       e => raise HttpError("Failed to read response: \{e}")
@@ -1130,14 +1195,19 @@ async fn send_streaming_chat_request(
     }
   }
 
-  // Construct ChatResponse from accumulated data
-  let message = ChatResponseMessage::{
+  // Construct ChatResponse from accumulated data (Claude format)
+  let content_blocks : Array[ContentBlock] = [
+    { type_: "text", text: full_content },
+  ]
+  {
+    id: "",
+    type_: "message",
     role: "assistant",
-    content: Some(full_content),
-    tool_calls,
+    content: content_blocks,
+    model,
+    stop_reason: Some(finish_reason),
+    usage: None,
   }
-  let choice = ChatResponseChoice::{ message, index: 0, finish_reason }
-  { choices: [choice], usage: None, id: "", object: "", created: 0, model }
 }
 
 ///|
@@ -1262,10 +1332,9 @@ async fn handle_command(
     "models" => {
       print_jarvis_prefix()
       println("Available models:")
-      println("  claude-sonnet-4-5-20250929  - Claude Sonnet 4.5 (default)")
-      println("  glm-4.5                     - GLM-4.5")
-      println("  gemini-2.5-pro              - Google Gemini 2.5 Pro")
-      println("  gpt-5-chat                  - GPT-5 Chat")
+      println("  claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)")
+      println("  claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)")
+      println("  claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)")
       println("")
       println("Use ':model <name>' to switch models")
       true
@@ -1385,89 +1454,60 @@ async fn handle_tool_calls(
         )
       }
       first_request = false
-      let { choices, usage, id: _, object: _, created: _, model: _ } = response
 
       // Record usage statistics
-      match usage {
+      match response.usage {
         Some(u) =>
           chat_history.usage_stats.add_request(
-            u.prompt_tokens,
-            u.completion_tokens,
-            u.total_tokens,
+            u.input_tokens,
+            u.output_tokens,
+            u.input_tokens + u.output_tokens,
             chat_history.current_model,
           )
         None => ()
       }
 
-      // Check if there are tool calls
-      if choices.length() == 0 {
-        print_jarvis_prefix()
-        println("Error: Empty response from API")
-        break
-      }
-      let { message, index: _, finish_reason: _ } = choices[0]
-      let { content, tool_calls, role: _ } = message
+      // Extract text content from response
+      let content_text = response.get_text_content()
 
-      // Add assistant message to history (even if it has tool_calls)
+      // Add assistant message to history
       let assistant_msg = {
         role: "assistant",
-        content,
-        tool_calls,
+        content: content_text,
+        tool_calls: None,
         tool_call_id: None,
         name: None,
       }
       chat_history.add(assistant_msg)
 
-      // Check if we have tool calls
-      match tool_calls {
-        Some(calls) if calls.length() > 0 => {
-          // Execute each tool call
-          for tool_call in calls {
-            print_jarvis_prefix()
-            println("Executing tool: \{tool_call.function.name}")
-            let result = execute_tool(tool_call)
-
-            // Add tool result to history
-            let tool_msg = Message::tool(
-              result,
-              tool_call.id,
-              tool_call.function.name,
-            )
-            chat_history.add(tool_msg)
-          }
-          // Continue loop to get final response
-          continue
-        }
-        _ => {
-          // No tool calls in structured format, check if content contains XML tool calls
-          match content {
-            Some(content_str) if content_str.contains("<function_calls>") => {
-              // Content contains XML-style tool calls, this is not standard
-              print_jarvis_prefix()
-              println(
-                "Warning: API returned tool calls in XML format instead of structured format.",
-              )
-              println(
-                "This API provider may not fully support OpenAI-style tool calling.",
-              )
-              println("Content: \{content_str}")
-              break
-            }
-            Some(content_str) =>
-              // Normal content, display it only if we didn't use streaming
-              if used_streaming == false {
-                print_jarvis_prefix()
-                println(content_str)
-              }
-            None =>
-              if used_streaming == false {
-                print_jarvis_prefix()
-                println("Error: No content in response")
-              }
-          }
+      // For now, Claude API doesn't support tool_calls in the same way
+      // Just display the content
+      match content_text {
+        Some(content_str) if content_str.contains("<function_calls>") => {
+          // Content contains XML-style tool calls
+          print_jarvis_prefix()
+          println(
+            "Warning: API returned tool calls in XML format instead of structured format.",
+          )
+          println(
+            "This API provider may not fully support OpenAI-style tool calling.",
+          )
+          println("Content: \{content_str}")
           break
         }
+        Some(content_str) =>
+          // Normal content, display it only if we didn't use streaming
+          if used_streaming == false {
+            print_jarvis_prefix()
+            println(content_str)
+          }
+        None =>
+          if used_streaming == false {
+            print_jarvis_prefix()
+            println("Error: No content in response")
+          }
       }
+      break
     }
     if max_iterations == 0 {
       print_jarvis_prefix()

@@ -395,6 +395,79 @@ fn LineEditor::move_word_backward(self : LineEditor) -> Bool {
 }
 
 ///|
+/// Delete from cursor to the beginning of the previous word (Option+Delete)
+fn LineEditor::delete_word_backward(self : LineEditor) -> Bool {
+  if self.cursor_pos == 0 {
+    return false
+  }
+  let start_pos = self.cursor_pos
+  let mut pos = self.cursor_pos - 1
+
+  // Skip current word separators
+  while pos > 0 {
+    match self.buffer.get_char(pos) {
+      Some(ch) => {
+        if is_word_separator(ch) == false {
+          break
+        }
+        pos = pos - 1
+      }
+      None => break
+    }
+  }
+
+  // Skip word characters
+  while pos > 0 {
+    match self.buffer.get_char(pos) {
+      Some(ch) => {
+        if is_word_separator(ch) {
+          pos = pos + 1
+          break
+        }
+        pos = pos - 1
+      }
+      None => break
+    }
+  }
+
+  // Handle the case where we reached the beginning
+  match self.buffer.get_char(pos) {
+    Some(ch) =>
+      if pos == 0 && is_word_separator(ch) == false {
+        pos = 0
+      }
+    None => ()
+  }
+  if pos != start_pos {
+    let before = self.buffer[0:pos].to_string() catch {
+      IndexOutOfBounds(_) | InvalidIndex(_) => ""
+    }
+    let after = self.buffer[start_pos:].to_string() catch {
+      IndexOutOfBounds(_) | InvalidIndex(_) => ""
+    }
+    self.buffer = before + after
+    self.cursor_pos = pos
+    true
+  } else {
+    false
+  }
+}
+
+///|
+/// Delete from cursor to the beginning of the line (Command+Delete)
+fn LineEditor::delete_to_start(self : LineEditor) -> Bool {
+  if self.cursor_pos == 0 {
+    return false
+  }
+  let after = self.buffer[self.cursor_pos:].to_string() catch {
+    IndexOutOfBounds(_) | InvalidIndex(_) => ""
+  }
+  self.buffer = after
+  self.cursor_pos = 0
+  true
+}
+
+///|
 /// Redraw line
 async fn redraw_line(editor : LineEditor, prompt : String) -> Unit {
   move_to_start()
@@ -457,12 +530,14 @@ async fn read_escape_sequence() -> String? {
             match key {
               b'C' => Some("option-right") // Option+Right
               b'D' => Some("option-left") // Option+Left
+              b'~' => Some("option-delete") // Option+Delete (ESC[1;3~)
               _ => None
             }
           } else if modifier == b'9' {
             match key {
               b'C' => Some("cmd-right") // Command+Right
               b'D' => Some("cmd-left") // Command+Left
+              b'~' => Some("cmd-delete") // Command+Delete (ESC[1;9~)
               _ => None
             }
           } else {
@@ -678,6 +753,14 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
           }
         Some("cmd-right") =>
           if editor.move_to_end() {
+            redraw_line(editor, prompt)
+          }
+        Some("option-delete") =>
+          if editor.delete_word_backward() {
+            redraw_line(editor, prompt)
+          }
+        Some("cmd-delete") =>
+          if editor.delete_to_start() {
             redraw_line(editor, prompt)
           }
         _ => ()
