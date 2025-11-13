@@ -104,17 +104,11 @@ struct FunctionCall {
 } derive(ToJson, FromJson)
 
 ///|
-/// Tool definition structures
+/// Tool definition structures for Claude API
 struct Tool {
-  type_ : String
-  function : FunctionDef
-} derive(ToJson(fields(type_(rename="type"))))
-
-///|
-struct FunctionDef {
   name : String
   description : String
-  parameters : Json
+  input_schema : Json
 } derive(ToJson)
 
 ///|
@@ -794,7 +788,7 @@ fn ChatRequest::with_tools(
     model,
     max_tokens: 4096,
     stream: false,
-    tools: None,  // Claude API doesn't support OpenAI-style function tools
+    tools: Some(tools),  // Claude API supports tools with input_schema format
     system: system_param,
   }
 }
@@ -876,8 +870,49 @@ struct ChatResponse {
 ///|
 struct ContentBlock {
   type_ : String
-  text : String
-} derive(FromJson(fields(type_(rename="type"))))
+  text : String?
+  id : String?
+  name : String?
+  input : Json?
+}
+
+///|
+impl @json.FromJson for ContentBlock with from_json(json, path) raise @json.JsonDecodeError {
+  match json {
+    Object(map) => {
+      let type_ = match map.get("type") {
+        Some(String(s)) => s
+        _ =>
+          raise @json.JsonDecodeError((path.add_key("type"), "expected string"))
+      }
+      let text = match map.get("text") {
+        Some(String(s)) => Some(s)
+        Some(Null) | None => None
+        _ =>
+          raise @json.JsonDecodeError(
+            (path.add_key("text"), "expected string or null"),
+          )
+      }
+      let id = match map.get("id") {
+        Some(String(s)) => Some(s)
+        Some(Null) | None => None
+        _ => None
+      }
+      let name = match map.get("name") {
+        Some(String(s)) => Some(s)
+        Some(Null) | None => None
+        _ => None
+      }
+      let input = match map.get("input") {
+        Some(obj) => Some(obj)
+        None => None
+        _ => None
+      }
+      { type_, text, id, name, input }
+    }
+    _ => raise @json.JsonDecodeError((path, "expected object"))
+  }
+}
 
 ///|
 /// Extract text content from Claude response
@@ -889,7 +924,10 @@ fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
   let mut result = ""
   for block in self.content {
     if block.type_ == "text" {
-      result = result + block.text
+      match block.text {
+        Some(t) => result = result + t
+        None => ()
+      }
     }
   }
   if result.is_empty() {
@@ -897,6 +935,21 @@ fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
   } else {
     Some(result)
   }
+}
+
+///|
+/// Extract tool uses from Claude response
+fn ChatResponse::get_tool_uses(self : ChatResponse) -> Array[(String, String, Json)] {
+  let tool_uses : Array[(String, String, Json)] = []
+  for block in self.content {
+    if block.type_ == "tool_use" {
+      match (block.id, block.name, block.input) {
+        (Some(id), Some(name), Some(input)) => tool_uses.push((id, name, input))
+        _ => ()
+      }
+    }
+  }
+  tool_uses
 }
 
 ///|
@@ -1197,7 +1250,7 @@ async fn send_streaming_chat_request(
 
   // Construct ChatResponse from accumulated data (Claude format)
   let content_blocks : Array[ContentBlock] = [
-    { type_: "text", text: full_content },
+    { type_: "text", text: Some(full_content), id: None, name: None, input: None },
   ]
   {
     id: "",
@@ -1234,32 +1287,32 @@ async fn execute_shell_command(command : String) -> String {
 }
 
 ///|
-async fn execute_tool(tool_call : ToolCall) -> String {
-  match tool_call.function.name {
+/// Execute tool with Claude API format (takes tool name and input JSON directly)
+async fn execute_tool_claude(tool_name : String, input : Json) -> String {
+  match tool_name {
     "execute_command" => {
-      // Parse arguments JSON
-      let args_json = @json.parse(tool_call.function.arguments) catch {
-        e => return "Error: Failed to parse arguments: \{e}"
-      }
-
-      // Extract command from arguments
-      match args_json {
+      // Extract command from input JSON
+      match input {
         Object(map) =>
           match map.get("command") {
-            Some(String(cmd)) => execute_shell_command(cmd)
+            Some(String(cmd)) => {
+              print_jarvis_prefix()
+              println("Executing: \{cmd}")
+              execute_shell_command(cmd)
+            }
             Some(_) => "Error: 'command' must be a string"
             None => "Error: Missing 'command' argument"
           }
-        _ => "Error: Arguments must be a JSON object"
+        _ => "Error: Input must be a JSON object"
       }
     }
-    _ => "Error: Unknown tool '\{tool_call.function.name}'"
+    _ => "Error: Unknown tool '\{tool_name}'"
   }
 }
 
 ///|
 fn get_available_tools() -> Array[Tool] {
-  let params : Json = {
+  let input_schema : Json = {
     "type": "object",
     "properties": {
       "command": {
@@ -1271,12 +1324,9 @@ fn get_available_tools() -> Array[Tool] {
   }
   [
     {
-      type_: "function",
-      function: {
-        name: "execute_command",
-        description: "Execute a shell command and return the output. Use this when you need to interact with the system, run programs, or access files.",
-        parameters: params,
-      },
+      name: "execute_command",
+      description: "Execute a shell command and return the output. Use this when you need to interact with the system, run programs, or access files.",
+      input_schema,
     },
   ]
 }
@@ -1467,10 +1517,49 @@ async fn handle_tool_calls(
         None => ()
       }
 
-      // Extract text content from response
+      // Extract text content and tool uses from response
       let content_text = response.get_text_content()
+      let tool_uses = response.get_tool_uses()
 
-      // Add assistant message to history
+      // Display text content if present and not using streaming
+      if tool_uses.length() == 0 {
+        match content_text {
+          Some(content_str) =>
+            if used_streaming == false {
+              print_jarvis_prefix()
+              println(content_str)
+            }
+          None =>
+            if used_streaming == false {
+              print_jarvis_prefix()
+              println("Error: No content in response")
+            }
+        }
+        // No tool calls, add message to history and break
+        let assistant_msg = {
+          role: "assistant",
+          content: content_text,
+          tool_calls: None,
+          tool_call_id: None,
+          name: None,
+        }
+        chat_history.add(assistant_msg)
+        break
+      }
+
+      // We have tool calls to execute
+      // First, display any text content
+      match content_text {
+        Some(content_str) =>
+          if content_str.is_empty() == false {
+            print_jarvis_prefix()
+            println(content_str)
+          }
+        None => ()
+      }
+
+      // Build assistant message with the full response for history
+      // Note: We store the text content, Claude API requires full conversation history
       let assistant_msg = {
         role: "assistant",
         content: content_text,
@@ -1480,34 +1569,35 @@ async fn handle_tool_calls(
       }
       chat_history.add(assistant_msg)
 
-      // For now, Claude API doesn't support tool_calls in the same way
-      // Just display the content
-      match content_text {
-        Some(content_str) if content_str.contains("<function_calls>") => {
-          // Content contains XML-style tool calls
-          print_jarvis_prefix()
-          println(
-            "Warning: API returned tool calls in XML format instead of structured format.",
-          )
-          println(
-            "This API provider may not fully support OpenAI-style tool calling.",
-          )
-          println("Content: \{content_str}")
-          break
+      // Execute each tool and collect results
+      let tool_results : Array[Json] = []
+      for i = 0; i < tool_uses.length(); i = i + 1 {
+        let (tool_id, tool_name, tool_input) = tool_uses[i]
+        let result = execute_tool_claude(tool_name, tool_input)
+
+        // Create tool_result content block
+        let tool_result : Json = {
+          "type": "tool_result",
+          "tool_use_id": tool_id,
+          "content": result,
         }
-        Some(content_str) =>
-          // Normal content, display it only if we didn't use streaming
-          if used_streaming == false {
-            print_jarvis_prefix()
-            println(content_str)
-          }
-        None =>
-          if used_streaming == false {
-            print_jarvis_prefix()
-            println("Error: No content in response")
-          }
+        tool_results.push(tool_result)
       }
-      break
+
+      // Send tool results back as a user message
+      // Note: We need to convert tool_results to message content
+      // For now, let's convert to string and send as content
+      let results_json = tool_results.to_json().stringify()
+      let user_msg_with_results = {
+        role: "user",
+        content: Some(results_json),
+        tool_calls: None,
+        tool_call_id: None,
+        name: None,
+      }
+      chat_history.add(user_msg_with_results)
+
+      // Continue loop to get final response after tool execution
     }
     if max_iterations == 0 {
       print_jarvis_prefix()
