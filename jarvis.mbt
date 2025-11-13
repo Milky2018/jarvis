@@ -203,12 +203,8 @@ fn ChatHistory::set_model(self : ChatHistory, model : String) -> Unit {
 }
 
 ///|
-/// Save conversation history to file and generate markdown summary
-async fn ChatHistory::save(
-  self : ChatHistory,
-  filename : String,
-  config : Config,
-) -> Unit {
+/// Save conversation history to file (without summary)
+async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   let json_obj : Json = {
     "messages": self.messages.to_json(),
     "model": self.current_model,
@@ -223,20 +219,84 @@ async fn ChatHistory::save(
   if exit_code != 0 {
     print_jarvis_prefix()
     println("Warning: Failed to save conversation")
-    return
   }
-
-  // Generate markdown summary
-  generate_summary(self, filename, config)
 }
 
 ///|
-/// Generate markdown summary of the conversation
-async fn generate_summary(
+/// Generate a meaningful title for the conversation
+async fn generate_conversation_title(
   chat_history : ChatHistory,
-  json_filename : String,
   config : Config,
-) -> Unit {
+) -> String {
+  // Build conversation preview (first few messages)
+  let mut preview = ""
+  let limit = if chat_history.messages.length() > 6 {
+    6
+  } else {
+    chat_history.messages.length()
+  }
+  for i = 0; i < limit; i = i + 1 {
+    let msg = chat_history.messages[i]
+    match msg.content {
+      Some(c) => {
+        let short = if c.length() > 100 {
+          c[:100].to_string() + "..."
+        } else {
+          c
+        }
+        preview = preview + short + "\n"
+      }
+      None => ()
+    }
+  }
+  let title_messages : Array[Message] = [
+    {
+      role: "user",
+      content: Some(
+        "请为以下对话生成一个简短的标题（不超过20个字，中文）。只返回标题本身，不要其他内容。\n\n对话内容：\n" +
+        preview,
+      ),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+  ]
+  let response = send_chat_request_with_tools(
+    config,
+    title_messages,
+    [],
+    chat_history.current_model,
+  ) catch {
+    _ => return "conversation"
+  }
+  match response.choices.get(0) {
+    Some(choice) =>
+      match choice.message.content {
+        Some(s) => {
+          let trimmed = s[:].trim(chars=" \n\t\r\"\'").to_string()
+          // Replace invalid filename characters
+          trimmed
+          .replace(old="/", new="_")
+          .replace(old=":", new="_")
+          .replace(old="\\", new="_")
+        }
+        None => "conversation"
+      }
+    None => "conversation"
+  }
+}
+
+///|
+/// Generate markdown summary of the conversation with meaningful title
+async fn generate_summary_with_title(
+  chat_history : ChatHistory,
+  config : Config,
+) -> (String, String) {
+  // Generate title first
+  print_jarvis_prefix()
+  println("Generating conversation title...")
+  let title = generate_conversation_title(chat_history, config)
+
   // Build conversation text
   let mut conversation_text = ""
   for msg in chat_history.messages {
@@ -253,6 +313,8 @@ async fn generate_summary(
   }
 
   // Create prompt for summarization
+  print_jarvis_prefix()
+  println("Generating summary...")
   let summary_messages : Array[Message] = [
     {
       role: "user",
@@ -276,7 +338,7 @@ async fn generate_summary(
     _ => {
       print_jarvis_prefix()
       println("Warning: Failed to generate conversation summary")
-      return
+      return ("", "")
     }
   }
   let summary = match response.choices.get(0) {
@@ -286,35 +348,16 @@ async fn generate_summary(
         None => {
           print_jarvis_prefix()
           println("Warning: Empty summary content")
-          return
+          return ("", "")
         }
       }
     None => {
       print_jarvis_prefix()
       println("Warning: Empty summary response")
-      return
+      return ("", "")
     }
   }
-
-  // Save summary to markdown file
-  let md_filename = if json_filename.has_suffix(".json") {
-    let len = json_filename.length()
-    json_filename[:len - 5].to_string() + ".md"
-  } else {
-    json_filename + ".md"
-  }
-  let escaped_summary = summary.replace(old="'", new="'\\''")
-  let (exit_code, _) = @process.collect_output_merged("sh", [
-    "-c",
-    "echo '\{escaped_summary}' > '\{md_filename}'",
-  ])
-  if exit_code != 0 {
-    print_jarvis_prefix()
-    println("Warning: Failed to save conversation summary")
-  } else {
-    print_jarvis_prefix()
-    println("Conversation summary saved")
-  }
+  (title, summary)
 }
 
 ///|
@@ -401,6 +444,27 @@ async fn list_conversations() -> Array[String] {
     }
   }
   lines
+}
+
+///|
+/// Find the latest conversation that hasn't been summarized
+async fn find_latest_unsummarized_conversation() -> String? {
+  let dir = get_jarvis_dir()
+  // List all JSON files sorted by modification time (newest first)
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c",
+    "cd '\{dir}' 2>/dev/null && for f in $(ls -1t *.json 2>/dev/null); do base=${f%.json}; if [ ! -f \"${base}.md\" ]; then echo \"$base\"; exit 0; fi; done",
+  ])
+  if exit_code != 0 {
+    return None
+  }
+  let text = output.text()
+  let trimmed = text[:].trim(chars=" \n\t\r").to_string()
+  if trimmed.is_empty() {
+    None
+  } else {
+    Some(trimmed)
+  }
 }
 
 ///|
@@ -1027,7 +1091,11 @@ fn get_available_tools() -> Array[Tool] {
 ///|
 /// Handle special commands starting with ':'
 ///  Returns true if command was handled, false if it's a normal message
-async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
+async fn handle_command(
+  input : String,
+  chat_history : ChatHistory,
+  config : Config,
+) -> Bool {
   if input.has_prefix(":") == false {
     return false
   }
@@ -1049,6 +1117,7 @@ async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
       println("  :models             - List available models")
       println("  :cost               - Show API usage statistics")
       println("  :clear              - Clear conversation history")
+      println("  :summarize          - Summarize and save current conversation")
       println("  :exit, :quit, :q    - Exit Jarvis")
       println("  exit, quit          - Also exits Jarvis")
       true
@@ -1099,6 +1168,39 @@ async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
         "  Total tokens:      \{stats.total_input_tokens + stats.total_output_tokens}",
       )
       println("  Estimated cost:    $\{total_cost}")
+      true
+    }
+    "summarize" | "sum" => {
+      if chat_history.messages.length() == 0 {
+        print_jarvis_prefix()
+        println("No messages to summarize")
+        return true
+      }
+      print_jarvis_prefix()
+      println("Summarizing conversation...")
+      let (title, summary) = generate_summary_with_title(chat_history, config)
+      if title.is_empty() || summary.is_empty() {
+        print_jarvis_prefix()
+        println("Failed to generate summary")
+        return true
+      }
+      // Save JSON with title as filename
+      let json_filename = get_conversation_path(title)
+      chat_history.save(json_filename)
+      // Save markdown summary
+      let md_filename = get_jarvis_dir() + "/" + title + ".md"
+      let escaped_summary = summary.replace(old="'", new="'\\''")
+      let (exit_code, _) = @process.collect_output_merged("sh", [
+        "-c",
+        "echo '\{escaped_summary}' > '\{md_filename}'",
+      ])
+      if exit_code == 0 {
+        print_jarvis_prefix()
+        println("Conversation summarized and saved as: \{title}")
+      } else {
+        print_jarvis_prefix()
+        println("Warning: Failed to save summary file")
+      }
       true
     }
     "exit" | "quit" | "q" => {
@@ -1308,8 +1410,25 @@ async fn chat_loop(config : Config) -> Unit {
   // Ensure .jarvis directory exists
   ensure_jarvis_dir()
 
-  // Always start with a new conversation
-  let chat_history = ChatHistory::new()
+  // Try to load the latest unsummarized conversation
+  let chat_history = match find_latest_unsummarized_conversation() {
+    Some(conversation_name) => {
+      let path = get_conversation_path(conversation_name)
+      match ChatHistory::load(path) {
+        Some(loaded) => {
+          print_jarvis_prefix()
+          println("Continuing from previous conversation: \{conversation_name}")
+          loaded
+        }
+        None => {
+          print_jarvis_prefix()
+          println("Failed to load previous conversation, starting new one")
+          ChatHistory::new()
+        }
+      }
+    }
+    None => ChatHistory::new()
+  }
   let command_history = CommandHistory::new(100)
   println("")
   print_jarvis_prefix()
@@ -1335,7 +1454,7 @@ async fn chat_loop(config : Config) -> Unit {
         }
 
         // Handle special commands
-        if handle_command(user_input, chat_history) {
+        if handle_command(user_input, chat_history, config) {
           println("")
           continue
         }
@@ -1355,7 +1474,7 @@ async fn chat_loop(config : Config) -> Unit {
     }
   }
 
-  // Save conversation on exit if there were messages
+  // Save conversation on exit if there were messages (without summary)
   if should_save && chat_history.messages.length() > 0 {
     // Generate timestamp-based filename
     let (exit_code, output) = @process.collect_output_merged("sh", [
@@ -1367,9 +1486,9 @@ async fn chat_loop(config : Config) -> Unit {
       "conversation"
     }
     let filename = get_conversation_path(timestamp)
-    chat_history.save(filename, config)
+    chat_history.save(filename)
     print_jarvis_prefix()
-    println("Conversation saved to: \{timestamp}")
+    println("Conversation saved (use :summarize to generate summary)")
   }
 }
 
