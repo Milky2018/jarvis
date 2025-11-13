@@ -123,22 +123,53 @@ struct UsageStats {
   mut total_requests : Int
   mut total_input_tokens : Int
   mut total_output_tokens : Int
+  cost_by_model : @hashmap.HashMap[String, Double]  // Store costs per model
 }
 
 ///|
 fn UsageStats::new() -> UsageStats {
-  { total_requests: 0, total_input_tokens: 0, total_output_tokens: 0 }
+  {
+    total_requests: 0,
+    total_input_tokens: 0,
+    total_output_tokens: 0,
+    cost_by_model: @hashmap.new(),
+  }
 }
 
 ///|
 fn UsageStats::add_request(
   self : UsageStats,
   input_tokens : Int,
-  output_tokens : Int
+  output_tokens : Int,
+  model : String,
 ) -> Unit {
   self.total_requests = self.total_requests + 1
   self.total_input_tokens = self.total_input_tokens + input_tokens
   self.total_output_tokens = self.total_output_tokens + output_tokens
+
+  // Calculate cost based on model (prices per 1M tokens in USD)
+  let (input_price, output_price) = match model {
+    "claude-sonnet-4-5-20250929" => (3.0, 15.0) // $3/$15 per 1M tokens
+    "gpt-4o" => (2.5, 10.0) // $2.5/$10 per 1M tokens
+    "gpt-4-turbo" => (10.0, 30.0) // $10/$30 per 1M tokens
+    "gpt-4" => (30.0, 60.0) // $30/$60 per 1M tokens
+    "gpt-3.5-turbo" => (0.5, 1.5) // $0.5/$1.5 per 1M tokens
+    _ => (3.0, 15.0) // Default to Claude pricing
+  }
+
+  let cost = input_tokens.to_double() / 1000000.0 * input_price +
+             output_tokens.to_double() / 1000000.0 * output_price
+
+  // Update cost for this model
+  let current_cost = self.cost_by_model.get(model).unwrap_or(0.0)
+  self.cost_by_model.set(model, current_cost + cost)
+}
+
+///|
+fn UsageStats::total_cost(self : UsageStats) -> Double {
+  let mut total = 0.0
+  self.cost_by_model.each(fn(_model, cost) { total = total + cost })
+  total
 }
 
 ///|
@@ -652,6 +683,7 @@ async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
     }
     "cost" => {
       let stats = chat_history.usage_stats
+      let total_cost = stats.total_cost()
       print_jarvis_prefix()
       println("API Usage Statistics:")
       println("  Total requests:    \{stats.total_requests}")
@@ -660,6 +692,7 @@ async fn handle_command(input : String, chat_history : ChatHistory) -> Bool {
       println(
         "  Total tokens:      \{stats.total_input_tokens + stats.total_output_tokens}",
       )
+      println("  Estimated cost:    $\{total_cost}")
       true
     }
     "exit" | "quit" | "q" => {
@@ -703,6 +736,7 @@ async fn handle_tool_calls(
           chat_history.usage_stats.add_request(
             u.prompt_tokens,
             u.completion_tokens,
+            chat_history.current_model,
           )
         None => ()
       }
