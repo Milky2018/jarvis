@@ -60,6 +60,7 @@ suberror JarvisError {
   HttpError(String)
   JsonParseError(String)
   StringViewError(String)
+  InterruptError(String)
 } derive(Show)
 
 ///|

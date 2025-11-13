@@ -11,6 +11,9 @@ async fn handle_tool_calls(
     while max_iterations > 0 {
       max_iterations = max_iterations - 1
 
+      // Check for interrupt before each iteration
+      check_and_raise()
+
       // Send request (use streaming for first request)
       let response = if first_request && tools.length() > 0 {
         // First request with tools: use non-streaming to check for tool calls
@@ -74,9 +77,13 @@ async fn handle_tool_calls(
             }
         }
         // No tool calls, add message to history and break
+        // Ensure content is not None to avoid API errors
         let assistant_msg = {
           role: "assistant",
-          content: content_text,
+          content: match content_text {
+            Some(c) => Some(c)
+            None => Some("") // Use empty string instead of None
+          },
           tool_calls: None,
           tool_call_id: None,
           name: None,
@@ -97,15 +104,22 @@ async fn handle_tool_calls(
       }
 
       // Build assistant message with the full response for history
-      // Note: We store the text content, Claude API requires full conversation history
-      let assistant_msg = {
-        role: "assistant",
-        content: content_text,
-        tool_calls: None,
-        tool_call_id: None,
-        name: None,
+      // IMPORTANT: Only add message if there's actual content
+      // Claude API requires content field to be non-null
+      match content_text {
+        Some(content) =>
+          if content.is_empty() == false {
+            let assistant_msg = {
+              role: "assistant",
+              content: Some(content),
+              tool_calls: None,
+              tool_call_id: None,
+              name: None,
+            }
+            chat_history.add(assistant_msg)
+          }
+        None => () // Skip adding message if no content (would cause API error)
       }
-      chat_history.add(assistant_msg)
 
       // Execute each tool and collect results
       let tool_results : Array[Json] = []
@@ -161,6 +175,11 @@ async fn handle_tool_calls(
       println_async("Warning: Maximum tool calling iterations reached")
     }
   } catch {
+    InterruptError(msg) => {
+      print_jarvis_prefix()
+      println_async("\{msg}")
+      println_async("")
+    }
     EnvVarNotSet(msg) => {
       print_jarvis_prefix()
       println_async("Error: Environment variable not set: \{msg}")
@@ -341,6 +360,9 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
 
 ///|
 async fn main {
+  // Initialize interrupt handler for Ctrl+C
+  setup_interrupt_handler()
+
   // Parse command line arguments using clap
   let parser = @clap.Parser::new(
     prog="jarvis",

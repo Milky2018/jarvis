@@ -10,5 +10,5 @@
     "moonbitlang/x/sys",
     "TheWaWaR/clap"
   ],
-  "native-stub": ["tty.c"]
+  "native-stub": ["tty.c", "interrupt.c"]
 }

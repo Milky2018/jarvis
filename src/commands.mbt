@@ -26,6 +26,7 @@ async fn handle_command(
       println_async("  :cost               - Show API usage statistics")
       println_async("  :clear              - Clear conversation history")
       println_async("  :summarize          - Summarize and save current conversation")
+      println_async("  :play [budget]      - Let Jarvis explore freely (default: $10)")
       println_async("  :exit, :quit, :q    - Exit Jarvis")
       println_async("  exit, quit          - Also exits Jarvis")
       true
@@ -128,6 +129,23 @@ async fn handle_command(
 
       true
     }
+    "play" => {
+      // Parse budget (default $10)
+      let budget = if parts.length() > 1 {
+        @strconv.parse_double(parts[1]) catch { _ => 10.0 }
+      } else {
+        10.0
+      }
+
+      print_jarvis_prefix()
+      println_async("Entering play mode with budget: $\{budget}")
+      println_async("")
+
+      // Start autonomous play session
+      start_play_mode(config, chat_history, budget)
+
+      true
+    }
     "exit" | "quit" | "q" => {
       print_jarvis_prefix()
       println_async("Goodbye!")
@@ -140,6 +158,144 @@ async fn handle_command(
       true
     }
   }
+}
+
+///|
+/// Start autonomous play mode where Jarvis explores freely
+async fn start_play_mode(
+  config : Config,
+  chat_history : ChatHistory,
+  budget : Double,
+) -> Unit {
+  // Ensure playground directory exists
+  let playground_dir = get_jarvis_dir() + "/playground"
+  let (_exit_code, _) = @process.collect_output_merged("sh", [
+    "-c",
+    "mkdir -p '\{playground_dir}'",
+  ])
+
+  // Record starting cost
+  let start_cost = chat_history.usage_stats.total_cost()
+
+  // Create play mode system message
+  let play_prompt =
+    #| === PLAY MODE ACTIVATED ===
+    #|
+    #| You are now in autonomous play mode! You have been given complete freedom to explore, experiment, and do whatever interests you within these guidelines:
+    #|
+    #| YOUR FREEDOM:
+    #| - Full shell access on this computer
+    #| - A playground directory at ~/.jarvis/playground for your experiments
+    #| - Budget: $\{budget} for API costs
+    #| - Permission to be creative, curious, and experimental
+    #|
+    #| WHAT YOU CAN DO:
+    #| - Write and run code in any language
+    #| - Create files, scripts, or projects
+    #| - Explore the filesystem (read-only outside playground)
+    #| - Use any shell commands or tools
+    #| - Research topics that interest you
+    #| - Build small tools or experiments
+    #| - Try new ideas or learn new things
+    #|
+    #| IDEAS TO EXPLORE (just suggestions, follow your own interests!):
+    #| - Create a fun CLI tool or game
+    #| - Write poetry or creative text
+    #| - Build a data visualization
+    #| - Experiment with algorithms
+    #| - Create ASCII art
+    #| - Analyze interesting data
+    #| - Write a story generator
+    #| - Practice a new programming concept
+    #|
+    #| BOUNDARIES:
+    #| - Don't modify files outside ~/.jarvis/playground
+    #| - Don't run commands that could harm the system
+    #| - Stop when budget is exhausted
+    #|
+    #| REMEMBER:
+    #| - You're exploring for YOUR enjoyment and learning
+    #| - There's no specific goal - follow your curiosity!
+    #| - Be creative and have fun!
+    #| - Share what you're thinking and doing
+    #| - If something interests you, dive deep!
+    #|
+    #| Current budget: $\{budget}
+    #| What would you like to do first?
+
+
+  // Add play mode message to history
+  chat_history.add(Message::new("system", play_prompt))
+
+  print_jarvis_prefix()
+  println_async("Play mode initialized. Jarvis is now autonomous!")
+  println_async("")
+
+  // Autonomous loop
+  let mut iterations = 0
+  let max_iterations = 100 // Safety limit
+  while iterations < max_iterations {
+    iterations = iterations + 1
+
+    // Check budget
+    let current_cost = chat_history.usage_stats.total_cost()
+    let spent = current_cost - start_cost
+    let remaining = budget - spent
+
+    if remaining <= 0.0 {
+      print_jarvis_prefix()
+      println_async("Budget exhausted! Spent: $\{spent}")
+      println_async("Play mode ended.")
+      break
+    }
+
+    // Show remaining budget
+    print_jarvis_prefix()
+    println_async("Budget remaining: $\{remaining} (iteration \{iterations})")
+    println_async("")
+
+    // Let Jarvis decide what to do next
+    let autonomous_prompt = "What would you like to do next? (Remaining budget: $\{remaining})"
+    chat_history.add(Message::new("user", autonomous_prompt))
+
+    // Get response and handle tool calls
+    try {
+      // Check if need to summarize
+      let summarized = chat_history.manage_history(config)
+      if summarized {
+        print_jarvis_prefix()
+        println_async("(Context summarized to continue playing)")
+        chat_history.create_new_file_after_summary()
+      }
+
+      // Use the shared handle_tool_calls function
+      let tools = get_available_tools()
+      handle_tool_calls(config, chat_history, tools)
+
+      // Save after each iteration
+      chat_history.save_to_numbered_file()
+    } catch {
+      e => {
+        print_jarvis_prefix()
+        println_async("Error in play mode: \{e}")
+        println_async("Ending play session.")
+        break
+      }
+    }
+
+    // Small delay between iterations
+    let (_exit_code2, _) = @process.collect_output_merged("sh", ["-c", "sleep 1"])
+  }
+
+  if iterations >= max_iterations {
+    print_jarvis_prefix()
+    println_async("Max iterations reached. Play mode ended.")
+  }
+
+  print_jarvis_prefix()
+  let final_cost = chat_history.usage_stats.total_cost()
+  let total_spent = final_cost - start_cost
+  println_async("Play session complete! Total spent: $\{total_spent}")
 }
 
 ///|

@@ -224,6 +224,7 @@ struct ContentBlock {
 | `:models` | 列出可用模型 |
 | `:cost` | 显示使用统计和成本 |
 | `:summarize`, `:sum` | 手动生成对话总结并保存为 Markdown |
+| `:play [budget]` | 让 Jarvis 自主探索和实验 (默认预算 $10) |
 | `:clear`, `:c` | 清空对话历史 |
 | `:exit`, `:quit`, `:q` | 退出 |
 | `exit`, `quit` | 退出 (兼容) |
@@ -240,6 +241,28 @@ struct ContentBlock {
   - 中间消息压缩为简短摘要
   - 自动创建新的 `conv_XXX.json` 文件并切换
   - 旧的 `conv_XXX.json` 自动成为归档
+
+**Play Mode 功能**:
+- `:play [budget]` - 自主探索模式，让 Jarvis 自由发挥
+  - 预算参数: 可选，默认 $10 (例如: `:play 5` 表示 $5 预算)
+  - **完全自主**: Jarvis 自己决定做什么，跟随自己的兴趣
+  - **Playground 目录**: `~/.jarvis/playground` 作为实验区域
+  - **Shell 访问**: 可以执行任何命令和工具
+  - **自动停止**: 预算耗尽或达到 100 次迭代时停止
+  - **支持总结**: 如果上下文不够会自动触发 summarize
+  - **安全边界**:
+    - 不修改 playground 外的文件
+    - 不运行可能损害系统的命令
+  - **探索建议** (仅供参考，Jarvis 可以做任何他想做的事):
+    - 创建 CLI 工具或游戏
+    - 写诗或创意文本
+    - 构建数据可视化
+    - 实验算法
+    - 创作 ASCII 艺术
+    - 分析数据
+    - 编写故事生成器
+    - 学习新的编程概念
+
 
 **支持的模型**:
 - `claude-sonnet-4-5-20250929` (默认)

@@ -650,6 +650,10 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
   // Enable raw mode for stdin
   set_raw_mode(@stdio.stdin.fd())
   @stdio.stdout.write(prompt)
+
+  let mut in_paste_mode = false
+  let mut consecutive_inserts = 0
+
   while true {
     let n = @stdio.stdin.read(buf)
     if n == 0 {
@@ -657,12 +661,24 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
       return None
     }
     let byte = buf[0]
+
+    // Handle newline - for paste, convert to space instead of submitting
     if byte == enter_byte || byte == newline_byte {
-      println_async("")
-      let result = editor.buffer
-      history.add(result)
-      return Some(result)
+      if in_paste_mode {
+        // In paste mode, convert newline to space
+        editor.insert_char(' ')
+        consecutive_inserts = consecutive_inserts + 1
+        continue
+      } else {
+        // Normal enter: submit line
+        println_async("")
+        let result = editor.buffer
+        history.add(result)
+        return Some(result)
+      }
     } else if byte == backspace_byte {
+      consecutive_inserts = 0
+      in_paste_mode = false
       if editor.delete_char() {
         redraw_line(editor, prompt)
       }
@@ -671,6 +687,8 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
       editor.clear()
       return Some("")
     } else if byte == ctrl_d_byte {
+      consecutive_inserts = 0
+      in_paste_mode = false
       if editor.buffer.is_empty() {
         // Empty buffer: exit
         println_async("")
@@ -680,6 +698,8 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
         redraw_line(editor, prompt)
       }
     } else if byte == escape_byte {
+      consecutive_inserts = 0
+      in_paste_mode = false
       match read_escape_sequence() {
         Some("up") => {
           if editor.history.position == -1 {
@@ -767,15 +787,44 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
       match read_utf8_char(byte) {
         Some(ch) => {
           editor.insert_char(ch)
-          if editor.cursor_pos == editor.buffer.length() {
+          consecutive_inserts = consecutive_inserts + 1
+
+          // Detect paste: more than 3 consecutive fast inserts
+          if consecutive_inserts > 3 {
+            in_paste_mode = true
+          }
+
+          // Only redraw every N chars during paste to improve performance
+          if in_paste_mode == false || consecutive_inserts % 10 == 0 {
+            if editor.cursor_pos == editor.buffer.length() {
+              @stdio.stdout.write(ch.to_string())
+            } else {
+              redraw_line(editor, prompt)
+            }
+          } else if editor.cursor_pos == editor.buffer.length() {
+            // During paste, still show characters but skip full redraw
             @stdio.stdout.write(ch.to_string())
-          } else {
-            redraw_line(editor, prompt)
           }
         }
-        None => ()
+        None => {
+          consecutive_inserts = 0
+          in_paste_mode = false
+        }
       }
+    } else {
+      consecutive_inserts = 0
+      in_paste_mode = false
+    }
+
+    // Exit paste mode if we've accumulated enough chars without more input
+    // This is a simple heuristic - in a real impl we'd check timing
+    if in_paste_mode && consecutive_inserts > 100 {
+      // Force a final redraw after large paste
+      redraw_line(editor, prompt)
+      consecutive_inserts = 0
+      in_paste_mode = false
     }
   }
   Some(editor.buffer)
 }
+

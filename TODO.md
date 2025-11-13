@@ -1,0 +1,2 @@
+- [ ] command+C或者ESC中断
+- [ ] play 模式会一直强迫
