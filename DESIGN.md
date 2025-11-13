@@ -101,7 +101,7 @@ struct ChatHistory {
 ```
 
 **历史管理策略**:
-- 触发条件: 超过 80% max_context_tokens (3200/4000)
+- 触发条件: 超过 80% max_context_tokens (160k/200k tokens)
 - 保留: 首条消息 + 最近 8 条消息
 - 中间部分: 通过 LLM 总结成摘要
 - Token 估算: ~4 字符 = 1 token

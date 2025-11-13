@@ -13,7 +13,7 @@ struct ChatHistory {
 fn ChatHistory::new() -> ChatHistory {
   {
     messages: [],
-    max_context_tokens: 4000,
+    max_context_tokens: 200000,
     current_model: "claude-sonnet-4-5-20250929",
     usage_stats: UsageStats::new(),
     current_file_number: 0, // Will be set when loading/creating conversation
@@ -239,7 +239,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
       }
       Some({
         messages,
-        max_context_tokens: 4000,
+        max_context_tokens: 200000,
         current_model: model,
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
