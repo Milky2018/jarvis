@@ -105,6 +105,10 @@ struct ChatHistory {
 - 保留: 首条消息 + 最近 8 条消息
 - 中间部分: 通过 LLM 总结成摘要
 - Token 估算: ~4 字符 = 1 token
+- **实时显示**: 每次输入前显示 token 使用百分比
+  - 绿色: < 60%
+  - 黄色: 60-79%
+  - 红色: ≥ 80% (即将触发自动总结)
 
 **对话持久化**:
 - 自动保存到 `~/.jarvis/conversations/<timestamp>.json`

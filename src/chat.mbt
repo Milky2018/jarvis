@@ -270,6 +270,35 @@ fn estimate_total_tokens(messages : Array[Message]) -> Int {
 }
 
 ///|
+/// Calculate and return token usage percentage
+fn ChatHistory::get_token_usage_percent(self : ChatHistory) -> Int {
+  let total = estimate_total_tokens(self.messages)
+  let percent = total * 100 / self.max_context_tokens
+  percent
+}
+
+///|
+/// Print token usage status with color coding
+async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
+  let total = estimate_total_tokens(self.messages)
+  let percent = total * 100 / self.max_context_tokens
+
+  // Color code based on usage
+  let color = if percent >= 80 {
+    "\u{001b}[31m" // Red for >= 80%
+  } else if percent >= 60 {
+    "\u{001b}[33m" // Yellow for >= 60%
+  } else {
+    "\u{001b}[32m" // Green for < 60%
+  }
+  let reset = "\u{001b}[0m"
+
+  @stdio.stdout.write(
+    "[\{color}\{total}/\{self.max_context_tokens} tokens (\{percent}%)\{reset}]\n",
+  )
+}
+
+///|
 /// Summarize old messages into a single system message
 async fn summarize_messages(
   config : Config,

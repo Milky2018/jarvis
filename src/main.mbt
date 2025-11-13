@@ -288,6 +288,8 @@ async fn chat_loop(config : Config) -> Unit {
   println_async("(Type 'exit' or 'quit' to end the conversation)")
   println_async("")
   while true {
+    // Show token usage before prompt
+    chat_history.print_token_usage()
     print_separator()
     match readline_simple("> ", command_history) {
       Some(user_input) => {
