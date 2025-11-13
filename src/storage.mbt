@@ -60,12 +60,13 @@ async fn create_new_conversation_file(
   let json_obj : Json = { "messages": initial_messages.to_json() }
   let json_str = json_obj.stringify()
 
-  // Escape single quotes for shell command
-  let escaped_json = json_str.replace(old="'", new="'\\''")
-
+  // Use printf %s to safely write the JSON string
   let (_exit_code, _) = @process.collect_output_merged("sh", [
     "-c",
-    "echo '\{escaped_json}' > '\{path}'",
+    "printf '%s' \"$1\" > \"$2\"",
+    "sh",
+    json_str,
+    path,
   ])
 
   next_number

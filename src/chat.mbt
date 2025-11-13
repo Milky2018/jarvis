@@ -39,13 +39,14 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   }
   let json_str = json_obj.stringify()
 
-  // Escape single quotes for shell command
-  let escaped_json = json_str.replace(old="'", new="'\\''")
-
-  // Write to file using shell command
+  // Use printf %s to safely write the JSON string
+  // This avoids shell interpretation of special characters
   let (exit_code, output) = @process.collect_output_merged("sh", [
     "-c",
-    "echo '\{escaped_json}' > '\{filename}'",
+    "printf '%s' \"$1\" > \"$2\"",
+    "sh",
+    json_str,
+    filename,
   ])
   if exit_code != 0 {
     print_jarvis_prefix()
