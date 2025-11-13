@@ -20,6 +20,18 @@ let ctrl_c_byte : Byte = b'\x03'
 let ctrl_d_byte : Byte = b'\x04'
 
 ///|
+let ctrl_u_byte : Byte = b'\x15'
+
+///|
+let ctrl_w_byte : Byte = b'\x17'
+
+///|
+let ctrl_a_byte : Byte = b'\x01'
+
+///|
+let ctrl_e_byte : Byte = b'\x05'
+
+///|
 let enter_byte : Byte = b'\r'
 
 ///|
@@ -565,11 +577,19 @@ async fn read_escape_sequence() -> String? {
       _ => None
     }
   } else if buf[0] == b'b' {
-    // Option+Left alternative sequence
+    // Option+Left alternative sequence (ESC b)
     Some("option-left")
   } else if buf[0] == b'f' {
-    // Option+Right alternative sequence
+    // Option+Right alternative sequence (ESC f)
     Some("option-right")
+  } else if buf[0] == b'd' {
+    // Option+Delete alternative sequence (ESC d)
+    // Some terminals send this for Option+Delete
+    Some("option-delete")
+  } else if buf[0] == backspace_byte {
+    // Option+Backspace/Delete (ESC + 0x7F)
+    // macOS Terminal often sends this for Option+Delete
+    Some("option-delete")
   } else {
     None
   }
@@ -697,6 +717,34 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
       } else if editor.delete_forward() {
         redraw_line(editor, prompt)
       }
+    } else if byte == ctrl_u_byte {
+      // Ctrl+U: Delete to start of line (Command+Delete on macOS)
+      consecutive_inserts = 0
+      in_paste_mode = false
+      if editor.delete_to_start() {
+        redraw_line(editor, prompt)
+      }
+    } else if byte == ctrl_w_byte {
+      // Ctrl+W: Delete word backward (Option+Delete on macOS)
+      consecutive_inserts = 0
+      in_paste_mode = false
+      if editor.delete_word_backward() {
+        redraw_line(editor, prompt)
+      }
+    } else if byte == ctrl_a_byte {
+      // Ctrl+A: Move to start of line (Command+Left on macOS)
+      consecutive_inserts = 0
+      in_paste_mode = false
+      if editor.move_to_start() {
+        redraw_line(editor, prompt)
+      }
+    } else if byte == ctrl_e_byte {
+      // Ctrl+E: Move to end of line (Command+Right on macOS)
+      consecutive_inserts = 0
+      in_paste_mode = false
+      if editor.move_to_end() {
+        redraw_line(editor, prompt)
+      }
     } else if byte == escape_byte {
       consecutive_inserts = 0
       in_paste_mode = false
@@ -795,22 +843,14 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
             in_paste_mode = true
           }
 
-          // Only redraw every N chars during paste to improve performance
-          if in_paste_mode == false || consecutive_inserts % 10 == 0 {
-            if editor.cursor_pos == editor.buffer.length() {
-              // Always redraw to keep cursor position in sync with display
-              // Especially important for wide characters (CJK)
-              redraw_line(editor, prompt)
-            } else {
-              redraw_line(editor, prompt)
-            }
-          } else if editor.cursor_pos == editor.buffer.length() {
-            // During paste, force redraw periodically for wide chars
-            if consecutive_inserts % 5 == 0 {
-              redraw_line(editor, prompt)
-            } else {
-              @stdio.stdout.write(ch.to_string())
-            }
+          // For non-paste mode or periodic updates in paste mode, do full redraw
+          // This ensures cursor position stays synchronized with display
+          if in_paste_mode == false || consecutive_inserts % 5 == 0 {
+            redraw_line(editor, prompt)
+          } else {
+            // In paste mode between redraws, just output character
+            // (redraw will fix cursor position every 5 chars)
+            @stdio.stdout.write(ch.to_string())
           }
         }
         None => {
