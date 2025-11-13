@@ -6,6 +6,9 @@ import(
 )
 
 // Values
+async fn check_and_raise() -> Unit raise JarvisError
+
+fn setup_interrupt_handler() -> Unit
 
 // Errors
 type JarvisError

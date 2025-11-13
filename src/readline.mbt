@@ -789,21 +789,28 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
           editor.insert_char(ch)
           consecutive_inserts = consecutive_inserts + 1
 
-          // Detect paste: more than 3 consecutive fast inserts
-          if consecutive_inserts > 3 {
+          // Detect paste: more than 10 consecutive fast inserts
+          // (raised from 3 to avoid triggering on manual Chinese input)
+          if consecutive_inserts > 10 {
             in_paste_mode = true
           }
 
           // Only redraw every N chars during paste to improve performance
           if in_paste_mode == false || consecutive_inserts % 10 == 0 {
             if editor.cursor_pos == editor.buffer.length() {
-              @stdio.stdout.write(ch.to_string())
+              // Always redraw to keep cursor position in sync with display
+              // Especially important for wide characters (CJK)
+              redraw_line(editor, prompt)
             } else {
               redraw_line(editor, prompt)
             }
           } else if editor.cursor_pos == editor.buffer.length() {
-            // During paste, still show characters but skip full redraw
-            @stdio.stdout.write(ch.to_string())
+            // During paste, force redraw periodically for wide chars
+            if consecutive_inserts % 5 == 0 {
+              redraw_line(editor, prompt)
+            } else {
+              @stdio.stdout.write(ch.to_string())
+            }
           }
         }
         None => {
