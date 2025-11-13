@@ -286,10 +286,10 @@ async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
   // Color code based on usage
   let color = if percent >= 80 {
     "\u{001b}[31m" // Red for >= 80%
-  } else if percent >= 60 {
-    "\u{001b}[33m" // Yellow for >= 60%
+  } else if percent >= 30 {
+    "\u{001b}[33m" // Yellow for >= 30%
   } else {
-    "\u{001b}[32m" // Green for < 60%
+    "\u{001b}[32m" // Green for < 30%
   }
   let reset = "\u{001b}[0m"
 
