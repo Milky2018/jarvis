@@ -123,7 +123,7 @@ struct UsageStats {
   mut total_requests : Int
   mut total_input_tokens : Int
   mut total_output_tokens : Int
-  cost_by_model : @hashmap.HashMap[String, Double]  // Store costs per model
+  cost_by_model : @hashmap.HashMap[String, Double] // Store costs per model
 }
 
 ///|
@@ -156,9 +156,8 @@ fn UsageStats::add_request(
     "gpt-3.5-turbo" => (0.5, 1.5) // $0.5/$1.5 per 1M tokens
     _ => (3.0, 15.0) // Default to Claude pricing
   }
-
   let cost = input_tokens.to_double() / 1000000.0 * input_price +
-             output_tokens.to_double() / 1000000.0 * output_price
+    output_tokens.to_double() / 1000000.0 * output_price
 
   // Update cost for this model
   let current_cost = self.cost_by_model.get(model).unwrap_or(0.0)

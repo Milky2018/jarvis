@@ -6,47 +6,65 @@
 /// - Command history (up/down arrows)
 /// - Line editing (left/right arrows, backspace, delete)
 
-///| ANSI Escape Sequences
+///|
+/// ANSI Escape Sequences
 let escape_byte : Byte = b'\x1b'
+
+///|
 let backspace_byte : Byte = b'\x7f'
+
+///|
 let ctrl_c_byte : Byte = b'\x03'
+
+///|
 let ctrl_d_byte : Byte = b'\x04'
+
+///|
 let enter_byte : Byte = b'\r'
+
+///|
 let newline_byte : Byte = b'\n'
 
-///| ANSI Control Functions
+///|
+/// ANSI Control Functions
 async fn move_cursor_left(count : Int) -> Unit {
   if count > 0 {
     @stdio.stdout.write("\u001b[\{count}D")
   }
 }
 
+///|
 async fn move_cursor_right(count : Int) -> Unit {
   if count > 0 {
     @stdio.stdout.write("\u001b[\{count}C")
   }
 }
 
+///|
 async fn clear_to_end() -> Unit {
   @stdio.stdout.write("\u001b[K")
 }
 
+///|
 async fn move_to_start() -> Unit {
   @stdio.stdout.write("\r")
 }
 
-///| History Management
-pub struct CommandHistory {
+///|
+/// History Management
+struct CommandHistory {
   entries : Array[String]
   mut position : Int
   max_size : Int
 }
 
-pub fn CommandHistory::new(max_size : Int) -> CommandHistory {
+///|
+fn CommandHistory::new(max_size : Int) -> CommandHistory {
   { entries: [], position: -1, max_size }
 }
 
-pub fn CommandHistory::add(self : CommandHistory, line : String) -> Unit {
+///|
+fn CommandHistory::add(self : CommandHistory, line : String) -> Unit {
   if line.is_empty() {
     return
   }
@@ -57,7 +75,6 @@ pub fn CommandHistory::add(self : CommandHistory, line : String) -> Unit {
   } else {
     true
   }
-
   if should_add {
     self.entries.push(line)
 
@@ -71,15 +88,14 @@ pub fn CommandHistory::add(self : CommandHistory, line : String) -> Unit {
       // This is a limitation we'll work around
     }
   }
-
   self.position = -1
 }
 
-pub fn CommandHistory::previous(self : CommandHistory) -> String? {
+///|
+fn CommandHistory::previous(self : CommandHistory) -> String? {
   if self.entries.length() == 0 {
     return None
   }
-
   if self.position == -1 {
     self.position = self.entries.length() - 1
     Some(self.entries[self.position])
@@ -91,11 +107,11 @@ pub fn CommandHistory::previous(self : CommandHistory) -> String? {
   }
 }
 
-pub fn CommandHistory::next(self : CommandHistory) -> String? {
+///|
+fn CommandHistory::next(self : CommandHistory) -> String? {
   if self.position == -1 {
     return None
   }
-
   if self.position < self.entries.length() - 1 {
     self.position = self.position + 1
     Some(self.entries[self.position])
@@ -105,7 +121,8 @@ pub fn CommandHistory::next(self : CommandHistory) -> String? {
   }
 }
 
-///| Line Editor
+///|
+/// Line Editor
 struct LineEditor {
   mut buffer : String
   mut cursor_pos : Int
@@ -113,23 +130,21 @@ struct LineEditor {
   mut saved_line : String
 }
 
+///|
 fn LineEditor::new(history : CommandHistory) -> LineEditor {
   { buffer: "", cursor_pos: 0, history, saved_line: "" }
 }
 
+///|
 fn LineEditor::insert_char(self : LineEditor, ch : Char) -> Unit {
   if self.cursor_pos == self.buffer.length() {
     self.buffer = self.buffer + ch.to_string()
     self.cursor_pos = self.cursor_pos + 1
   } else {
-    let before = try {
-      self.buffer[0:self.cursor_pos].to_string()
-    } catch {
+    let before = self.buffer[0:self.cursor_pos].to_string() catch {
       IndexOutOfBounds(_) | InvalidIndex(_) => ""
     }
-    let after = try {
-      self.buffer[self.cursor_pos:].to_string()
-    } catch {
+    let after = self.buffer[self.cursor_pos:].to_string() catch {
       IndexOutOfBounds(_) | InvalidIndex(_) => ""
     }
     self.buffer = before + ch.to_string() + after
@@ -137,16 +152,13 @@ fn LineEditor::insert_char(self : LineEditor, ch : Char) -> Unit {
   }
 }
 
+///|
 fn LineEditor::delete_char(self : LineEditor) -> Bool {
   if self.cursor_pos > 0 {
-    let before = try {
-      self.buffer[0:self.cursor_pos - 1].to_string()
-    } catch {
+    let before = self.buffer[0:self.cursor_pos - 1].to_string() catch {
       IndexOutOfBounds(_) | InvalidIndex(_) => ""
     }
-    let after = try {
-      self.buffer[self.cursor_pos:].to_string()
-    } catch {
+    let after = self.buffer[self.cursor_pos:].to_string() catch {
       IndexOutOfBounds(_) | InvalidIndex(_) => ""
     }
     self.buffer = before + after
@@ -157,16 +169,13 @@ fn LineEditor::delete_char(self : LineEditor) -> Bool {
   }
 }
 
+///|
 fn LineEditor::delete_forward(self : LineEditor) -> Bool {
   if self.cursor_pos < self.buffer.length() {
-    let before = try {
-      self.buffer[0:self.cursor_pos].to_string()
-    } catch {
+    let before = self.buffer[0:self.cursor_pos].to_string() catch {
       IndexOutOfBounds(_) | InvalidIndex(_) => ""
     }
-    let after = try {
-      self.buffer[self.cursor_pos + 1:].to_string()
-    } catch {
+    let after = self.buffer[self.cursor_pos + 1:].to_string() catch {
       IndexOutOfBounds(_) | InvalidIndex(_) => ""
     }
     self.buffer = before + after
@@ -176,6 +185,7 @@ fn LineEditor::delete_forward(self : LineEditor) -> Bool {
   }
 }
 
+///|
 fn LineEditor::move_left(self : LineEditor) -> Bool {
   if self.cursor_pos > 0 {
     self.cursor_pos = self.cursor_pos - 1
@@ -185,6 +195,7 @@ fn LineEditor::move_left(self : LineEditor) -> Bool {
   }
 }
 
+///|
 fn LineEditor::move_right(self : LineEditor) -> Bool {
   if self.cursor_pos < self.buffer.length() {
     self.cursor_pos = self.cursor_pos + 1
@@ -194,6 +205,7 @@ fn LineEditor::move_right(self : LineEditor) -> Bool {
   }
 }
 
+///|
 fn LineEditor::move_to_start(self : LineEditor) -> Bool {
   if self.cursor_pos > 0 {
     self.cursor_pos = 0
@@ -203,6 +215,7 @@ fn LineEditor::move_to_start(self : LineEditor) -> Bool {
   }
 }
 
+///|
 fn LineEditor::move_to_end(self : LineEditor) -> Bool {
   if self.cursor_pos < self.buffer.length() {
     self.cursor_pos = self.buffer.length()
@@ -212,17 +225,20 @@ fn LineEditor::move_to_end(self : LineEditor) -> Bool {
   }
 }
 
+///|
 fn LineEditor::set_buffer(self : LineEditor, text : String) -> Unit {
   self.buffer = text
   self.cursor_pos = text.length()
 }
 
+///|
 fn LineEditor::clear(self : LineEditor) -> Unit {
   self.buffer = ""
   self.cursor_pos = 0
 }
 
-///| Calculate display width of a character
+///|
+/// Calculate display width of a character
 /// Most CJK characters have width 2, ASCII has width 1
 fn char_display_width(ch : Char) -> Int {
   let code = ch.to_int()
@@ -233,34 +249,62 @@ fn char_display_width(ch : Char) -> Int {
   // Katakana: 0x30A0-0x30FF
   // Full-width forms: 0xFF00-0xFFEF
   if (code >= 0x4E00 && code <= 0x9FFF) ||
-     (code >= 0x3400 && code <= 0x4DBF) ||
-     (code >= 0xAC00 && code <= 0xD7AF) ||
-     (code >= 0x3040 && code <= 0x309F) ||
-     (code >= 0x30A0 && code <= 0x30FF) ||
-     (code >= 0xFF00 && code <= 0xFFEF) {
+    (code >= 0x3400 && code <= 0x4DBF) ||
+    (code >= 0xAC00 && code <= 0xD7AF) ||
+    (code >= 0x3040 && code <= 0x309F) ||
+    (code >= 0x30A0 && code <= 0x30FF) ||
+    (code >= 0xFF00 && code <= 0xFFEF) {
     2
   } else {
     1
   }
 }
 
-///| Check if a character is a word separator
+///|
+/// Check if a character is a word separator
 fn is_word_separator(ch : Char) -> Bool {
-  ch == ' ' || ch == '\t' || ch == '\n' || ch == '/' || ch == '\\' ||
-  ch == '.' || ch == ',' || ch == ';' || ch == ':' || ch == '-' ||
-  ch == '_' || ch == '=' || ch == '+' || ch == '*' || ch == '&' ||
-  ch == '|' || ch == '<' || ch == '>' || ch == '(' || ch == ')' ||
-  ch == '[' || ch == ']' || ch == '{' || ch == '}' || ch == '\'' ||
-  ch == '"' || ch == '`' || ch == '!' || ch == '?' || ch == '@' ||
-  ch == '#' || ch == '$' || ch == '%' || ch == '^'
+  ch == ' ' ||
+  ch == '\t' ||
+  ch == '\n' ||
+  ch == '/' ||
+  ch == '\\' ||
+  ch == '.' ||
+  ch == ',' ||
+  ch == ';' ||
+  ch == ':' ||
+  ch == '-' ||
+  ch == '_' ||
+  ch == '=' ||
+  ch == '+' ||
+  ch == '*' ||
+  ch == '&' ||
+  ch == '|' ||
+  ch == '<' ||
+  ch == '>' ||
+  ch == '(' ||
+  ch == ')' ||
+  ch == '[' ||
+  ch == ']' ||
+  ch == '{' ||
+  ch == '}' ||
+  ch == '\'' ||
+  ch == '"' ||
+  ch == '`' ||
+  ch == '!' ||
+  ch == '?' ||
+  ch == '@' ||
+  ch == '#' ||
+  ch == '$' ||
+  ch == '%' ||
+  ch == '^'
 }
 
-///| Move cursor forward by one word
+///|
+/// Move cursor forward by one word
 fn LineEditor::move_word_forward(self : LineEditor) -> Bool {
   if self.cursor_pos >= self.buffer.length() {
     return false
   }
-
   let mut pos = self.cursor_pos
   let len = self.buffer.length()
 
@@ -289,7 +333,6 @@ fn LineEditor::move_word_forward(self : LineEditor) -> Bool {
       None => break
     }
   }
-
   if pos != self.cursor_pos {
     self.cursor_pos = pos
     true
@@ -298,12 +341,12 @@ fn LineEditor::move_word_forward(self : LineEditor) -> Bool {
   }
 }
 
-///| Move cursor backward by one word
+///|
+/// Move cursor backward by one word
 fn LineEditor::move_word_backward(self : LineEditor) -> Bool {
   if self.cursor_pos == 0 {
     return false
   }
-
   let mut pos = self.cursor_pos - 1
 
   // Skip current word separators
@@ -335,16 +378,14 @@ fn LineEditor::move_word_backward(self : LineEditor) -> Bool {
 
   // Handle the case where we reached the beginning
   match self.buffer.get_char(pos) {
-    Some(ch) => {
+    Some(ch) =>
       if pos == 0 && is_word_separator(ch) == false {
         // We're at the start of a word at position 0
         self.cursor_pos = 0
         return true
       }
-    }
     None => ()
   }
-
   if pos != self.cursor_pos {
     self.cursor_pos = pos
     true
@@ -353,7 +394,8 @@ fn LineEditor::move_word_backward(self : LineEditor) -> Bool {
   }
 }
 
-///| Redraw line
+///|
+/// Redraw line
 async fn redraw_line(editor : LineEditor, prompt : String) -> Unit {
   move_to_start()
   clear_to_end()
@@ -363,31 +405,29 @@ async fn redraw_line(editor : LineEditor, prompt : String) -> Unit {
   let mut display_width_after = 0
   for i = editor.cursor_pos; i < editor.buffer.length(); i = i + 1 {
     match editor.buffer.get_char(i) {
-      Some(ch) => display_width_after = display_width_after + char_display_width(ch)
+      Some(ch) =>
+        display_width_after = display_width_after + char_display_width(ch)
       None => ()
     }
   }
-
   if display_width_after > 0 {
     move_cursor_left(display_width_after)
   }
 }
 
-///| Read escape sequence
+///|
+/// Read escape sequence
 async fn read_escape_sequence() -> String? {
   let buf = FixedArray::make(1, b'\x00')
-
   let n1 = @stdio.stdin.read(buf)
   if n1 == 0 {
     return None
   }
-
   if buf[0] == b'[' {
     let n2 = @stdio.stdin.read(buf)
     if n2 == 0 {
       return None
     }
-
     match buf[0] {
       b'A' => Some("up")
       b'B' => Some("down")
@@ -415,14 +455,14 @@ async fn read_escape_sequence() -> String? {
           // modifier: 3 = Option, 9 = Command
           if modifier == b'3' {
             match key {
-              b'C' => Some("option-right")  // Option+Right
-              b'D' => Some("option-left")   // Option+Left
+              b'C' => Some("option-right") // Option+Right
+              b'D' => Some("option-left") // Option+Left
               _ => None
             }
           } else if modifier == b'9' {
             match key {
-              b'C' => Some("cmd-right")     // Command+Right
-              b'D' => Some("cmd-left")      // Command+Left
+              b'C' => Some("cmd-right") // Command+Right
+              b'D' => Some("cmd-left") // Command+Left
               _ => None
             }
           } else {
@@ -447,7 +487,6 @@ async fn read_escape_sequence() -> String? {
     if n2 == 0 {
       return None
     }
-
     match buf[0] {
       b'H' => Some("home")
       b'F' => Some("end")
@@ -464,7 +503,8 @@ async fn read_escape_sequence() -> String? {
   }
 }
 
-///| Read a UTF-8 character from stdin
+///|
+/// Read a UTF-8 character from stdin
 async fn read_utf8_char(first_byte : Byte) -> Char? {
   // Single byte (ASCII)
   if first_byte < b'\x80' {
@@ -481,7 +521,7 @@ async fn read_utf8_char(first_byte : Byte) -> Char? {
       return None
     }
     let code_point = ((first_byte.to_int() & 0x1F) << 6) |
-                     (buf[0].to_int() & 0x3F)
+      (buf[0].to_int() & 0x3F)
     return Some(Int::unsafe_to_char(code_point))
   }
 
@@ -492,16 +532,14 @@ async fn read_utf8_char(first_byte : Byte) -> Char? {
       return None
     }
     let byte2 = buf[0]
-
     let n2 = @stdio.stdin.read(buf)
     if n2 == 0 {
       return None
     }
     let byte3 = buf[0]
-
     let code_point = ((first_byte.to_int() & 0x0F) << 12) |
-                     ((byte2.to_int() & 0x3F) << 6) |
-                     (byte3.to_int() & 0x3F)
+      ((byte2.to_int() & 0x3F) << 6) |
+      (byte3.to_int() & 0x3F)
     return Some(Int::unsafe_to_char(code_point))
   }
 
@@ -512,48 +550,41 @@ async fn read_utf8_char(first_byte : Byte) -> Char? {
       return None
     }
     let byte2 = buf[0]
-
     let n2 = @stdio.stdin.read(buf)
     if n2 == 0 {
       return None
     }
     let byte3 = buf[0]
-
     let n3 = @stdio.stdin.read(buf)
     if n3 == 0 {
       return None
     }
     let byte4 = buf[0]
-
     let code_point = ((first_byte.to_int() & 0x07) << 18) |
-                     ((byte2.to_int() & 0x3F) << 12) |
-                     ((byte3.to_int() & 0x3F) << 6) |
-                     (byte4.to_int() & 0x3F)
+      ((byte2.to_int() & 0x3F) << 12) |
+      ((byte3.to_int() & 0x3F) << 6) |
+      (byte4.to_int() & 0x3F)
     return Some(Int::unsafe_to_char(code_point))
   }
-
   None
 }
 
-///| Main readline function with raw mode enabled
-pub async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
+///|
+/// Main readline function with raw mode enabled
+async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
   let editor = LineEditor::new(history)
   let buf = FixedArray::make(1, b'\x00')
 
   // Enable raw mode for stdin
   set_raw_mode(@stdio.stdin.fd())
-
   @stdio.stdout.write(prompt)
-
   while true {
     let n = @stdio.stdin.read(buf)
     if n == 0 {
       println("")
       return None
     }
-
     let byte = buf[0]
-
     if byte == enter_byte || byte == newline_byte {
       println("")
       let result = editor.buffer
@@ -572,11 +603,9 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
         // Empty buffer: exit
         println("")
         return None
-      } else {
         // Non-empty buffer: delete character under cursor (forward delete)
-        if editor.delete_forward() {
-          redraw_line(editor, prompt)
-        }
+      } else if editor.delete_forward() {
+        redraw_line(editor, prompt)
       }
     } else if byte == escape_byte {
       match read_escape_sequence() {
@@ -592,7 +621,7 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
             None => ()
           }
         }
-        Some("down") => {
+        Some("down") =>
           match editor.history.next() {
             Some(line) => {
               if line.is_empty() && editor.saved_line.is_empty() == false {
@@ -604,8 +633,7 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
             }
             None => ()
           }
-        }
-        Some("left") => {
+        Some("left") =>
           if editor.move_left() {
             // Move cursor left by the display width of the character we just moved past
             match editor.buffer.get_char(editor.cursor_pos) {
@@ -616,8 +644,7 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
               None => move_cursor_left(1)
             }
           }
-        }
-        Some("right") => {
+        Some("right") =>
           if editor.move_right() {
             // Move cursor right by the display width of the character we just moved past
             match editor.buffer.get_char(editor.cursor_pos - 1) {
@@ -628,42 +655,31 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
               None => move_cursor_right(1)
             }
           }
-        }
-        Some("home") => {
+        Some("home") =>
           if editor.move_to_start() {
             redraw_line(editor, prompt)
           }
-        }
-        Some("end") => {
-          if editor.move_to_end() {
-            redraw_line(editor, prompt)
-          }
-        }
-        Some("delete") => {
+        Some("end") => if editor.move_to_end() { redraw_line(editor, prompt) }
+        Some("delete") =>
           if editor.delete_forward() {
             redraw_line(editor, prompt)
           }
-        }
-        Some("option-left") => {
+        Some("option-left") =>
           if editor.move_word_backward() {
             redraw_line(editor, prompt)
           }
-        }
-        Some("option-right") => {
+        Some("option-right") =>
           if editor.move_word_forward() {
             redraw_line(editor, prompt)
           }
-        }
-        Some("cmd-left") => {
+        Some("cmd-left") =>
           if editor.move_to_start() {
             redraw_line(editor, prompt)
           }
-        }
-        Some("cmd-right") => {
+        Some("cmd-right") =>
           if editor.move_to_end() {
             redraw_line(editor, prompt)
           }
-        }
         _ => ()
       }
     } else if byte >= b'\x80' || (byte >= b' ' && byte < b'\x7f') {
@@ -681,6 +697,5 @@ pub async fn readline_simple(prompt : String, history : CommandHistory) -> Strin
       }
     }
   }
-
   Some(editor.buffer)
 }
