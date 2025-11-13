@@ -404,6 +404,135 @@ async fn list_conversations() -> Array[String] {
 }
 
 ///|
+/// Get all memory summaries from .jarvis directory
+async fn get_all_memories() -> Array[(String, String)] {
+  let dir = get_jarvis_dir()
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c",
+    "cd '\{dir}' 2>/dev/null && ls -1 *.md 2>/dev/null || true",
+  ])
+  if exit_code != 0 {
+    return []
+  }
+  let text = output.text()
+  let text_view = text[:].trim(chars=" \n\t\r")
+  let text_str = text_view.to_string()
+  if text_str.is_empty() {
+    return []
+  }
+  let memories : Array[(String, String)] = []
+  let lines : Array[String] = []
+  for line in text_view.split("\n") {
+    let trimmed_view = line.trim(chars=" \t\r")
+    let filename = trimmed_view.to_string()
+    if filename.is_empty() == false {
+      lines.push(filename)
+    }
+  }
+
+  // Read each file
+  for filename in lines {
+    let filepath = dir + "/" + filename
+    let (read_code, content_output) = @process.collect_output_merged("sh", [
+      "-c",
+      "cat '\{filepath}' 2>/dev/null",
+    ])
+    if read_code == 0 {
+      let content = content_output.text()
+      memories.push((filename, content))
+    }
+  }
+  memories
+}
+
+///|
+/// Search for relevant memories based on user input
+async fn search_relevant_memories(
+  user_input : String,
+  config : Config,
+  model : String,
+) -> String {
+  let memories = get_all_memories()
+  if memories.length() == 0 {
+    return ""
+  }
+
+  // Build a prompt to find relevant memories
+  let mut memories_text = ""
+  for i = 0; i < memories.length(); i = i + 1 {
+    let (filename, content) = memories[i]
+    // Limit each memory to 300 chars for the search
+    let preview = if content.length() > 300 {
+      content[:300].to_string() + "..."
+    } else {
+      content
+    }
+    memories_text = memories_text + "\{i + 1}. [\{filename}]\n\{preview}\n\n"
+  }
+  let search_messages : Array[Message] = [
+    {
+      role: "user",
+      content: Some(
+        "用户说：\{user_input}\n\n以下是历史对话的总结：\n\n\{memories_text}\n\n请判断哪些历史对话与用户当前的话题相关。如果有相关的，请回复相关的编号（用逗号分隔，如\"1,3,5\"）。如果没有相关的，请只回复\"无\"。",
+      ),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+  ]
+  let response = send_chat_request_with_tools(
+    config,
+    search_messages,
+    [],
+    model,
+  ) catch {
+    _ => return ""
+  }
+  let relevant_indices = match response.choices.get(0) {
+    Some(choice) =>
+      match choice.message.content {
+        Some(s) => s
+        None => return ""
+      }
+    None => return ""
+  }
+  if relevant_indices.contains("无") {
+    return ""
+  }
+  let trimmed_indices = relevant_indices[:].trim(chars=" \n\t\r").to_string()
+  if trimmed_indices.is_empty() {
+    return ""
+  }
+
+  // Parse the indices and collect relevant memories
+  let mut relevant_memories = ""
+  let indices_view = relevant_indices[:].trim(chars=" \n\t\r")
+  for part in indices_view.split(",") {
+    let num_str = part.trim(chars=" \t\r\n").to_string()
+    let idx = match num_str {
+      "1" => 1
+      "2" => 2
+      "3" => 3
+      "4" => 4
+      "5" => 5
+      "6" => 6
+      "7" => 7
+      "8" => 8
+      "9" => 9
+      "10" => 10
+      _ => 0
+    }
+    if idx > 0 && idx <= memories.length() {
+      let (filename, content) = memories[idx - 1]
+      relevant_memories = relevant_memories +
+        "\n\n--- 相关记忆 [\{filename}] ---\n" +
+        content
+    }
+  }
+  relevant_memories
+}
+
+///|
 /// Estimate token count for a message (rough approximation: 1 token ≈ 4 chars)
 fn estimate_tokens(message : Message) -> Int {
   let mut total = 0
@@ -1030,6 +1159,24 @@ async fn handle_user_input(
   chat_history : ChatHistory,
   user_input : String,
 ) -> Unit {
+  // Search for relevant memories before processing
+  let relevant_memories = search_relevant_memories(
+    user_input,
+    config,
+    chat_history.current_model,
+  )
+
+  // If we found relevant memories, inject them as a system message
+  if relevant_memories.is_empty() == false {
+    print_jarvis_prefix()
+    println("(Found relevant memories from past conversations)")
+    let memory_message = Message::new(
+      "system",
+      "以下是与当前话题相关的历史记忆：" + relevant_memories,
+    )
+    chat_history.add(memory_message)
+  }
+
   // Add user message to history
   let user_message = Message::new("user", user_input)
   chat_history.add(user_message)
