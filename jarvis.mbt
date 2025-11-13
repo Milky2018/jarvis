@@ -89,14 +89,136 @@ struct FunctionDef {
 /// Manages conversation history
 struct ChatHistory {
   messages : Array[Message]
+  max_context_tokens : Int  // Maximum tokens for context (e.g., 4096)
 }
 
 fn ChatHistory::new() -> ChatHistory {
-  { messages: [] }
+  { messages: [], max_context_tokens: 4000 }  // Leave some room for response
 }
 
 fn ChatHistory::add(self : ChatHistory, message : Message) -> Unit {
   self.messages.push(message)
+}
+
+///| Estimate token count for a message (rough approximation: 1 token ≈ 4 chars)
+fn estimate_tokens(message : Message) -> Int {
+  let mut total = 0
+  match message.content {
+    Some(content) => total = total + content.length() / 4
+    None => ()
+  }
+  // Add overhead for role, tool calls, etc.
+  total + 10
+}
+
+///| Estimate total tokens for a message array
+fn estimate_total_tokens(messages : Array[Message]) -> Int {
+  let mut total = 0
+  for i = 0; i < messages.length(); i = i + 1 {
+    total = total + estimate_tokens(messages[i])
+  }
+  total
+}
+
+///| Summarize old messages into a single system message
+async fn summarize_messages(
+  config : Config,
+  messages : Array[Message]
+) -> String raise JarvisError {
+  let summary_prompt = {
+    let mut text = "Please summarize the following conversation history concisely, focusing on key points and context:\n\n"
+    for msg in messages {
+      match msg.content {
+        Some(content) => {
+          text = text + msg.role + ": " + content + "\n\n"
+        }
+        None => ()
+      }
+    }
+    text + "Provide a brief summary in 2-3 sentences."
+  }
+
+  let summary_messages : Array[Message] = [
+    Message::new("user", summary_prompt)
+  ]
+
+  let tools = get_available_tools()
+  let response = send_chat_request_with_tools(config, summary_messages, tools)
+  let { choices, id: _, object: _, created: _, model: _ } = response
+
+  if choices.length() == 0 {
+    return "Previous conversation history (summary unavailable)"
+  }
+
+  let { message, index: _, finish_reason: _ } = choices[0]
+  let { content, tool_calls: _, role: _ } = message
+
+  match content {
+    Some(text) => text
+    None => "Previous conversation history (summary unavailable)"
+  }
+}
+
+///| Manage chat history: keep first message, summarize middle, keep recent 4 turns
+///  Returns true if history was summarized
+async fn ChatHistory::manage_history(
+  self : ChatHistory,
+  config : Config
+) -> Bool raise JarvisError {
+  let total_tokens = estimate_total_tokens(self.messages)
+  let max_tokens = self.max_context_tokens
+
+  // If under 80% of max tokens, no need to manage
+  if total_tokens < max_tokens * 8 / 10 {
+    return false
+  }
+
+  // Count recent messages to keep (4 turns = 8 messages, but may include tool messages)
+  let recent_keep = 8
+  let messages_count = self.messages.length()
+
+  if messages_count <= recent_keep + 1 {
+    // Not enough messages to summarize
+    return false
+  }
+
+  // Separate messages: first + middle + recent
+  let first_message = self.messages[0]
+  let recent_start = messages_count - recent_keep
+
+  // Middle messages to summarize (skip first, keep recent)
+  let middle_messages : Array[Message] = []
+  for i = 1; i < recent_start; i = i + 1 {
+    middle_messages.push(self.messages[i])
+  }
+
+  // If no middle messages, nothing to summarize
+  if middle_messages.length() == 0 {
+    return false
+  }
+
+  // Generate summary (no notification to avoid error type mismatch)
+  let summary_text = summarize_messages(config, middle_messages)
+  let summary_message = Message::new(
+    "system",
+    "Previous conversation summary: " + summary_text
+  )
+
+  // Rebuild messages array: first + summary + recent
+  let new_messages : Array[Message] = [first_message, summary_message]
+  for i = recent_start; i < messages_count; i = i + 1 {
+    new_messages.push(self.messages[i])
+  }
+
+  // Replace messages (we need to clear and repopulate since we can't reassign)
+  while self.messages.length() > 0 {
+    ignore(self.messages.pop())
+  }
+  for msg in new_messages {
+    self.messages.push(msg)
+  }
+
+  true  // Indicate that summarization happened
 }
 
 ///| API Request/Response
@@ -176,7 +298,7 @@ suberror JarvisError {
   HttpError(String)
   JsonParseError(String)
   StringViewError(String)
-}
+} derive(Show)
 
 ///|
 async fn load_config() -> Config raise JarvisError {
@@ -398,6 +520,21 @@ async fn chat_loop(config : Config) -> Unit {
         // Add user message to history
         let user_message = Message::new("user", user_input)
         chat_history.add(user_message)
+
+        // Manage history before sending request
+        try {
+          let summarized = chat_history.manage_history(config)
+          if summarized {
+            print_jarvis_prefix()
+            println("(Summarized old conversation history to manage context length)")
+          }
+        } catch {
+          e => {
+            // If history management fails, just log and continue
+            print_jarvis_prefix()
+            println("Warning: History management failed: \{e}")
+          }
+        }
 
         // Tool calling loop
         try {
