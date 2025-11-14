@@ -24,7 +24,7 @@ let color_red = "\u001b[31m"
 async fn print_jarvis_prefix() -> Unit {
   @stdio.stdout.write(color_bold)
   @stdio.stdout.write(color_cyan)
-  println_async("Jarvis")
+  @stdio.stdout.write("Jarvis")
   @stdio.stdout.write(color_reset)
   @stdio.stdout.write(": ")
 }
@@ -45,6 +45,7 @@ async fn jarvis_cries(message : String) -> Unit {
   @stdio.stdout.write(color_reset)
 }
 
+///|
 async fn println_async(s : String) -> Unit {
   @stdio.stdout.write("\{s}\n")
 }

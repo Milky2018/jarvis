@@ -41,7 +41,7 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
 
   // Use native fs API to write file
   @fs.write_file(filename, json_str, create=0o644) catch {
-    e => jarvis_says("Warning: Failed to save conversation: \{e}")
+    e => jarvis_cries("Failed to save conversation: \{e}")
   }
 }
 
@@ -188,14 +188,14 @@ async fn generate_summary_with_title(
     chat_history.current_model,
   ) catch {
     _ => {
-      jarvis_says("Warning: Failed to generate conversation summary")
+      jarvis_cries("Failed to generate conversation summary")
       return ("", "")
     }
   }
   let summary = match response.get_text_content() {
     Some(s) => s
     None => {
-      jarvis_says("Warning: Empty summary content")
+      jarvis_cries("Empty summary content")
       return ("", "")
     }
   }

@@ -108,7 +108,7 @@ async fn handle_command(
         @fs.write_file(md_filename, summary, create=0o644)
         jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
       } catch {
-        e => jarvis_says("Warning: Failed to save summary file: \{e}")
+        e => jarvis_cries("Failed to save summary file: \{e}")
       }
 
       // Create new file and print notifications (shared logic with auto-compact)

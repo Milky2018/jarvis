@@ -201,7 +201,6 @@ async fn send_streaming_chat_request(
   // Buffer for reading chunks
   let buffer = FixedArray::make(16, b'\x00')
   let mut accumulated_data = ""
-
   for {
     let bytes_read = client.read(buffer) catch {
       e =>
@@ -226,7 +225,9 @@ async fn send_streaming_chat_request(
     for i = 0; i < accumulated_data.length(); i = i + 1 {
       match accumulated_data.get_char(i) {
         Some('\n') => {
-          let line_view = accumulated_data[last_newline_pos:i] catch { _ => continue }
+          let line_view = accumulated_data[last_newline_pos:i] catch {
+              _ => continue
+            }
           let line = line_view.to_string().trim(chars=" \t\r\n").to_string()
           if line.length() > 0 {
             lines.push(line)
@@ -266,6 +267,7 @@ async fn send_streaming_chat_request(
             full_content = full_content + content
             // Output immediately after parsing (ignore write errors)
             let _ = @stdio.stdout.write(content) catch { _ => () }
+
           }
         }
 
@@ -277,7 +279,6 @@ async fn send_streaming_chat_request(
       }
     }
   }
-
 
   // Construct ChatResponse from accumulated data (Claude format)
   let content_blocks : Array[ContentBlock] = [

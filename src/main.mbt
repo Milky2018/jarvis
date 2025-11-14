@@ -159,7 +159,7 @@ async fn handle_tool_calls(
       // Continue loop to get final response after tool execution
     }
     if max_iterations == 0 {
-      jarvis_says("Warning: Maximum tool calling iterations reached")
+      jarvis_cries("Maximum tool calling iterations reached")
     }
   } catch {
     EnvVarNotSet(msg) =>
@@ -213,7 +213,7 @@ async fn handle_user_input(
   } catch {
     e =>
       // If history management fails, just log and continue
-      jarvis_says("Warning: History management failed: \{e}")
+      jarvis_cries("History management failed: \{e}")
   }
 
   // Tool calling loop
@@ -278,17 +278,15 @@ async fn chat_loop(config : Config) -> Unit {
           for msg in chat_history.messages {
             if msg.role == "user" {
               match msg.content {
-                Some(content) => {
+                Some(content) =>
                   // Skip tool result messages
                   if !content.has_prefix("Tool:") {
                     user_inputs.push(content)
                   }
-                }
                 None => ()
               }
             }
           }
-
           let rl = ReadlineInterface::with_history(100, user_inputs)
           while rl.read_to_queue(input_queue) {
 

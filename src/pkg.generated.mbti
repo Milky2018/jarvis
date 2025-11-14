@@ -6,13 +6,12 @@ import(
 )
 
 // Values
-async fn check_and_raise() -> Unit raise JarvisError
-
-fn setup_interrupt_handler() -> Unit
 
 // Errors
 type JarvisError
 impl Show for JarvisError
+
+type JarvisSignal
 
 // Types and methods
 type ChatHistory
@@ -35,11 +34,15 @@ type FunctionCall
 impl ToJson for FunctionCall
 impl @json.FromJson for FunctionCall
 
+type KeyPress
+
 type LineEditor
 
 type Message
 impl ToJson for Message
 impl @json.FromJson for Message
+
+type ReadlineInterface
 
 type ResponseUsage
 impl @json.FromJson for ResponseUsage
