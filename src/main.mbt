@@ -65,10 +65,7 @@ async fn handle_tool_calls(
       // Display text content if present and not using streaming
       if tool_uses.length() == 0 {
         match content_text {
-          Some(content_str) =>
-            if !used_streaming {
-              jarvis_says(content_str)
-            }
+          Some(content_str) => if !used_streaming { jarvis_says(content_str) }
           None =>
             if !used_streaming {
               jarvis_says("Error: No content in response")
@@ -92,7 +89,7 @@ async fn handle_tool_calls(
 
       // We have tool calls to execute
       // First, display any text content
-      if content_text is Some(content_str) && content_str.is_blank() {
+      if content_text is Some(content_str) && !content_str.is_blank() {
         jarvis_says(content_str)
       }
 
@@ -165,18 +162,11 @@ async fn handle_tool_calls(
       jarvis_says("Warning: Maximum tool calling iterations reached")
     }
   } catch {
-    EnvVarNotSet(msg) => {
+    EnvVarNotSet(msg) =>
       jarvis_says("Error: Environment variable not set: \{msg}")
-    }
-    HttpError(msg) => {
-      jarvis_says("Error: HTTP error: \{msg}")
-    }
-    JsonParseError(msg) => {
-      jarvis_says("Error: JSON parse error: \{msg}")
-    }
-    StringViewError(msg) => {
-      jarvis_says("Error: String view error: \{msg}")
-    }
+    HttpError(msg) => jarvis_says("Error: HTTP error: \{msg}")
+    JsonParseError(msg) => jarvis_says("Error: JSON parse error: \{msg}")
+    StringViewError(msg) => jarvis_says("Error: String view error: \{msg}")
     e => raise e
   }
 }
@@ -221,10 +211,9 @@ async fn handle_user_input(
       chat_history.create_new_file_after_summary()
     }
   } catch {
-    e => {
+    e =>
       // If history management fails, just log and continue
       jarvis_says("Warning: History management failed: \{e}")
-    }
   }
 
   // Tool calling loop
@@ -270,9 +259,7 @@ async fn chat_loop(config : Config) -> Unit {
     }
   }
   println_async("")
-  jarvis_says(
-    "Hello! I'm Jarvis, your AI assistant. How can I help you today?",
-  )
+  jarvis_says("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
   println_async("(Type 'exit' or 'quit' to end the conversation)")
   println_async("")
 

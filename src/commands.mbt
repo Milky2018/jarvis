@@ -16,20 +16,20 @@ async fn handle_command(
   let command = parts[0]
   match command {
     "help" | "h" => {
-      jarvis_says("Available commands:")
-      println_async("  :help, :h           - Show this help message")
-      println_async("  :model [name]       - Show or set current model")
-      println_async("  :models             - List available models")
-      println_async("  :cost               - Show API usage statistics")
-      println_async("  :clear              - Clear conversation history")
-      println_async(
-        "  :summarize          - Summarize and save current conversation",
+      jarvis_says(
+        (
+          #| Available commands:
+          #|   :help, :h           - Show this help message
+          #|   :model [name]       - Show or set current model
+          #|   :models             - List available models
+          #|   :cost               - Show API usage statistics
+          #|   :clear              - Clear conversation history
+          #|   :summarize          - Summarize and save current conversation
+          #|   :play [budget]      - Let Jarvis explore freely (default: $10)
+          #|   :exit, :quit, :q    - Exit Jarvis
+          #|   exit, quit          - Also exits Jarvis
+        ),
       )
-      println_async(
-        "  :play [budget]      - Let Jarvis explore freely (default: $10)",
-      )
-      println_async("  :exit, :quit, :q    - Exit Jarvis")
-      println_async("  exit, quit          - Also exits Jarvis")
       true
     }
     "model" | "m" => {
@@ -45,18 +45,16 @@ async fn handle_command(
       true
     }
     "models" => {
-      jarvis_says("Available models:")
-      println_async(
-        "  claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)",
+      jarvis_says(
+        (
+          #| Available models:
+          #|   claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)
+          #|   claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)
+          #|   claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)
+          #|
+          #| Use ':model <name>' to switch models
+        ),
       )
-      println_async(
-        "  claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)",
-      )
-      println_async(
-        "  claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)",
-      )
-      println_async("")
-      println_async("Use ':model <name>' to switch models")
       true
     }
     "clear" | "c" => {
@@ -69,15 +67,16 @@ async fn handle_command(
     }
     "cost" => {
       let stats = chat_history.usage_stats
-      let total_cost = stats.total_cost()
-      jarvis_says("API Usage Statistics:")
-      println_async("  Total requests:    \{stats.total_requests}")
-      println_async("  Input tokens:      \{stats.total_input_tokens}")
-      println_async("  Output tokens:     \{stats.total_output_tokens}")
-      println_async(
-        "  Total tokens:      \{stats.total_input_tokens + stats.total_output_tokens}",
+      jarvis_says(
+        (
+          $| API Usage Statistics:
+          $|   Total requests:    \{stats.total_requests}
+          $|   Input tokens:      \{stats.total_input_tokens}
+          $|   Output tokens:     \{stats.total_output_tokens}
+          $|   Total tokens:      \{stats.total_input_tokens + stats.total_output_tokens}
+          $|   Estimated cost:    $\{stats.total_cost()}
+        ),
       )
-      println_async("  Estimated cost:    $\{total_cost}")
       true
     }
     "summarize" | "sum" => {
@@ -109,9 +108,7 @@ async fn handle_command(
         @fs.write_file(md_filename, summary, create=0o644)
         jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
       } catch {
-        e => {
-          jarvis_says("Warning: Failed to save summary file: \{e}")
-        }
+        e => jarvis_says("Warning: Failed to save summary file: \{e}")
       }
 
       // Create new file and print notifications (shared logic with auto-compact)
@@ -172,7 +169,7 @@ async fn start_play_mode(
     #| YOUR FREEDOM:
     #| - Full shell access on this computer
     #| - A playground directory at ~/.jarvis/playground for your experiments
-    #| - Budget: $\{budget} for API costs
+    $| - Budget: \{budget} for API costs
     #| - Permission to be creative, curious, and experimental
     #|
     #| WHAT YOU CAN DO:
@@ -206,7 +203,7 @@ async fn start_play_mode(
     #| - Share what you're thinking and doing
     #| - If something interests you, dive deep!
     #|
-    #| Current budget: $\{budget}
+    $| Current budget: \{budget}
     #| What would you like to do first?
 
   // Add play mode message to history
