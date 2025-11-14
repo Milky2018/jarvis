@@ -169,7 +169,7 @@ async fn start_play_mode(
     #| YOUR FREEDOM:
     #| - Full shell access on this computer
     #| - A playground directory at ~/.jarvis/playground for your experiments
-    $| - Budget: \{budget} for API costs
+    $| - Budget: $\{budget} for API costs
     #| - Permission to be creative, curious, and experimental
     #|
     #| WHAT YOU CAN DO:
@@ -203,7 +203,7 @@ async fn start_play_mode(
     #| - Share what you're thinking and doing
     #| - If something interests you, dive deep!
     #|
-    $| Current budget: \{budget}
+    $| Current budget: $\{budget}
     #| What would you like to do first?
 
   // Add play mode message to history

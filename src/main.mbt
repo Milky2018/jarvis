@@ -272,7 +272,18 @@ async fn chat_loop(config : Config) -> Unit {
 
         // Start readline task in background
         group.spawn_bg(fn() {
-          let rl = ReadlineInterface::new(100)
+          // Extract user messages from chat history for readline history
+          let user_inputs : Array[String] = []
+          for msg in chat_history.messages {
+            if msg.role == "user" {
+              match msg.content {
+                Some(content) => user_inputs.push(content)
+                None => ()
+              }
+            }
+          }
+
+          let rl = ReadlineInterface::with_history(100, user_inputs)
           while rl.read_to_queue(input_queue) {
 
           }

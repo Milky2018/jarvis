@@ -24,6 +24,19 @@ fn ReadlineInterface::new(history_size : Int) -> ReadlineInterface {
 }
 
 ///|
+/// Create a new readline interface with pre-populated history
+fn ReadlineInterface::with_history(
+  history_size : Int,
+  initial_history : Array[String]
+) -> ReadlineInterface {
+  let history = CommandHistory::new(history_size)
+  for entry in initial_history {
+    history.add(entry)
+  }
+  { prompt: "> ", history }
+}
+
+///|
 /// Set the prompt for next readline
 fn ReadlineInterface::set_prompt(
   self : ReadlineInterface,
