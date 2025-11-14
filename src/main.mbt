@@ -178,23 +178,6 @@ async fn handle_user_input(
   chat_history : ChatHistory,
   config : Config,
 ) -> Unit {
-  // Search for relevant memories before processing
-  let relevant_memories = search_relevant_memories(
-    user_input,
-    config,
-    chat_history.current_model,
-  )
-
-  // If we found relevant memories, inject them as a system message
-  if !relevant_memories.is_empty() {
-    jarvis_says("(Found relevant memories from past conversations)")
-    let memory_message = Message::new(
-      "system",
-      "以下是与当前话题相关的历史记忆：" + relevant_memories,
-    )
-    chat_history.add(memory_message)
-  }
-
   // Add user message to history
   let user_message = Message::new("user", user_input)
   chat_history.add(user_message)

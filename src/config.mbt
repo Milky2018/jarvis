@@ -7,25 +7,27 @@ struct Config {
 } derive(Show)
 
 ///|
-/// ANSI Color codes
-let color_cyan = "\u001b[36m"
+const COLOR_CYAN : String = "\u001b[36m"
 
 ///|
-let color_reset = "\u001b[0m"
+const COLOR_RESET : String = "\u001b[0m"
 
 ///|
-let color_bold = "\u001b[1m"
+const COLOR_BOLD : String = "\u001b[1m"
 
 ///|
-let color_red = "\u001b[31m"
+const COLOR_RED : String = "\u001b[31m"
+
+///|
+const COLOR_GRAY : String = "\u001b[38;2;90;90;90m"
 
 ///|
 /// Print colored Jarvis prefix
 async fn print_jarvis_prefix() -> Unit {
-  @stdio.stdout.write(color_bold)
-  @stdio.stdout.write(color_cyan)
+  @stdio.stdout.write(COLOR_BOLD)
+  @stdio.stdout.write(COLOR_CYAN)
   @stdio.stdout.write("Jarvis")
-  @stdio.stdout.write(color_reset)
+  @stdio.stdout.write(COLOR_RESET)
   @stdio.stdout.write(": ")
 }
 
@@ -40,9 +42,9 @@ async fn jarvis_says(message : String) -> Unit {
 /// Jarvis cries (error output) - shows error in red
 async fn jarvis_cries(message : String) -> Unit {
   print_jarvis_prefix()
-  @stdio.stdout.write(color_red)
+  @stdio.stdout.write(COLOR_RED)
   println_async(message)
-  @stdio.stdout.write(color_reset)
+  @stdio.stdout.write(COLOR_RESET)
 }
 
 ///|
@@ -59,7 +61,9 @@ async fn print_separator() -> Unit {
   for i = 0; i < size.col; i = i + 1 {
     line = line + "─"
   }
+  @stdio.stdout.write(COLOR_GRAY)
   println_async(line)
+  @stdio.stdout.write(COLOR_RESET)
 }
 
 ///|
