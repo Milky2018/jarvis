@@ -7,8 +7,9 @@
     "moonbitlang/async/io",
     "moonbitlang/async/process",
     "moonbitlang/async/fs",
+    "moonbitlang/async/aqueue",
     "moonbitlang/x/sys",
     "TheWaWaR/clap"
   ],
-  "native-stub": ["tty.c", "interrupt.c"]
+  "native-stub": ["tty.c"]
 }

@@ -199,11 +199,10 @@ async fn send_streaming_chat_request(
   let mut finish_reason = ""
 
   // Buffer for reading chunks
-  let buffer = FixedArray::make(4096, b'\x00')
+  let buffer = FixedArray::make(16, b'\x00')
   let mut accumulated_data = ""
-  let mut keep_reading = true
 
-  while keep_reading {
+  for {
     let bytes_read = client.read(buffer) catch {
       e =>
         raise HttpError(
@@ -251,7 +250,6 @@ async fn send_streaming_chat_request(
         let json_str = json_str_view.to_string()
         let trimmed = json_str[:].trim(chars=" \t\r\n").to_string()
         if trimmed == "[DONE]" {
-          keep_reading = false
           break
         }
         let chunk_json = @json.parse(json_str) catch { _ => continue }
@@ -274,13 +272,10 @@ async fn send_streaming_chat_request(
         // Extract finish reason
         if choice_map.get("finish_reason") is Some(String(reason)) {
           finish_reason = reason
-          keep_reading = false
+          break
         }
       }
     }
-
-    // Check for interrupt during streaming
-    check_and_raise()
   }
 
 

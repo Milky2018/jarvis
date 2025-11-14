@@ -41,35 +41,38 @@ async fn ReadlineInterface::read_line(
 }
 
 ///|
+/// Key press events
+enum KeyPress {
+  Char(Char)
+  Enter
+  Backspace
+  Delete
+  CtrlC
+  CtrlD
+  CtrlU  // Delete to start
+  CtrlW  // Delete word backward
+  CtrlA  // Move to start
+  CtrlE  // Move to end
+  Up
+  Down
+  Left
+  Right
+  Home
+  End
+  OptionLeft   // Word backward
+  OptionRight  // Word forward
+  OptionDelete // Delete word backward
+  CmdLeft      // Move to start
+  CmdRight     // Move to end
+  CmdDelete    // Delete to start
+  PasteStart   // Bracketed paste start
+  PasteEnd     // Bracketed paste end
+  Unknown
+}
+
+///|
 /// ANSI Escape Sequences
-let escape_byte : Byte = b'\x1b'
-
-///|
 let backspace_byte : Byte = b'\x7f'
-
-///|
-let ctrl_c_byte : Byte = b'\x03'
-
-///|
-let ctrl_d_byte : Byte = b'\x04'
-
-///|
-let ctrl_u_byte : Byte = b'\x15'
-
-///|
-let ctrl_w_byte : Byte = b'\x17'
-
-///|
-let ctrl_a_byte : Byte = b'\x01'
-
-///|
-let ctrl_e_byte : Byte = b'\x05'
-
-///|
-let enter_byte : Byte = b'\r'
-
-///|
-let newline_byte : Byte = b'\n'
 
 ///|
 /// ANSI Control Functions
@@ -592,6 +595,42 @@ async fn read_escape_sequence() -> String? {
           None
         }
       }
+      b'2' => {
+        // Check for bracketed paste: ESC[200~ (start) or ESC[201~ (end)
+        let n3 = @stdio.stdin.read(buf)
+        if n3 == 0 {
+          return None
+        }
+        if buf[0] == b'0' {
+          let n4 = @stdio.stdin.read(buf)
+          if n4 == 0 {
+            return None
+          }
+          match buf[0] {
+            b'0' => {
+              // ESC[200~ - paste start
+              let n5 = @stdio.stdin.read(buf)
+              if n5 > 0 && buf[0] == b'~' {
+                Some("paste-start")
+              } else {
+                None
+              }
+            }
+            b'1' => {
+              // ESC[201~ - paste end
+              let n5 = @stdio.stdin.read(buf)
+              if n5 > 0 && buf[0] == b'~' {
+                Some("paste-end")
+              } else {
+                None
+              }
+            }
+            _ => None
+          }
+        } else {
+          None
+        }
+      }
       _ => None
     }
   } else if buf[0] == b'O' {
@@ -620,6 +659,57 @@ async fn read_escape_sequence() -> String? {
     Some("option-delete")
   } else {
     None
+  }
+}
+
+///|
+/// Parse a byte into a KeyPress event
+async fn parse_keypress() -> KeyPress? {
+  let buf = FixedArray::make(1, b'\x00')
+  let n = @stdio.stdin.read(buf)
+  if n == 0 {
+    return None
+  }
+  let byte = buf[0]
+
+  // Handle special control characters
+  match byte {
+    b'\r' | b'\n' => Some(Enter)
+    b'\x7f' => Some(Backspace)  // Backspace
+    b'\x03' => Some(CtrlC)
+    b'\x04' => Some(CtrlD)
+    b'\x15' => Some(CtrlU)
+    b'\x17' => Some(CtrlW)
+    b'\x01' => Some(CtrlA)
+    b'\x05' => Some(CtrlE)
+    b'\x1b' => {
+      // Escape sequence
+      match read_escape_sequence() {
+        Some("up") => Some(Up)
+        Some("down") => Some(Down)
+        Some("left") => Some(Left)
+        Some("right") => Some(Right)
+        Some("home") => Some(Home)
+        Some("end") => Some(End)
+        Some("delete") => Some(Delete)
+        Some("option-left") => Some(OptionLeft)
+        Some("option-right") => Some(OptionRight)
+        Some("option-delete") => Some(OptionDelete)
+        Some("cmd-left") => Some(CmdLeft)
+        Some("cmd-right") => Some(CmdRight)
+        Some("cmd-delete") => Some(CmdDelete)
+        Some("paste-start") => Some(PasteStart)
+        Some("paste-end") => Some(PasteEnd)
+        _ => Some(Unknown)
+      }
+    }
+    _ => {
+      // UTF-8 character
+      match read_utf8_char(byte) {
+        Some(ch) => Some(Char(ch))
+        None => Some(Unknown)
+      }
+    }
   }
 }
 
@@ -690,220 +780,237 @@ async fn read_utf8_char(first_byte : Byte) -> Char? {
 }
 
 ///|
+/// Handle a keypress event
+async fn handle_keypress(
+  key : KeyPress,
+  editor : LineEditor,
+  prompt : String,
+  in_paste_mode : Bool,
+  consecutive_inserts : Int
+) -> (Bool, Int, Bool) {
+  // Returns: (should_continue, new_consecutive_inserts, new_in_paste_mode)
+  match key {
+    Char(ch) => {
+      editor.insert_char(ch)
+      let new_consecutive = consecutive_inserts + 1
+
+      // Render the character
+      if in_paste_mode == false || new_consecutive % 5 == 0 {
+        if editor.cursor_pos < editor.buffer.length() {
+          redraw_line(editor, prompt)
+        } else {
+          @stdio.stdout.write(ch.to_string())
+        }
+      } else {
+        @stdio.stdout.write(ch.to_string())
+      }
+      (true, new_consecutive, in_paste_mode)
+    }
+    Enter => {
+      if in_paste_mode {
+        editor.insert_char(' ')
+        (true, consecutive_inserts + 1, in_paste_mode)
+      } else {
+        (false, 0, false)  // Exit the loop
+      }
+    }
+    Backspace => {
+      if editor.delete_char() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    Delete => {
+      if editor.delete_forward() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    CtrlU | CmdDelete => {
+      if editor.delete_to_start() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    CtrlW | OptionDelete => {
+      if editor.delete_word_backward() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    CtrlA | CmdLeft => {
+      if editor.move_to_start() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    CtrlE | CmdRight => {
+      if editor.move_to_end() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    Up => {
+      if editor.history.position == -1 {
+        editor.saved_line = editor.buffer
+      }
+      match editor.history.previous() {
+        Some(line) => {
+          editor.set_buffer(line)
+          redraw_line(editor, prompt)
+        }
+        None => ()
+      }
+      (true, 0, false)
+    }
+    Down => {
+      match editor.history.next() {
+        Some(line) => {
+          if line.is_empty() && editor.saved_line.is_empty() == false {
+            editor.set_buffer(editor.saved_line)
+          } else {
+            editor.set_buffer(line)
+          }
+          redraw_line(editor, prompt)
+        }
+        None => ()
+      }
+      (true, 0, false)
+    }
+    Left => {
+      if editor.move_left() {
+        match editor.buffer.get_char(editor.cursor_pos) {
+          Some(ch) => {
+            let width = char_display_width(ch)
+            move_cursor_left(width)
+          }
+          None => move_cursor_left(1)
+        }
+      }
+      (true, 0, false)
+    }
+    Right => {
+      if editor.move_right() {
+        match editor.buffer.get_char(editor.cursor_pos - 1) {
+          Some(ch) => {
+            let width = char_display_width(ch)
+            move_cursor_right(width)
+          }
+          None => move_cursor_right(1)
+        }
+      }
+      (true, 0, false)
+    }
+    Home => {
+      if editor.move_to_start() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    End => {
+      if editor.move_to_end() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    OptionLeft => {
+      if editor.move_word_backward() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    OptionRight => {
+      if editor.move_word_forward() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
+    }
+    CtrlC => {
+      raise InterruptError("Operation interrupted by user (Ctrl+C)")
+      (false, 0, false)  // Never reached
+    }
+    CtrlD => {
+      if editor.buffer.is_empty() {
+        (false, 0, false)  // Exit (will return None)
+      } else if editor.delete_forward() {
+        redraw_line(editor, prompt)
+        (true, 0, false)
+      } else {
+        (true, 0, false)
+      }
+    }
+    PasteStart => {
+      // Enter paste mode
+      (true, 0, true)
+    }
+    PasteEnd => {
+      // Exit paste mode and redraw to ensure proper display
+      redraw_line(editor, prompt)
+      (true, 0, false)
+    }
+    Unknown => (true, 0, false)
+  }
+}
+
+///|
 /// Main readline function with raw mode enabled
 async fn readline_simple(
   prompt : String,
   history : CommandHistory
 ) -> String? raise {
   let editor = LineEditor::new(history)
-  let buf = FixedArray::make(1, b'\x00')
 
   // Enable raw mode for stdin
   set_raw_mode(@stdio.stdin.fd())
+
+  // Enable bracketed paste mode
+  @stdio.stdout.write("\u001b[?2004h")
 
   let mut in_paste_mode = false
   let mut consecutive_inserts = 0
 
   for {
-    let n = @stdio.stdin.read(buf)
-    if n == 0 {
-      return None
-    }
-    let byte = buf[0]
+    match parse_keypress() {
+      Some(key) => {
+        let (should_continue, new_consecutive, new_paste) = handle_keypress(
+          key,
+          editor,
+          prompt,
+          in_paste_mode,
+          consecutive_inserts,
+        )
+        consecutive_inserts = new_consecutive
+        in_paste_mode = new_paste
 
-    // Handle newline - for paste, convert to space instead of submitting
-    if byte == enter_byte || byte == newline_byte {
-      if in_paste_mode {
-        // In paste mode, convert newline to space
-        editor.insert_char(' ')
-        consecutive_inserts = consecutive_inserts + 1
-        continue
-      } else {
-        // Normal enter: submit line
-        let result = editor.buffer
-        history.add(result)
-        return Some(result)
+        if should_continue == false {
+          match key {
+            CtrlD => {
+              if editor.buffer.is_empty() {
+                // Disable bracketed paste mode before exit
+                @stdio.stdout.write("\u001b[?2004l")
+                return None
+              }
+            }
+            _ => {
+              // Normal exit (Enter key)
+              let result = editor.buffer
+              history.add(result)
+              // Disable bracketed paste mode before exit
+              @stdio.stdout.write("\u001b[?2004l")
+              return Some(result)
+            }
+          }
+        }
       }
-    } else if byte == backspace_byte {
-      consecutive_inserts = 0
-      in_paste_mode = false
-      if editor.delete_char() {
-        redraw_line(editor, prompt)
-      }
-    } else if byte == ctrl_c_byte {
-      // Raise error to cancel the task group
-      // The outer loop will catch this and restart
-      raise InterruptError("Operation interrupted by user (Ctrl+C)")
-    } else if byte == ctrl_d_byte {
-      consecutive_inserts = 0
-      in_paste_mode = false
-      if editor.buffer.is_empty() {
-        // Empty buffer: exit
+      None => {
+        // Disable bracketed paste mode before exit
+        @stdio.stdout.write("\u001b[?2004l")
         return None
-        // Non-empty buffer: delete character under cursor (forward delete)
-      } else if editor.delete_forward() {
-        redraw_line(editor, prompt)
       }
-    } else if byte == ctrl_u_byte {
-      // Ctrl+U: Delete to start of line (Command+Delete on macOS)
-      consecutive_inserts = 0
-      in_paste_mode = false
-      if editor.delete_to_start() {
-        redraw_line(editor, prompt)
-      }
-    } else if byte == ctrl_w_byte {
-      // Ctrl+W: Delete word backward (Option+Delete on macOS)
-      consecutive_inserts = 0
-      in_paste_mode = false
-      if editor.delete_word_backward() {
-        redraw_line(editor, prompt)
-      }
-    } else if byte == ctrl_a_byte {
-      // Ctrl+A: Move to start of line (Command+Left on macOS)
-      consecutive_inserts = 0
-      in_paste_mode = false
-      if editor.move_to_start() {
-        redraw_line(editor, prompt)
-      }
-    } else if byte == ctrl_e_byte {
-      // Ctrl+E: Move to end of line (Command+Right on macOS)
-      consecutive_inserts = 0
-      in_paste_mode = false
-      if editor.move_to_end() {
-        redraw_line(editor, prompt)
-      }
-    } else if byte == escape_byte {
-      consecutive_inserts = 0
-      in_paste_mode = false
-      match read_escape_sequence() {
-        Some("up") => {
-          if editor.history.position == -1 {
-            editor.saved_line = editor.buffer
-          }
-          match editor.history.previous() {
-            Some(line) => {
-              editor.set_buffer(line)
-              redraw_line(editor, prompt)
-            }
-            None => ()
-          }
-        }
-        Some("down") =>
-          match editor.history.next() {
-            Some(line) => {
-              if line.is_empty() && editor.saved_line.is_empty() == false {
-                editor.set_buffer(editor.saved_line)
-              } else {
-                editor.set_buffer(line)
-              }
-              redraw_line(editor, prompt)
-            }
-            None => ()
-          }
-        Some("left") =>
-          if editor.move_left() {
-            // Move cursor left by the display width of the character we just moved past
-            match editor.buffer.get_char(editor.cursor_pos) {
-              Some(ch) => {
-                let width = char_display_width(ch)
-                move_cursor_left(width)
-              }
-              None => move_cursor_left(1)
-            }
-          }
-        Some("right") =>
-          if editor.move_right() {
-            // Move cursor right by the display width of the character we just moved past
-            match editor.buffer.get_char(editor.cursor_pos - 1) {
-              Some(ch) => {
-                let width = char_display_width(ch)
-                move_cursor_right(width)
-              }
-              None => move_cursor_right(1)
-            }
-          }
-        Some("home") =>
-          if editor.move_to_start() {
-            redraw_line(editor, prompt)
-          }
-        Some("end") => if editor.move_to_end() { redraw_line(editor, prompt) }
-        Some("delete") =>
-          if editor.delete_forward() {
-            redraw_line(editor, prompt)
-          }
-        Some("option-left") =>
-          if editor.move_word_backward() {
-            redraw_line(editor, prompt)
-          }
-        Some("option-right") =>
-          if editor.move_word_forward() {
-            redraw_line(editor, prompt)
-          }
-        Some("cmd-left") =>
-          if editor.move_to_start() {
-            redraw_line(editor, prompt)
-          }
-        Some("cmd-right") =>
-          if editor.move_to_end() {
-            redraw_line(editor, prompt)
-          }
-        Some("option-delete") =>
-          if editor.delete_word_backward() {
-            redraw_line(editor, prompt)
-          }
-        Some("cmd-delete") =>
-          if editor.delete_to_start() {
-            redraw_line(editor, prompt)
-          }
-        _ => ()
-      }
-    } else if byte >= b'\x80' || (byte >= b' ' && byte < b'\x7f') {
-      // UTF-8 character (multi-byte or ASCII printable)
-      match read_utf8_char(byte) {
-        Some(ch) => {
-          editor.insert_char(ch)
-          consecutive_inserts = consecutive_inserts + 1
-
-          // Detect paste: more than 10 consecutive fast inserts
-          // (raised from 3 to avoid triggering on manual Chinese input)
-          if consecutive_inserts > 10 {
-            in_paste_mode = true
-          }
-
-          // For non-paste mode or periodic updates in paste mode, do full redraw
-          // This ensures cursor position stays synchronized with display
-          if in_paste_mode == false || consecutive_inserts % 5 == 0 {
-            // Only redraw if cursor is not at end, otherwise just output the character
-            if editor.cursor_pos < editor.buffer.length() {
-              redraw_line(editor, prompt)
-            } else {
-              @stdio.stdout.write(ch.to_string())
-            }
-          } else {
-            // In paste mode between redraws, just output character
-            // (redraw will fix cursor position every 5 chars)
-            @stdio.stdout.write(ch.to_string())
-          }
-        }
-        None => {
-          consecutive_inserts = 0
-          in_paste_mode = false
-        }
-      }
-    } else {
-      consecutive_inserts = 0
-      in_paste_mode = false
-    }
-
-    // Exit paste mode if we've accumulated enough chars without more input
-    // This is a simple heuristic - in a real impl we'd check timing
-    if in_paste_mode && consecutive_inserts > 100 {
-      // Force a final redraw after large paste
-      redraw_line(editor, prompt)
-      consecutive_inserts = 0
-      in_paste_mode = false
     }
   }
+  // Disable bracketed paste mode before exit
+  @stdio.stdout.write("\u001b[?2004l")
   Some(editor.buffer)
 }
 

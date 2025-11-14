@@ -11,9 +11,6 @@ async fn handle_tool_calls(
     while max_iterations > 0 {
       max_iterations = max_iterations - 1
 
-      // Check for interrupt before each iteration
-      check_and_raise()
-
       // Send request (use streaming for first request)
       let response = if first_request && tools.length() > 0 {
         // First request with tools: use non-streaming to check for tool calls
@@ -312,16 +309,35 @@ async fn chat_loop(config : Config) -> Unit {
   for {
     try {
       @async.with_task_group(fn(group) {
-        // Start background task to monitor for Ctrl+C
+        // Create a queue for readline input
+        let input_queue : @aqueue.Queue[String] = @aqueue.Queue::new()
+
+        // Start readline task in background
         group.spawn_bg(fn() {
+          let rl = ReadlineInterface::new(100)
           for {
-            check_and_raise()
-            @async.sleep(100)  // Check every 100ms
+            // Print prompt and read user input
+            rl.set_prompt("> ")
+            @stdio.stdout.write("> ")
+
+            match rl.read_line() {
+              Some(input) => {
+                // Ignore empty input or whitespace-only input
+                let trimmed = input.trim(chars=" \t\n\r").to_string()
+                if trimmed.is_empty() == false {
+                  // Send input to queue
+                  input_queue.put(trimmed)
+                }
+                // For empty input, just continue reading
+              }
+              None => {
+                // Ctrl+D - send special marker to indicate exit
+                input_queue.put("<EXIT>")
+                break
+              }
+            }
           }
         })
-
-        // Create readline interface
-        let rl = ReadlineInterface::new(100)
 
         // Main interaction loop
         for {
@@ -329,34 +345,21 @@ async fn chat_loop(config : Config) -> Unit {
           chat_history.print_token_usage()
           print_separator()
 
-          // Print prompt and read user input
-          rl.set_prompt("> ")
-          @stdio.stdout.write("> ")
+          // Wait for input from readline task
+          let user_input = input_queue.get()
 
-          // Keep reading until we get non-empty input
-          let user_input = loop rl.read_line() {
-            Some(input) => {
-              // Ignore empty input or whitespace-only input
-              let trimmed = input.trim(chars=" \t\n\r").to_string()
-              if trimmed.is_empty() {
-                // Empty or whitespace-only input: keep waiting, don't print anything
-                continue rl.read_line()
-              } else {
-                break trimmed
-              }
-            }
-            None => {
-              // Ctrl+D - also raise ExitRequested
-              println_async("") // Print newline after Ctrl+D
-              print_jarvis_prefix()
-              println_async("Goodbye!")
-              raise ExitRequested
-            }
+          // Check for Ctrl+D exit marker
+          if user_input == "<EXIT>" {
+            println_async("") // Print newline after Ctrl+D
+            print_jarvis_prefix()
+            println_async("Goodbye!")
+            raise ExitRequested
           }
+
           println_async("") // Print newline after user input
           print_separator()
 
-          // Check for exit commands - raise ExitRequested to cancel task group
+          // Check for exit commands
           if is_exit_command(user_input) {
             print_jarvis_prefix()
             println_async("Goodbye!")
@@ -379,13 +382,6 @@ async fn chat_loop(config : Config) -> Unit {
     } catch {
       // Exit requested: clean exit
       ExitRequested => break
-      // Ctrl+C: task group cancelled, print message and restart
-      InterruptError(_) => {
-        println_async("^C")
-        print_jarvis_prefix()
-        println_async("Operation interrupted by Ctrl+C")
-        println_async("")
-      }
       e => {
         println_async("")
         print_jarvis_prefix()
@@ -409,9 +405,6 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
 
 ///|
 async fn main {
-  // Initialize interrupt handler for Ctrl+C
-  setup_interrupt_handler()
-
   // Parse command line arguments using clap
   let parser = @clap.Parser::new(
     prog="jarvis",
