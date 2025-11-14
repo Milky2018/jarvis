@@ -31,8 +31,7 @@ async fn execute_tool_claude(tool_name : String, input : Json) -> String {
         Object(map) =>
           match map.get("command") {
             Some(String(cmd)) => {
-              print_jarvis_prefix()
-              println_async("Executing: \{cmd}")
+              jarvis_says("Executing: \{cmd}")
               execute_shell_command(cmd)
             }
             Some(_) => "Error: 'command' must be a string"

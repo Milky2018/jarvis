@@ -15,8 +15,7 @@ async fn interact(
 
   // Check for exit commands
   if is_exit_command(user_input) {
-    print_jarvis_prefix()
-    println_async("Goodbye!")
+    jarvis_says("Goodbye!")
     raise ExitRequested
   }
 

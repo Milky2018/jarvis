@@ -42,8 +42,7 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   // Use native fs API to write file
   @fs.write_file(filename, json_str, create=0o644) catch {
     e => {
-      print_jarvis_prefix()
-      println_async("Warning: Failed to save conversation: \{e}")
+      jarvis_says("Warning: Failed to save conversation: \{e}")
     }
   }
 }
@@ -85,11 +84,9 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
   let num_str = format_conv_number(next_number)
 
   // Print notifications
-  print_jarvis_prefix()
-  println_async("Created new conversation file: conv_\{num_str}.json")
+  jarvis_says("Created new conversation file: conv_\{num_str}.json")
   if old_number > 0 {
-    print_jarvis_prefix()
-    println_async(
+    jarvis_says(
       "(Previous conversation archived in conv_\{old_num_str}.json)",
     )
   }
@@ -154,8 +151,7 @@ async fn generate_summary_with_title(
   config : Config,
 ) -> (String, String) {
   // Generate title first
-  print_jarvis_prefix()
-  println_async("Generating conversation title...")
+  jarvis_says("Generating conversation title:")
   let title = generate_conversation_title(chat_history, config)
 
   // Build conversation text
@@ -174,8 +170,7 @@ async fn generate_summary_with_title(
   }
 
   // Create prompt for summarization
-  print_jarvis_prefix()
-  println_async("Generating summary...")
+  jarvis_says("Generating summary:")
   let summary_messages : Array[Message] = [
     {
       role: "user",
@@ -197,16 +192,14 @@ async fn generate_summary_with_title(
     chat_history.current_model,
   ) catch {
     _ => {
-      print_jarvis_prefix()
-      println_async("Warning: Failed to generate conversation summary")
+      jarvis_says("Warning: Failed to generate conversation summary")
       return ("", "")
     }
   }
   let summary = match response.get_text_content() {
     Some(s) => s
     None => {
-      print_jarvis_prefix()
-      println_async("Warning: Empty summary content")
+      jarvis_says("Warning: Empty summary content")
       return ("", "")
     }
   }

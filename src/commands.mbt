@@ -16,8 +16,7 @@ async fn handle_command(
   let command = parts[0]
   match command {
     "help" | "h" => {
-      print_jarvis_prefix()
-      println_async("Available commands:")
+      jarvis_says("Available commands:")
       println_async("  :help, :h           - Show this help message")
       println_async("  :model [name]       - Show or set current model")
       println_async("  :models             - List available models")
@@ -36,20 +35,17 @@ async fn handle_command(
     "model" | "m" => {
       if parts.length() == 1 {
         // Show current model
-        print_jarvis_prefix()
-        println_async("Current model: \{chat_history.current_model}")
+        jarvis_says("Current model: \{chat_history.current_model}")
       } else {
         // Set model
         let new_model = parts[1]
         chat_history.set_model(new_model)
-        print_jarvis_prefix()
-        println_async("Model changed to: \{new_model}")
+        jarvis_says("Model changed to: \{new_model}")
       }
       true
     }
     "models" => {
-      print_jarvis_prefix()
-      println_async("Available models:")
+      jarvis_says("Available models:")
       println_async(
         "  claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)",
       )
@@ -68,15 +64,13 @@ async fn handle_command(
       while chat_history.messages.length() > 0 {
         ignore(chat_history.messages.pop())
       }
-      print_jarvis_prefix()
-      println_async("Conversation history cleared")
+      jarvis_says("Conversation history cleared")
       true
     }
     "cost" => {
       let stats = chat_history.usage_stats
       let total_cost = stats.total_cost()
-      print_jarvis_prefix()
-      println_async("API Usage Statistics:")
+      jarvis_says("API Usage Statistics:")
       println_async("  Total requests:    \{stats.total_requests}")
       println_async("  Input tokens:      \{stats.total_input_tokens}")
       println_async("  Output tokens:     \{stats.total_output_tokens}")
@@ -88,16 +82,13 @@ async fn handle_command(
     }
     "summarize" | "sum" => {
       if chat_history.messages.length() == 0 {
-        print_jarvis_prefix()
-        println_async("No messages to summarize")
+        jarvis_says("No messages to summarize")
         return true
       }
-      print_jarvis_prefix()
-      println_async("Summarizing conversation...")
+      jarvis_says("Summarizing conversation:")
       let (title, summary) = generate_summary_with_title(chat_history, config)
       if title.is_empty() || summary.is_empty() {
-        print_jarvis_prefix()
-        println_async("Failed to generate summary")
+        jarvis_says("Failed to generate summary")
         return true
       }
 
@@ -116,12 +107,10 @@ async fn handle_command(
       let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
       try {
         @fs.write_file(md_filename, summary, create=0o644)
-        print_jarvis_prefix()
-        println_async("Summary saved as: \{timestamp}_\{title}.md")
+        jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
       } catch {
         e => {
-          print_jarvis_prefix()
-          println_async("Warning: Failed to save summary file: \{e}")
+          jarvis_says("Warning: Failed to save summary file: \{e}")
         }
       }
 
@@ -138,8 +127,7 @@ async fn handle_command(
       } else {
         10.0
       }
-      print_jarvis_prefix()
-      println_async("Entering play mode with budget: $\{budget}")
+      jarvis_says("Entering play mode with budget: $\{budget}")
       println_async("")
 
       // Start autonomous play session
@@ -147,13 +135,11 @@ async fn handle_command(
       true
     }
     "exit" | "quit" | "q" => {
-      print_jarvis_prefix()
-      println_async("Goodbye!")
+      jarvis_says("Goodbye!")
       false // Signal to exit
     }
     _ => {
-      print_jarvis_prefix()
-      println_async("Unknown command: :\{command}")
+      jarvis_says("Unknown command: :\{command}")
       println_async("Type ':help' for available commands")
       true
     }
@@ -225,8 +211,7 @@ async fn start_play_mode(
 
   // Add play mode message to history
   chat_history.add(Message::new("system", play_prompt))
-  print_jarvis_prefix()
-  println_async("Play mode initialized. Jarvis is now autonomous!")
+  jarvis_says("Play mode initialized. Jarvis is now autonomous!")
   println_async("")
 
   // Autonomous loop
@@ -240,15 +225,13 @@ async fn start_play_mode(
     let spent = current_cost - start_cost
     let remaining = budget - spent
     if remaining <= 0.0 {
-      print_jarvis_prefix()
-      println_async("Budget exhausted! Spent: $\{spent}")
+      jarvis_says("Budget exhausted! Spent: $\{spent}")
       println_async("Play mode ended.")
       break
     }
 
     // Show remaining budget
-    print_jarvis_prefix()
-    println_async("Budget remaining: $\{remaining} (iteration \{iterations})")
+    jarvis_says("Budget remaining: $\{remaining} (iteration \{iterations})")
     println_async("")
 
     // Let Jarvis decide what to do next
@@ -260,8 +243,7 @@ async fn start_play_mode(
       // Check if need to summarize
       let summarized = chat_history.manage_history(config)
       if summarized {
-        print_jarvis_prefix()
-        println_async("(Context summarized to continue playing)")
+        jarvis_says("(Context summarized to continue playing)")
         chat_history.create_new_file_after_summary()
       }
 
@@ -273,8 +255,7 @@ async fn start_play_mode(
       chat_history.save_to_numbered_file()
     } catch {
       e => {
-        print_jarvis_prefix()
-        println_async("Error in play mode: \{e}")
+        jarvis_says("Error in play mode: \{e}")
         println_async("Ending play session.")
         break
       }
@@ -287,13 +268,11 @@ async fn start_play_mode(
 
   }
   if iterations >= max_iterations {
-    print_jarvis_prefix()
-    println_async("Max iterations reached. Play mode ended.")
+    jarvis_says("Max iterations reached. Play mode ended.")
   }
-  print_jarvis_prefix()
   let final_cost = chat_history.usage_stats.total_cost()
   let total_spent = final_cost - start_cost
-  println_async("Play session complete! Total spent: $\{total_spent}")
+  jarvis_says("Play session complete! Total spent: $\{total_spent}")
 }
 
 ///|

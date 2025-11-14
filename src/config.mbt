@@ -22,6 +22,13 @@ async fn print_jarvis_prefix() -> Unit {
   @stdio.stdout.write(color_bold + color_cyan + "Jarvis" + color_reset + ": ")
 }
 
+///|
+/// Jarvis speaks - unified function for all Jarvis output
+async fn jarvis_says(message : String) -> Unit {
+  print_jarvis_prefix()
+  println_async(message)
+}
+
 async fn println_async(s : String) -> Unit {
   @stdio.stdout.write("\{s}\n")
 } 

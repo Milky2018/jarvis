@@ -28,7 +28,6 @@ async fn handle_tool_calls(
         )
       } else if first_request {
         // First request without tools: use streaming
-        print_jarvis_prefix()
         used_streaming = true
         let resp = send_streaming_chat_request(
           config,
@@ -68,13 +67,11 @@ async fn handle_tool_calls(
         match content_text {
           Some(content_str) =>
             if !used_streaming {
-              print_jarvis_prefix()
-              println_async(content_str)
+              jarvis_says(content_str)
             }
           None =>
             if !used_streaming {
-              print_jarvis_prefix()
-              println_async("Error: No content in response")
+              jarvis_says("Error: No content in response")
             }
         }
         // No tool calls, add message to history and break
@@ -96,8 +93,7 @@ async fn handle_tool_calls(
       // We have tool calls to execute
       // First, display any text content
       if content_text is Some(content_str) && content_str.is_blank() {
-        print_jarvis_prefix()
-        println_async(content_str)
+        jarvis_says(content_str)
       }
 
       // Build assistant message with the full response for history
@@ -166,25 +162,20 @@ async fn handle_tool_calls(
       // Continue loop to get final response after tool execution
     }
     if max_iterations == 0 {
-      print_jarvis_prefix()
-      println_async("Warning: Maximum tool calling iterations reached")
+      jarvis_says("Warning: Maximum tool calling iterations reached")
     }
   } catch {
     EnvVarNotSet(msg) => {
-      print_jarvis_prefix()
-      println_async("Error: Environment variable not set: \{msg}")
+      jarvis_says("Error: Environment variable not set: \{msg}")
     }
     HttpError(msg) => {
-      print_jarvis_prefix()
-      println_async("Error: HTTP error: \{msg}")
+      jarvis_says("Error: HTTP error: \{msg}")
     }
     JsonParseError(msg) => {
-      print_jarvis_prefix()
-      println_async("Error: JSON parse error: \{msg}")
+      jarvis_says("Error: JSON parse error: \{msg}")
     }
     StringViewError(msg) => {
-      print_jarvis_prefix()
-      println_async("Error: String view error: \{msg}")
+      jarvis_says("Error: String view error: \{msg}")
     }
     e => raise e
   }
@@ -206,8 +197,7 @@ async fn handle_user_input(
 
   // If we found relevant memories, inject them as a system message
   if !relevant_memories.is_empty() {
-    print_jarvis_prefix()
-    println_async("(Found relevant memories from past conversations)")
+    jarvis_says("(Found relevant memories from past conversations)")
     let memory_message = Message::new(
       "system",
       "以下是与当前话题相关的历史记忆：" + relevant_memories,
@@ -223,8 +213,7 @@ async fn handle_user_input(
   try {
     let summarized = chat_history.manage_history(config)
     if summarized {
-      print_jarvis_prefix()
-      println_async(
+      jarvis_says(
         "(Summarized old conversation history to manage context length)",
       )
 
@@ -234,8 +223,7 @@ async fn handle_user_input(
   } catch {
     e => {
       // If history management fails, just log and continue
-      print_jarvis_prefix()
-      println_async("Warning: History management failed: \{e}")
+      jarvis_says("Warning: History management failed: \{e}")
     }
   }
 
@@ -262,9 +250,8 @@ async fn chat_loop(config : Config) -> Unit {
   let chat_history = match load_latest_conversation() {
     Some((loaded_history, file_num)) => {
       loaded_history.current_file_number = file_num
-      print_jarvis_prefix()
       let num_str = format_conv_number(file_num)
-      println_async("Loaded conversation from conv_\{num_str}.json")
+      jarvis_says("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
     None => {
@@ -278,14 +265,12 @@ async fn chat_loop(config : Config) -> Unit {
       // Create the first conversation file
       let file_num = create_new_conversation_file(history.messages)
       history.current_file_number = file_num
-      print_jarvis_prefix()
-      println_async("Created new conversation: conv_001.json")
+      jarvis_says("Created new conversation: conv_001.json")
       history
     }
   }
   println_async("")
-  print_jarvis_prefix()
-  println_async(
+  jarvis_says(
     "Hello! I'm Jarvis, your AI assistant. How can I help you today?",
   )
   println_async("(Type 'exit' or 'quit' to end the conversation)")
@@ -312,16 +297,14 @@ async fn chat_loop(config : Config) -> Unit {
     } catch {
       ExitRequested => break
       InterruptByUser => {
-        print_jarvis_prefix()
-        println_async("Interrupted by user")
+        jarvis_says("Interrupted by user")
         println_async("")
         continue
       }
       ActionFinished => continue
       e => {
         println_async("")
-        print_jarvis_prefix()
-        println_async("Fatal error: \{e}")
+        jarvis_says("Fatal error: \{e}")
         break
       }
     }
@@ -333,8 +316,7 @@ async fn chat_loop(config : Config) -> Unit {
 async fn execute_prompt(config : Config, prompt : String) -> Unit {
   ensure_jarvis_dir()
   let chat_history = ChatHistory::new()
-  print_jarvis_prefix()
-  println_async("Processing: \{prompt}")
+  jarvis_says("Processing: \{prompt}")
   println_async("")
   handle_user_input(prompt, chat_history, config)
 }
