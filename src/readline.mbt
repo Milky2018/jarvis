@@ -5,6 +5,40 @@
 /// - Arrow keys for cursor movement and history navigation
 /// - Command history (up/down arrows)
 /// - Line editing (left/right arrows, backspace, delete)
+///
+/// Architecture:
+/// - Runs in a background coroutine to allow immediate Ctrl+C response
+/// - Communicates with main coroutine via async queue
+
+///|
+/// Readline interface for direct use in main loop
+struct ReadlineInterface {
+  mut prompt : String
+  history : CommandHistory
+}
+
+///|
+/// Create a new readline interface
+fn ReadlineInterface::new(history_size : Int) -> ReadlineInterface {
+  { prompt: "> ", history: CommandHistory::new(history_size) }
+}
+
+///|
+/// Set the prompt for next readline
+fn ReadlineInterface::set_prompt(
+  self : ReadlineInterface,
+  prompt : String
+) -> Unit {
+  self.prompt = prompt
+}
+
+///|
+/// Read a line from user (blocking, waits for user input)
+async fn ReadlineInterface::read_line(
+  self : ReadlineInterface
+) -> String? raise {
+  readline_simple(self.prompt, self.history)
+}
 
 ///|
 /// ANSI Escape Sequences
@@ -241,12 +275,6 @@ fn LineEditor::move_to_end(self : LineEditor) -> Bool {
 fn LineEditor::set_buffer(self : LineEditor, text : String) -> Unit {
   self.buffer = text
   self.cursor_pos = text.length()
-}
-
-///|
-fn LineEditor::clear(self : LineEditor) -> Unit {
-  self.buffer = ""
-  self.cursor_pos = 0
 }
 
 ///|
@@ -663,21 +691,22 @@ async fn read_utf8_char(first_byte : Byte) -> Char? {
 
 ///|
 /// Main readline function with raw mode enabled
-async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
+async fn readline_simple(
+  prompt : String,
+  history : CommandHistory
+) -> String? raise {
   let editor = LineEditor::new(history)
   let buf = FixedArray::make(1, b'\x00')
 
   // Enable raw mode for stdin
   set_raw_mode(@stdio.stdin.fd())
-  @stdio.stdout.write(prompt)
 
   let mut in_paste_mode = false
   let mut consecutive_inserts = 0
 
-  while true {
+  for {
     let n = @stdio.stdin.read(buf)
     if n == 0 {
-      println_async("")
       return None
     }
     let byte = buf[0]
@@ -691,7 +720,6 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
         continue
       } else {
         // Normal enter: submit line
-        println_async("")
         let result = editor.buffer
         history.add(result)
         return Some(result)
@@ -703,15 +731,14 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
         redraw_line(editor, prompt)
       }
     } else if byte == ctrl_c_byte {
-      println_async("^C")
-      editor.clear()
-      return Some("")
+      // Raise error to cancel the task group
+      // The outer loop will catch this and restart
+      raise InterruptError("Operation interrupted by user (Ctrl+C)")
     } else if byte == ctrl_d_byte {
       consecutive_inserts = 0
       in_paste_mode = false
       if editor.buffer.is_empty() {
         // Empty buffer: exit
-        println_async("")
         return None
         // Non-empty buffer: delete character under cursor (forward delete)
       } else if editor.delete_forward() {
@@ -846,7 +873,12 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
           // For non-paste mode or periodic updates in paste mode, do full redraw
           // This ensures cursor position stays synchronized with display
           if in_paste_mode == false || consecutive_inserts % 5 == 0 {
-            redraw_line(editor, prompt)
+            // Only redraw if cursor is not at end, otherwise just output the character
+            if editor.cursor_pos < editor.buffer.length() {
+              redraw_line(editor, prompt)
+            } else {
+              @stdio.stdout.write(ch.to_string())
+            }
           } else {
             // In paste mode between redraws, just output character
             // (redraw will fix cursor position every 5 chars)

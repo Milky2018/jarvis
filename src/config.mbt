@@ -61,6 +61,7 @@ suberror JarvisError {
   JsonParseError(String)
   StringViewError(String)
   InterruptError(String)
+  ExitRequested
 } derive(Show)
 
 ///|

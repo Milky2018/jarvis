@@ -237,7 +237,9 @@ async fn handle_user_input(
     let summarized = chat_history.manage_history(config)
     if summarized {
       print_jarvis_prefix()
-      println_async("(Summarized old conversation history to manage context length)")
+      println_async(
+        "(Summarized old conversation history to manage context length)",
+      )
 
       // Create new file and print notifications (shared logic with manual summarize)
       chat_history.create_new_file_after_summary()
@@ -285,8 +287,7 @@ async fn chat_loop(config : Config) -> Unit {
     None => {
       // Create new conversation with initial system message
       let initial_msg = Message::new(
-        "system",
-        "You are Jarvis, a helpful AI assistant. You can execute shell commands when needed.",
+        "system", "You are Jarvis, a helpful AI assistant. You can execute shell commands when needed.",
       )
       let history = ChatHistory::new()
       history.add(initial_msg)
@@ -294,57 +295,105 @@ async fn chat_loop(config : Config) -> Unit {
       // Create the first conversation file
       let file_num = create_new_conversation_file(history.messages)
       history.current_file_number = file_num
-
       print_jarvis_prefix()
       println_async("Created new conversation: conv_001.json")
       history
     }
   }
-  let command_history = CommandHistory::new(100)
   println_async("")
   print_jarvis_prefix()
-  println_async("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
+  println_async(
+    "Hello! I'm Jarvis, your AI assistant. How can I help you today?",
+  )
   println_async("(Type 'exit' or 'quit' to end the conversation)")
   println_async("")
-  while true {
-    // Show token usage before prompt
-    chat_history.print_token_usage()
-    print_separator()
-    match readline_simple("> ", command_history) {
-      Some(user_input) => {
-        print_separator()
-        if user_input.is_empty() {
-          continue
-        }
 
-        // Check for exit commands first
-        if is_exit_command(user_input) {
-          print_jarvis_prefix()
-          println_async("Goodbye!")
-          break
-        }
+  // Main loop: Ctrl+C handling to interrupt operations
+  for {
+    try {
+      @async.with_task_group(fn(group) {
+        // Start background task to monitor for Ctrl+C
+        group.spawn_bg(fn() {
+          for {
+            check_and_raise()
+            @async.sleep(100)  // Check every 100ms
+          }
+        })
 
-        // Handle special commands
-        if handle_command(user_input, chat_history, config) {
+        // Create readline interface
+        let rl = ReadlineInterface::new(100)
+
+        // Main interaction loop
+        for {
+          // Show token usage before prompt
+          chat_history.print_token_usage()
+          print_separator()
+
+          // Print prompt and read user input
+          rl.set_prompt("> ")
+          @stdio.stdout.write("> ")
+
+          // Keep reading until we get non-empty input
+          let user_input = loop rl.read_line() {
+            Some(input) => {
+              // Ignore empty input or whitespace-only input
+              let trimmed = input.trim(chars=" \t\n\r").to_string()
+              if trimmed.is_empty() {
+                // Empty or whitespace-only input: keep waiting, don't print anything
+                continue rl.read_line()
+              } else {
+                break trimmed
+              }
+            }
+            None => {
+              // Ctrl+D - also raise ExitRequested
+              println_async("") // Print newline after Ctrl+D
+              print_jarvis_prefix()
+              println_async("Goodbye!")
+              raise ExitRequested
+            }
+          }
+          println_async("") // Print newline after user input
+          print_separator()
+
+          // Check for exit commands - raise ExitRequested to cancel task group
+          if is_exit_command(user_input) {
+            print_jarvis_prefix()
+            println_async("Goodbye!")
+            raise ExitRequested
+          }
+
+          // Handle special commands
+          if handle_command(user_input, chat_history, config) {
+            println_async("")
+            continue
+          }
+
+          // Handle normal user input
+          handle_user_input(config, chat_history, user_input)
           println_async("")
-          continue
         }
-
-        // Handle normal user input
-        handle_user_input(config, chat_history, user_input)
+      })
+      // TaskGroup completed normally (should not reach here)
+      break
+    } catch {
+      // Exit requested: clean exit
+      ExitRequested => break
+      // Ctrl+C: task group cancelled, print message and restart
+      InterruptError(_) => {
+        println_async("^C")
+        print_jarvis_prefix()
+        println_async("Operation interrupted by Ctrl+C")
         println_async("")
       }
-      None => {
+      e => {
         println_async("")
         print_jarvis_prefix()
-        println_async("Goodbye!")
+        println_async("Fatal error: \{e}")
         break
       }
     }
   }
-
-  // Save conversation on exit (no longer needed, saved after each interaction)
-  // Just print goodbye message
 }
 
 ///|
