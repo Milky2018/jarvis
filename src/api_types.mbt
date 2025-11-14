@@ -21,14 +21,11 @@ fn ChatRequest::with_tools(
   let non_system_messages : Array[Message] = []
   for msg in messages {
     if msg.role == "system" {
-      match msg.content {
-        Some(content) => {
-          if system_content.is_empty() == false {
-            system_content = system_content + "\n\n"
-          }
-          system_content = system_content + content
+      if msg.content is Some(content) {
+        if !system_content.is_empty() {
+          system_content = system_content + "\n\n"
         }
-        None => ()
+        system_content = system_content + content
       }
     } else {
       non_system_messages.push(msg)
@@ -91,11 +88,8 @@ fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
   // Concatenate all text blocks
   let mut result = ""
   for block in self.content {
-    if block.type_ == "text" {
-      match block.text {
-        Some(t) => result = result + t
-        None => ()
-      }
+    if block.type_ == "text" && block.text is Some(t) {
+      result = result + t
     }
   }
   if result.is_empty() {

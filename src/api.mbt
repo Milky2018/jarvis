@@ -135,7 +135,7 @@ async fn send_streaming_chat_request(
   let non_system_messages : Array[Message] = []
   for msg in messages {
     if msg.role == "system" && msg.content is Some(content) {
-      if system_content.is_empty() == false {
+      if !system_content.is_empty() {
         system_content = system_content + "\n\n"
       }
       system_content = system_content + content
@@ -248,7 +248,7 @@ async fn send_streaming_chat_request(
       if line.has_prefix("data: ") {
         let json_str_view = line[6:] catch { _ => continue }
         let json_str = json_str_view.to_string()
-        let trimmed = json_str[:].trim(chars=" \t\r\n").to_string()
+        let trimmed = json_str.trim(chars=" \t\r\n").to_string()
         if trimmed == "[DONE]" {
           break
         }

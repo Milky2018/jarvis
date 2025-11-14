@@ -2,3 +2,5 @@
 - [ ] play 模式会一直强迫
 - [ ] command+delete，option+delete
 - [ ] 移除所有 pub
+- [ ] Error相关的println_async替换为errorln_async
+- [ ] relevant memories删掉

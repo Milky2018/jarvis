@@ -4,9 +4,7 @@ async fn handle_command(
   chat_history : ChatHistory,
   config : Config,
 ) -> Bool {
-  if input.has_prefix(":") == false {
-    return false
-  }
+  guard input.has_prefix(":") else { return false }
   let parts_view = input[1:].split(" ")
   let parts : Array[String] = []
   for part in parts_view {
@@ -25,8 +23,12 @@ async fn handle_command(
       println_async("  :models             - List available models")
       println_async("  :cost               - Show API usage statistics")
       println_async("  :clear              - Clear conversation history")
-      println_async("  :summarize          - Summarize and save current conversation")
-      println_async("  :play [budget]      - Let Jarvis explore freely (default: $10)")
+      println_async(
+        "  :summarize          - Summarize and save current conversation",
+      )
+      println_async(
+        "  :play [budget]      - Let Jarvis explore freely (default: $10)",
+      )
       println_async("  :exit, :quit, :q    - Exit Jarvis")
       println_async("  exit, quit          - Also exits Jarvis")
       true
@@ -101,11 +103,10 @@ async fn handle_command(
 
       // Generate timestamp-based filename
       let (exit_code, output) = @process.collect_output_merged("sh", [
-        "-c",
-        "date +%Y%m%d_%H%M%S",
+        "-c", "date +%Y%m%d_%H%M%S",
       ])
       let timestamp = if exit_code == 0 {
-        output.text()[:].trim(chars=" \n\t\r").to_string()
+        output.text().trim(chars=" \n\t\r").to_string()
       } else {
         "unknown"
       }
@@ -126,24 +127,23 @@ async fn handle_command(
 
       // Create new file and print notifications (shared logic with auto-compact)
       chat_history.create_new_file_after_summary()
-
       true
     }
     "play" => {
       // Parse budget (default $10)
       let budget = if parts.length() > 1 {
-        @strconv.parse_double(parts[1]) catch { _ => 10.0 }
+        @strconv.parse_double(parts[1]) catch {
+          _ => 10.0
+        }
       } else {
         10.0
       }
-
       print_jarvis_prefix()
       println_async("Entering play mode with budget: $\{budget}")
       println_async("")
 
       // Start autonomous play session
       start_play_mode(config, chat_history, budget)
-
       true
     }
     "exit" | "quit" | "q" => {
@@ -223,10 +223,8 @@ async fn start_play_mode(
     #| Current budget: $\{budget}
     #| What would you like to do first?
 
-
   // Add play mode message to history
   chat_history.add(Message::new("system", play_prompt))
-
   print_jarvis_prefix()
   println_async("Play mode initialized. Jarvis is now autonomous!")
   println_async("")
@@ -241,7 +239,6 @@ async fn start_play_mode(
     let current_cost = chat_history.usage_stats.total_cost()
     let spent = current_cost - start_cost
     let remaining = budget - spent
-
     if remaining <= 0.0 {
       print_jarvis_prefix()
       println_async("Budget exhausted! Spent: $\{spent}")
@@ -284,14 +281,15 @@ async fn start_play_mode(
     }
 
     // Small delay between iterations
-    let (_exit_code2, _) = @process.collect_output_merged("sh", ["-c", "sleep 1"])
-  }
+    let (_exit_code2, _) = @process.collect_output_merged("sh", [
+      "-c", "sleep 1",
+    ])
 
+  }
   if iterations >= max_iterations {
     print_jarvis_prefix()
     println_async("Max iterations reached. Play mode ended.")
   }
-
   print_jarvis_prefix()
   let final_cost = chat_history.usage_stats.total_cost()
   let total_spent = final_cost - start_cost

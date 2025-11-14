@@ -23,8 +23,12 @@ async fn print_jarvis_prefix() -> Unit {
 }
 
 async fn println_async(s : String) -> Unit {
-  @stdio.stdout.write(s + "\n")
+  @stdio.stdout.write("\{s}\n")
 } 
+
+async fn errorln_async(s : String) -> Unit {
+  @stdio.stderr.write("\{s}\n")
+}
 
 ///|
 /// Print horizontal separator line
@@ -60,7 +64,6 @@ suberror JarvisError {
   HttpError(String)
   JsonParseError(String)
   StringViewError(String)
-  InterruptError(String)
   ExitRequested
 } derive(Show)
 

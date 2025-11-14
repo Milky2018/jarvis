@@ -13,6 +13,7 @@ async fn ensure_jarvis_dir() -> Unit {
     "-c",
     "mkdir -p '\{dir}'",
   ])
+
 }
 
 ///|
@@ -24,12 +25,14 @@ async fn get_latest_conversation_number() -> Int {
     "-c",
     "cd '\{dir}' 2>/dev/null && ls -1 conv_*.json 2>/dev/null | sed 's/conv_\\([0-9]*\\)\\.json/\\1/' | sort -n | tail -1",
   ])
-  if exit_code != 0 || output.text().trim(chars=" \n\t\r").to_string().is_empty() {
+  if exit_code != 0 || output.text().is_blank() {
     return 0 // No conversation files exist yet
   }
   let number_str = output.text().trim(chars=" \n\t\r").to_string()
   // Parse the number
-  @strconv.parse_int(number_str) catch { _ => 0 }
+  @strconv.parse_int(number_str) catch {
+    _ => 0
+  }
 }
 
 ///|
@@ -49,9 +52,7 @@ fn get_conversation_file_path(number : Int) -> String {
 
 ///|
 /// Create a new conversation file with initial messages
-async fn create_new_conversation_file(
-  initial_messages : Array[Message]
-) -> Int {
+async fn create_new_conversation_file(initial_messages : Array[Message]) -> Int {
   ensure_jarvis_dir()
   let next_number = get_latest_conversation_number() + 1
   let path = get_conversation_file_path(next_number)
@@ -59,8 +60,9 @@ async fn create_new_conversation_file(
   // Save the initial messages using native fs API
   let json_obj : Json = { "messages": initial_messages.to_json() }
   let json_str = json_obj.stringify()
-  @fs.write_file(path, json_str, create=0o644) catch { _ => () }
-
+  @fs.write_file(path, json_str, create=0o644) catch {
+    _ => ()
+  }
   next_number
 }
 
@@ -79,8 +81,6 @@ async fn load_latest_conversation() -> (ChatHistory, Int)? {
   }
 }
 
-
-
 ///|
 /// Get all memory summaries from .jarvis directory
 async fn get_all_memories() -> Array[(String, String)] {
@@ -93,7 +93,7 @@ async fn get_all_memories() -> Array[(String, String)] {
     return []
   }
   let text = output.text()
-  let text_view = text[:].trim(chars=" \n\t\r")
+  let text_view = text.trim(chars=" \n\t\r")
   let text_str = text_view.to_string()
   if text_str.is_empty() {
     return []
@@ -103,7 +103,7 @@ async fn get_all_memories() -> Array[(String, String)] {
   for line in text_view.split("\n") {
     let trimmed_view = line.trim(chars=" \t\r")
     let filename = trimmed_view.to_string()
-    if filename.is_empty() == false {
+    if !filename.is_empty() {
       lines.push(filename)
     }
   }
@@ -138,7 +138,7 @@ fn extract_keywords(text : String) -> Array[String] {
   for word_view in text_lower[:].split(" ") {
     let word = word_view.to_string()
     // Keep words that are >= 2 chars and not stop words
-    if word.length() >= 2 && stop_words.contains(word) == false {
+    if word.length() >= 2 && !stop_words.contains(word) {
       keywords.push(word)
     }
   }
@@ -244,14 +244,14 @@ async fn search_relevant_memories(
   if relevant_indices.contains("无") {
     return ""
   }
-  let trimmed_indices = relevant_indices[:].trim(chars=" \n\t\r").to_string()
+  let trimmed_indices = relevant_indices.trim(chars=" \n\t\r").to_string()
   if trimmed_indices.is_empty() {
     return ""
   }
 
   // Parse the indices and collect relevant memories
   let mut relevant_memories = ""
-  let indices_view = relevant_indices[:].trim(chars=" \n\t\r")
+  let indices_view = relevant_indices.trim(chars=" \n\t\r")
   for part in indices_view.split(",") {
     let num_str = part.trim(chars=" \t\r\n").to_string()
     let idx = match num_str {

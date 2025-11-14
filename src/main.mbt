@@ -1,4 +1,10 @@
 ///|
+suberror JarvisSignal {
+  InterruptByUser
+  ActionFinished
+}
+
+///|
 async fn handle_tool_calls(
   config : Config,
   chat_history : ChatHistory,
@@ -44,15 +50,13 @@ async fn handle_tool_calls(
       first_request = false
 
       // Record usage statistics
-      match response.usage {
-        Some(u) =>
-          chat_history.usage_stats.add_request(
-            u.input_tokens,
-            u.output_tokens,
-            u.input_tokens + u.output_tokens,
-            chat_history.current_model,
-          )
-        None => ()
+      if response.usage is Some(u) {
+        chat_history.usage_stats.add_request(
+          u.input_tokens,
+          u.output_tokens,
+          u.input_tokens + u.output_tokens,
+          chat_history.current_model,
+        )
       }
 
       // Extract text content and tool uses from response
@@ -63,12 +67,12 @@ async fn handle_tool_calls(
       if tool_uses.length() == 0 {
         match content_text {
           Some(content_str) =>
-            if used_streaming == false {
+            if !used_streaming {
               print_jarvis_prefix()
               println_async(content_str)
             }
           None =>
-            if used_streaming == false {
+            if !used_streaming {
               print_jarvis_prefix()
               println_async("Error: No content in response")
             }
@@ -91,31 +95,25 @@ async fn handle_tool_calls(
 
       // We have tool calls to execute
       // First, display any text content
-      match content_text {
-        Some(content_str) =>
-          if content_str.is_empty() == false {
-            print_jarvis_prefix()
-            println_async(content_str)
-          }
-        None => ()
+      if content_text is Some(content_str) && content_str.is_blank() {
+        print_jarvis_prefix()
+        println_async(content_str)
       }
 
       // Build assistant message with the full response for history
       // IMPORTANT: Only add message if there's actual content
       // Claude API requires content field to be non-null
-      match content_text {
-        Some(content) =>
-          if content.is_empty() == false {
-            let assistant_msg = {
-              role: "assistant",
-              content: Some(content),
-              tool_calls: None,
-              tool_call_id: None,
-              name: None,
-            }
-            chat_history.add(assistant_msg)
+      if content_text is Some(content) {
+        if !content.is_empty() {
+          let assistant_msg = {
+            role: "assistant",
+            content: Some(content),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
           }
-        None => () // Skip adding message if no content (would cause API error)
+          chat_history.add(assistant_msg)
+        }
       }
 
       // Execute each tool and collect results
@@ -172,11 +170,6 @@ async fn handle_tool_calls(
       println_async("Warning: Maximum tool calling iterations reached")
     }
   } catch {
-    InterruptError(msg) => {
-      print_jarvis_prefix()
-      println_async("\{msg}")
-      println_async("")
-    }
     EnvVarNotSet(msg) => {
       print_jarvis_prefix()
       println_async("Error: Environment variable not set: \{msg}")
@@ -193,19 +186,16 @@ async fn handle_tool_calls(
       print_jarvis_prefix()
       println_async("Error: String view error: \{msg}")
     }
-    _ => {
-      print_jarvis_prefix()
-      println_async("Error: Unknown error occurred")
-    }
+    e => raise e
   }
 }
 
 ///|
 /// Handle user input and generate response
 async fn handle_user_input(
-  config : Config,
-  chat_history : ChatHistory,
   user_input : String,
+  chat_history : ChatHistory,
+  config : Config,
 ) -> Unit {
   // Search for relevant memories before processing
   let relevant_memories = search_relevant_memories(
@@ -215,7 +205,7 @@ async fn handle_user_input(
   )
 
   // If we found relevant memories, inject them as a system message
-  if relevant_memories.is_empty() == false {
+  if !relevant_memories.is_empty() {
     print_jarvis_prefix()
     println_async("(Found relevant memories from past conversations)")
     let memory_message = Message::new(
@@ -260,11 +250,7 @@ async fn handle_user_input(
 ///|
 /// Check if input is an exit command
 fn is_exit_command(input : String) -> Bool {
-  input == "exit" ||
-  input == "quit" ||
-  input.has_prefix(":exit") ||
-  input.has_prefix(":quit") ||
-  input.has_prefix(":q")
+  input == "exit" || input == "quit" || input == "<EXIT>"
 }
 
 ///|
@@ -315,73 +301,23 @@ async fn chat_loop(config : Config) -> Unit {
         // Start readline task in background
         group.spawn_bg(fn() {
           let rl = ReadlineInterface::new(100)
-          for {
-            // Print prompt and read user input
-            rl.set_prompt("> ")
-            @stdio.stdout.write("> ")
+          while rl.read_to_queue(input_queue) {
 
-            match rl.read_line() {
-              Some(input) => {
-                // Ignore empty input or whitespace-only input
-                let trimmed = input.trim(chars=" \t\n\r").to_string()
-                if trimmed.is_empty() == false {
-                  // Send input to queue
-                  input_queue.put(trimmed)
-                }
-                // For empty input, just continue reading
-              }
-              None => {
-                // Ctrl+D - send special marker to indicate exit
-                input_queue.put("<EXIT>")
-                break
-              }
-            }
           }
         })
-
-        // Main interaction loop
-        for {
-          // Show token usage before prompt
-          chat_history.print_token_usage()
-          print_separator()
-
-          // Wait for input from readline task
-          let user_input = input_queue.get()
-
-          // Check for Ctrl+D exit marker
-          if user_input == "<EXIT>" {
-            println_async("") // Print newline after Ctrl+D
-            print_jarvis_prefix()
-            println_async("Goodbye!")
-            raise ExitRequested
-          }
-
-          println_async("") // Print newline after user input
-          print_separator()
-
-          // Check for exit commands
-          if is_exit_command(user_input) {
-            print_jarvis_prefix()
-            println_async("Goodbye!")
-            raise ExitRequested
-          }
-
-          // Handle special commands
-          if handle_command(user_input, chat_history, config) {
-            println_async("")
-            continue
-          }
-
-          // Handle normal user input
-          handle_user_input(config, chat_history, user_input)
-          println_async("")
-        }
+        interact(chat_history, input_queue, config)
+        raise ActionFinished
       })
-      // TaskGroup completed normally (should not reach here)
-      break
+      continue
     } catch {
-      // Exit requested: clean exit
       ExitRequested => break
+      InterruptByUser => {
+        print_jarvis_prefix()
+        println_async("Interrupted by user")
+        println_async("")
+        continue
+      }
+      ActionFinished => continue
       e => {
         println_async("")
         print_jarvis_prefix()
@@ -400,7 +336,7 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
   print_jarvis_prefix()
   println_async("Processing: \{prompt}")
   println_async("")
-  handle_user_input(config, chat_history, prompt)
+  handle_user_input(prompt, chat_history, config)
 }
 
 ///|
@@ -434,13 +370,10 @@ async fn main {
   }
 
   // Parse arguments
-  match parser.parse(value, cli_args) {
-    Some(help_msg) => {
-      // Help message requested or parse error
-      println_async(help_msg)
-      return
-    }
-    None => ()
+  if parser.parse(value, cli_args) is Some(help_msg) {
+    // Help message requested or parse error
+    println_async(help_msg)
+    return
   }
 
   // Check if execute mode
@@ -480,6 +413,6 @@ async fn main {
       @stdio.stderr.write("Error: JSON parse error: \{msg}\n")
     StringViewError(msg) =>
       @stdio.stderr.write("Error: String view error: \{msg}\n")
-    _ => @stdio.stderr.write("Error: Unknown error occurred\n")
+    e => @stdio.stderr.write("Error: Unknown error occurred: \{e}\n")
   }
 }

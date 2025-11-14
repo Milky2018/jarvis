@@ -40,9 +40,7 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   let json_str = json_obj.stringify()
 
   // Use native fs API to write file
-  try {
-    @fs.write_file(filename, json_str, create=0o644)
-  } catch {
+  @fs.write_file(filename, json_str, create=0o644) catch {
     e => {
       print_jarvis_prefix()
       println_async("Warning: Failed to save conversation: \{e}")
@@ -62,6 +60,7 @@ async fn ChatHistory::save_to_numbered_file(self : ChatHistory) -> Unit {
 
 ///|
 /// Create a new conversation file after summarization
+
 ///|
 /// Format conversation file number as 3-digit string
 fn format_conv_number(num : Int) -> String {
@@ -76,9 +75,7 @@ fn format_conv_number(num : Int) -> String {
 
 ///|
 /// Create new conversation file after summarization and print notifications
-async fn ChatHistory::create_new_file_after_summary(
-  self : ChatHistory
-) -> Unit {
+async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit {
   let old_number = self.current_file_number
   let old_num_str = format_conv_number(old_number)
 
@@ -92,7 +89,9 @@ async fn ChatHistory::create_new_file_after_summary(
   println_async("Created new conversation file: conv_\{num_str}.json")
   if old_number > 0 {
     print_jarvis_prefix()
-    println_async("(Previous conversation archived in conv_\{old_num_str}.json)")
+    println_async(
+      "(Previous conversation archived in conv_\{old_num_str}.json)",
+    )
   }
 }
 
@@ -137,7 +136,7 @@ async fn generate_conversation_title(
   }
   match response.get_text_content() {
     Some(s) => {
-      let trimmed = s[:].trim(chars=" \n\t\r\"\'").to_string()
+      let trimmed = s.trim(chars=" \n\t\r\"\'").to_string()
       // Replace invalid filename characters
       trimmed
       .replace(old="/", new="_")
@@ -284,7 +283,6 @@ async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
     "\u{001b}[32m" // Green for < 30%
   }
   let reset = "\u{001b}[0m"
-
   @stdio.stdout.write(
     "[\{color}\{total}/\{self.max_context_tokens} tokens (\{percent}%)\{reset}]\n",
   )

@@ -27,16 +27,14 @@ fn ReadlineInterface::new(history_size : Int) -> ReadlineInterface {
 /// Set the prompt for next readline
 fn ReadlineInterface::set_prompt(
   self : ReadlineInterface,
-  prompt : String
+  prompt : String,
 ) -> Unit {
   self.prompt = prompt
 }
 
 ///|
 /// Read a line from user (blocking, waits for user input)
-async fn ReadlineInterface::read_line(
-  self : ReadlineInterface
-) -> String? raise {
+async fn ReadlineInterface::read_line(self : ReadlineInterface) -> String? {
   readline_simple(self.prompt, self.history)
 }
 
@@ -49,24 +47,24 @@ enum KeyPress {
   Delete
   CtrlC
   CtrlD
-  CtrlU  // Delete to start
-  CtrlW  // Delete word backward
-  CtrlA  // Move to start
-  CtrlE  // Move to end
+  CtrlU // Delete to start
+  CtrlW // Delete word backward
+  CtrlA // Move to start
+  CtrlE // Move to end
   Up
   Down
   Left
   Right
   Home
   End
-  OptionLeft   // Word backward
-  OptionRight  // Word forward
+  OptionLeft // Word backward
+  OptionRight // Word forward
   OptionDelete // Delete word backward
-  CmdLeft      // Move to start
-  CmdRight     // Move to end
-  CmdDelete    // Delete to start
-  PasteStart   // Bracketed paste start
-  PasteEnd     // Bracketed paste end
+  CmdLeft // Move to start
+  CmdRight // Move to end
+  CmdDelete // Delete to start
+  PasteStart // Bracketed paste start
+  PasteEnd // Bracketed paste end
   Unknown
 }
 
@@ -355,9 +353,7 @@ fn LineEditor::move_word_forward(self : LineEditor) -> Bool {
   while pos < len {
     match self.buffer.get_char(pos) {
       Some(ch) => {
-        if is_word_separator(ch) == false {
-          break
-        }
+        guard is_word_separator(ch) else { break }
         pos = pos + 1
       }
       None => break
@@ -396,9 +392,7 @@ fn LineEditor::move_word_backward(self : LineEditor) -> Bool {
   while pos > 0 {
     match self.buffer.get_char(pos) {
       Some(ch) => {
-        if is_word_separator(ch) == false {
-          break
-        }
+        guard is_word_separator(ch) else { break }
         pos = pos - 1
       }
       None => break
@@ -420,14 +414,12 @@ fn LineEditor::move_word_backward(self : LineEditor) -> Bool {
   }
 
   // Handle the case where we reached the beginning
-  match self.buffer.get_char(pos) {
-    Some(ch) =>
-      if pos == 0 && is_word_separator(ch) == false {
-        // We're at the start of a word at position 0
-        self.cursor_pos = 0
-        return true
-      }
-    None => ()
+  if self.buffer.get_char(pos) is Some(ch) {
+    if pos == 0 && !is_word_separator(ch) {
+      // We're at the start of a word at position 0
+      self.cursor_pos = 0
+      return true
+    }
   }
   if pos != self.cursor_pos {
     self.cursor_pos = pos
@@ -450,9 +442,7 @@ fn LineEditor::delete_word_backward(self : LineEditor) -> Bool {
   while pos > 0 {
     match self.buffer.get_char(pos) {
       Some(ch) => {
-        if is_word_separator(ch) == false {
-          break
-        }
+        guard is_word_separator(ch) else { break }
         pos = pos - 1
       }
       None => break
@@ -474,9 +464,8 @@ fn LineEditor::delete_word_backward(self : LineEditor) -> Bool {
   }
 
   // Handle the case where we reached the beginning
-  match self.buffer.get_char(pos) {
-    Some(ch) => if pos == 0 && is_word_separator(ch) == false { pos = 0 }
-    None => ()
+  if self.buffer.get_char(pos) is Some(ch) && pos == 0 && !is_word_separator(ch) {
+    pos = 0
   }
   if pos != start_pos {
     let before = self.buffer[0:pos].to_string() catch {
@@ -517,10 +506,8 @@ async fn redraw_line(editor : LineEditor, prompt : String) -> Unit {
   // Calculate display width of characters after cursor
   let mut display_width_after = 0
   for i = editor.cursor_pos; i < editor.buffer.length(); i = i + 1 {
-    match editor.buffer.get_char(i) {
-      Some(ch) =>
-        display_width_after = display_width_after + char_display_width(ch)
-      None => ()
+    if editor.buffer.get_char(i) is Some(ch) {
+      display_width_after = display_width_after + char_display_width(ch)
     }
   }
   if display_width_after > 0 {
@@ -675,14 +662,14 @@ async fn parse_keypress() -> KeyPress? {
   // Handle special control characters
   match byte {
     b'\r' | b'\n' => Some(Enter)
-    b'\x7f' => Some(Backspace)  // Backspace
+    b'\x7f' => Some(Backspace) // Backspace
     b'\x03' => Some(CtrlC)
     b'\x04' => Some(CtrlD)
     b'\x15' => Some(CtrlU)
     b'\x17' => Some(CtrlW)
     b'\x01' => Some(CtrlA)
     b'\x05' => Some(CtrlE)
-    b'\x1b' => {
+    b'\x1b' =>
       // Escape sequence
       match read_escape_sequence() {
         Some("up") => Some(Up)
@@ -702,14 +689,12 @@ async fn parse_keypress() -> KeyPress? {
         Some("paste-end") => Some(PasteEnd)
         _ => Some(Unknown)
       }
-    }
-    _ => {
+    _ =>
       // UTF-8 character
       match read_utf8_char(byte) {
         Some(ch) => Some(Char(ch))
         None => Some(Unknown)
       }
-    }
   }
 }
 
@@ -786,7 +771,7 @@ async fn handle_keypress(
   editor : LineEditor,
   prompt : String,
   in_paste_mode : Bool,
-  consecutive_inserts : Int
+  consecutive_inserts : Int,
 ) -> (Bool, Int, Bool) {
   // Returns: (should_continue, new_consecutive_inserts, new_in_paste_mode)
   match key {
@@ -795,7 +780,7 @@ async fn handle_keypress(
       let new_consecutive = consecutive_inserts + 1
 
       // Render the character
-      if in_paste_mode == false || new_consecutive % 5 == 0 {
+      if !in_paste_mode || new_consecutive % 5 == 0 {
         if editor.cursor_pos < editor.buffer.length() {
           redraw_line(editor, prompt)
         } else {
@@ -806,14 +791,13 @@ async fn handle_keypress(
       }
       (true, new_consecutive, in_paste_mode)
     }
-    Enter => {
+    Enter =>
       if in_paste_mode {
         editor.insert_char(' ')
         (true, consecutive_inserts + 1, in_paste_mode)
       } else {
-        (false, 0, false)  // Exit the loop
+        (false, 0, false) // Exit the loop
       }
-    }
     Backspace => {
       if editor.delete_char() {
         redraw_line(editor, prompt)
@@ -854,26 +838,20 @@ async fn handle_keypress(
       if editor.history.position == -1 {
         editor.saved_line = editor.buffer
       }
-      match editor.history.previous() {
-        Some(line) => {
-          editor.set_buffer(line)
-          redraw_line(editor, prompt)
-        }
-        None => ()
+      if editor.history.previous() is Some(line) {
+        editor.set_buffer(line)
+        redraw_line(editor, prompt)
       }
       (true, 0, false)
     }
     Down => {
-      match editor.history.next() {
-        Some(line) => {
-          if line.is_empty() && editor.saved_line.is_empty() == false {
-            editor.set_buffer(editor.saved_line)
-          } else {
-            editor.set_buffer(line)
-          }
-          redraw_line(editor, prompt)
+      if editor.history.next() is Some(line) {
+        if line.is_empty() && !editor.saved_line.is_empty() {
+          editor.set_buffer(editor.saved_line)
+        } else {
+          editor.set_buffer(line)
         }
-        None => ()
+        redraw_line(editor, prompt)
       }
       (true, 0, false)
     }
@@ -926,23 +904,23 @@ async fn handle_keypress(
       (true, 0, false)
     }
     CtrlC => {
-      raise InterruptError("Operation interrupted by user (Ctrl+C)")
-      (false, 0, false)  // Never reached
+      if editor.delete_to_start() {
+        redraw_line(editor, prompt)
+      }
+      (true, 0, false)
     }
-    CtrlD => {
+    CtrlD =>
       if editor.buffer.is_empty() {
-        (false, 0, false)  // Exit (will return None)
+        (false, 0, false) // Exit (will return None)
       } else if editor.delete_forward() {
         redraw_line(editor, prompt)
         (true, 0, false)
       } else {
         (true, 0, false)
       }
-    }
-    PasteStart => {
+    PasteStart =>
       // Enter paste mode
       (true, 0, true)
-    }
     PasteEnd => {
       // Exit paste mode and redraw to ensure proper display
       redraw_line(editor, prompt)
@@ -954,10 +932,7 @@ async fn handle_keypress(
 
 ///|
 /// Main readline function with raw mode enabled
-async fn readline_simple(
-  prompt : String,
-  history : CommandHistory
-) -> String? raise {
+async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
   let editor = LineEditor::new(history)
 
   // Enable raw mode for stdin
@@ -965,32 +940,24 @@ async fn readline_simple(
 
   // Enable bracketed paste mode
   @stdio.stdout.write("\u001b[?2004h")
-
   let mut in_paste_mode = false
   let mut consecutive_inserts = 0
-
   for {
     match parse_keypress() {
       Some(key) => {
         let (should_continue, new_consecutive, new_paste) = handle_keypress(
-          key,
-          editor,
-          prompt,
-          in_paste_mode,
-          consecutive_inserts,
+          key, editor, prompt, in_paste_mode, consecutive_inserts,
         )
         consecutive_inserts = new_consecutive
         in_paste_mode = new_paste
-
-        if should_continue == false {
+        if !should_continue {
           match key {
-            CtrlD => {
+            CtrlD =>
               if editor.buffer.is_empty() {
                 // Disable bracketed paste mode before exit
                 @stdio.stdout.write("\u001b[?2004l")
                 return None
               }
-            }
             _ => {
               // Normal exit (Enter key)
               let result = editor.buffer
@@ -1014,3 +981,35 @@ async fn readline_simple(
   Some(editor.buffer)
 }
 
+///|
+async fn ReadlineInterface::read_to_queue(
+  self : ReadlineInterface,
+  queue : @async.Queue[String],
+) -> Bool {
+  self.set_prompt("> ")
+  print_separator()
+  @stdio.stdout.write("> ")
+  match self.read_line() {
+    Some(input) => {
+      // Ignore empty input or whitespace-only input
+      let trimmed = input.trim(chars=" \t\n\r").to_string()
+      if !trimmed.is_empty() {
+        // Send input to queue
+        queue.put(trimmed)
+        for {
+          let keypress = parse_keypress()
+          if keypress is Some(CtrlC) {
+            raise InterruptByUser
+          }
+        }
+      }
+      true
+      // For empty input, just continue reading
+    }
+    None => {
+      // Ctrl+D - send special marker to indicate exit
+      queue.put("<EXIT>")
+      false
+    }
+  }
+}
