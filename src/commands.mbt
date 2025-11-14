@@ -133,7 +133,7 @@ async fn handle_command(
     }
     "exit" | "quit" | "q" => {
       jarvis_says("Goodbye!")
-      false // Signal to exit
+      raise ExitRequested
     }
     _ => {
       jarvis_says("Unknown command: :\{command}")
@@ -208,13 +208,15 @@ async fn start_play_mode(
 
   // Add play mode message to history
   chat_history.add(Message::new("system", play_prompt))
+
+  // Add initial user message to trigger Jarvis's first response
+  chat_history.add(Message::new("user", "Begin your exploration."))
   jarvis_says("Play mode initialized. Jarvis is now autonomous!")
   println_async("")
 
   // First iteration - let Jarvis start autonomously
   let mut iterations = 0
   let max_iterations = 100 // Safety limit
-
   while iterations < max_iterations {
     iterations = iterations + 1
 

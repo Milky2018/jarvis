@@ -266,8 +266,9 @@ async fn send_streaming_chat_request(
           if delta_map.get("content") is Some(String(content)) {
             full_content = full_content + content
             // Output immediately after parsing (ignore write errors)
-            @stdio.stdout.write(content) catch { _ => () }
-
+            @stdio.stdout.write(content) catch {
+              _ => ()
+            }
           }
         }
 

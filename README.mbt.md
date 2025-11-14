@@ -1,162 +1,198 @@
-# Jarvis - 智能电脑助手
+# Jarvis - Intelligent Computer Assistant
 
-Jarvis 是一个基于 MoonBit 开发的智能 AI 助手,能够通过自然语言与 LLM 进行对话交互。
+Jarvis is an intelligent AI assistant built with MoonBit, enabling natural language conversation and system command execution through LLM integration.
 
-## 功能特性
+## Features
 
-- ✅ 自然语言对话交互
-- ✅ 支持 OpenAI 兼容的 API
-- ✅ 会话历史记录
-- ✅ 命令行历史记录(上下箭头导航)
-- ✅ 行内编辑(左右箭头移动光标)
-- ✅ 错误处理和重试机制
-- ✅ 环境变量配置
+- ✅ Natural language conversation interface
+- ✅ OpenAI-compatible API support
+- ✅ Tool calling for shell command execution
+- ✅ Conversation history persistence
+- ✅ Smart context management with auto-summarization
+- ✅ Command-line history navigation (arrow keys)
+- ✅ Advanced line editing (cursor movement, word jumping, etc.)
+- ✅ Streaming responses with real-time output
+- ✅ Token usage tracking and cost estimation
+- ✅ Execute mode (`-e` flag) for single commands
+- ✅ Play mode for autonomous exploration
+- ✅ Multi-model support (Claude Sonnet/Haiku/Opus)
 
-## 快速开始
+## Quick Start
 
-### 前置要求
+### Prerequisites
 
-- MoonBit 编译器和工具链
-- 一个 OpenAI 兼容的 LLM API 服务
+- MoonBit compiler and toolchain
+- An OpenAI-compatible LLM API service (Claude API recommended)
 
-### 安装依赖
+### Configuration
 
-```bash
-moon add moonbitlang/async
-moon add moonbitlang/x
-```
-
-### 配置环境变量
-
-设置以下环境变量:
+Set the following environment variables:
 
 ```bash
-export JARVIS_BASE_URL="https://api.openai.com/v1/chat/completions"
-export JARVIS_AUTH_TOKEN="your-api-token-here"
+export JARVIS_BASE_URL="https://api.anthropic.com/v1/messages"
+export JARVIS_AUTH_TOKEN="your-api-key-here"
 ```
 
-或者对于本地 LLM:
+Or for local LLM services:
 
 ```bash
 export JARVIS_BASE_URL="http://localhost:11434/v1/chat/completions"
 export JARVIS_AUTH_TOKEN="ollama"
 ```
 
-### 构建和运行
+### Build and Run
 
 ```bash
-# 构建项目
+# Build the project
 moon build
 
-# 运行
-moon run .
+# Run in interactive mode
+moon run src
 
-# 或者直接运行编译后的可执行文件
-./target/native/release/build/jarvis.exe
+# Or run the compiled executable
+./target/native/release/build/src/src.exe
+
+# Execute a single command and exit
+moon run src -- -e "What is the current directory?"
 ```
 
-## 使用示例
+### Installation
 
+```bash
+./install.sh
+# This installs the binary to ~/bin/jarvis
 ```
-$ moon run .
+
+## Usage
+
+### Interactive Mode
+
+```bash
+$ jarvis
 Jarvis: Hello! I'm Jarvis, your AI assistant. How can I help you today?
 (Type 'exit' or 'quit' to end the conversation)
 
-> 你好,请介绍一下你自己
-Jarvis: 你好!我是 Jarvis,一个 AI 助手。我可以帮助你回答问题、提供信息和进行对话...
+[1030/200000 tokens (0%)]
+────────────────────────────────────────────────────────────────────────────────
+> List all .mbt files in the src directory
+Jarvis: Executing: ls src/*.mbt
+# Output displayed...
 
 > exit
 Jarvis: Goodbye!
 ```
 
-## 项目结构
+### Execute Mode
 
-```
-jarvis/
-├── jarvis.mbt              # 主程序代码(包含所有核心功能)
-├── readline.mbt            # 终端行编辑和历史记录功能
-├── jarvis_test.mbt         # 测试文件
-├── moon.mod.json           # 模块配置
-├── moon.pkg.json           # 包配置(is-main: true)
-├── DESIGN.md               # 设计文档
-└── README.md               # 本文件
+Execute a single command and exit:
+
+```bash
+$ jarvis -e "What is the current directory?"
+Jarvis: Processing: What is the current directory?
+Jarvis: Executing: pwd
+/path/to/current/directory
 ```
 
-## 核心模块
+### Built-in Commands
 
-### Config
-配置管理,从环境变量读取 API 地址和认证令牌。
+| Command | Description |
+|---------|-------------|
+| `:help`, `:h` | Show help message |
+| `:model [name]` | View or set current model |
+| `:models` | List available models |
+| `:cost` | Show API usage statistics and estimated cost |
+| `:summarize`, `:sum` | Manually summarize and save conversation |
+| `:play [budget]` | Start autonomous exploration mode (default budget: $10) |
+| `:clear`, `:c` | Clear conversation history |
+| `:exit`, `:quit`, `:q` | Exit Jarvis |
+| `exit`, `quit` | Exit (alternative) |
 
-### Message
-聊天消息的数据结构,支持 JSON 序列化。
+### Keyboard Shortcuts
 
-### ChatHistory
-管理对话历史记录。
+- **Arrow keys**: Navigate command history (up/down), move cursor (left/right)
+- **Option + Left/Right**: Jump by word
+- **Command/Ctrl + A**: Move to start of line
+- **Command/Ctrl + E**: Move to end of line
+- **Home/End**: Move to start/end of line
+- **Backspace/Delete**: Delete characters
+- **Option + Delete**: Delete word backward
+- **Command + Delete**: Delete to start of line
+- **Ctrl + C**: Cancel current line
+- **Ctrl + D**: Exit (when line is empty)
 
-### ChatRequest/ChatResponse
-LLM API 的请求和响应结构,使用 `derive(ToJson, FromJson)` 自动处理 JSON。
+## Key Features
 
-### CommandHistory
-管理命令行历史记录,支持上下箭头导航和自动去重。
+### Context Management
 
-### LineEditor
-提供终端行编辑功能,支持光标移动、字符插入/删除等操作。
+Jarvis automatically manages conversation context:
+- **Token tracking**: Real-time display of token usage before each input
+- **Color-coded warnings**:
+  - Green: < 30% of context
+  - Yellow: 30-79% of context
+  - Red: ≥ 80% (auto-summarization will trigger)
+- **Auto-summarization**: When context exceeds 80%, older messages are summarized
+- **Manual summarization**: Use `:summarize` to create a detailed Markdown summary
 
-## 开发
+### Play Mode
 
-### 运行测试
+Let Jarvis explore autonomously with a budget:
+
+```bash
+> :play 10
+Jarvis: Entering play mode with budget: $10
+Jarvis: Play mode initialized. Jarvis is now autonomous!
+```
+
+In play mode, Jarvis can:
+- Freely explore and experiment within `~/.jarvis/playground`
+- Execute any shell commands
+- Create files, scripts, or projects
+- Learn and try new things
+- End the session by calling the `end_play_mode` tool
+
+### Conversation Persistence
+
+All conversations are automatically saved:
+- Location: `~/.jarvis/conv_001.json`, `conv_002.json`, etc.
+- Automatic loading of the latest conversation on startup
+- Summaries saved as: `~/.jarvis/<timestamp>_<title>.md`
+
+## Supported Models
+
+- `claude-sonnet-4-5-20250929` (default) - $3/$15 per 1M tokens
+- `claude-haiku-4-5-20251001` - $0.8/$4 per 1M tokens
+- `claude-opus-4-1-20250805` - $15/$75 per 1M tokens
+
+Switch models with `:model <name>` command.
+
+## Development
+
+### Run Tests
 
 ```bash
 moon test
 ```
 
-### 代码格式化
+### Code Formatting
 
 ```bash
 moon fmt
 ```
 
-### 检查代码
+### Type Checking
 
 ```bash
 moon check
 ```
 
-## 技术栈
+## Design Philosophy
 
-- **语言**: MoonBit
-- **异步运行时**: moonbitlang/async
-- **HTTP 客户端**: moonbitlang/async/http
-- **环境变量**: moonbitlang/x/sys
-- **JSON 处理**: 内置 derive(ToJson, FromJson)
+See [DESIGN.md](DESIGN.md) for the complete design philosophy and architecture details.
 
-## 错误处理
-
-Jarvis 定义了以下错误类型:
-
-- `EnvVarNotSet`: 环境变量未设置
-- `HttpError`: HTTP 请求失败
-- `InvalidResponse`: API 响应格式无效
-- `JsonParseError`: JSON 解析错误
-- `StringViewError`: 字符串视图错误
-
-所有错误都会被捕获并以友好的方式显示给用户。
-
-## 未来计划
-
-查看 [DESIGN.md](DESIGN.md) 了解完整的设计规划和路线图。
-
-主要计划:
-- [ ] 语音输入/输出
-- [ ] 系统操作集成
-- [ ] 插件系统
-- [ ] 工作流自动化
-- [ ] 多模态支持
-
-## 许可证
+## License
 
 Apache-2.0 License
 
-## 贡献
+## Contributing
 
-欢迎提交 Issue 和 Pull Request!
+Issues and Pull Requests are welcome!

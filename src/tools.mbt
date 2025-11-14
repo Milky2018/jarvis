@@ -57,7 +57,7 @@ async fn execute_tool_claude(tool_name : String, input : Json) -> String {
 }
 
 ///|
-fn get_available_tools(in_play_mode~ : Bool = false) -> Array[Tool] {
+fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
   let execute_command_schema : Json = {
     "type": "object",
     "properties": {
@@ -94,9 +94,5 @@ fn get_available_tools(in_play_mode~ : Bool = false) -> Array[Tool] {
       input_schema: end_play_mode_schema,
     })
   }
-
   tools
 }
-
-///|
-/// Handle special commands starting with ':'

@@ -80,4 +80,3 @@ async fn load_latest_conversation() -> (ChatHistory, Int)? {
     None => None
   }
 }
-
