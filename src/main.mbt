@@ -2,6 +2,7 @@
 suberror JarvisSignal {
   InterruptByUser
   ActionFinished
+  PlayModeEnded
 }
 
 ///|

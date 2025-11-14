@@ -211,9 +211,10 @@ async fn start_play_mode(
   jarvis_says("Play mode initialized. Jarvis is now autonomous!")
   println_async("")
 
-  // Autonomous loop
+  // First iteration - let Jarvis start autonomously
   let mut iterations = 0
   let max_iterations = 100 // Safety limit
+
   while iterations < max_iterations {
     iterations = iterations + 1
 
@@ -231,10 +232,6 @@ async fn start_play_mode(
     jarvis_says("Budget remaining: $\{remaining} (iteration \{iterations})")
     println_async("")
 
-    // Let Jarvis decide what to do next
-    let autonomous_prompt = "What would you like to do next? (Remaining budget: $\{remaining})"
-    chat_history.add(Message::new("user", autonomous_prompt))
-
     // Get response and handle tool calls
     try {
       // Check if need to summarize
@@ -244,25 +241,24 @@ async fn start_play_mode(
         chat_history.create_new_file_after_summary()
       }
 
-      // Use the shared handle_tool_calls function
-      let tools = get_available_tools()
+      // Use the shared handle_tool_calls function with play mode tools
+      let tools = get_available_tools(in_play_mode=true)
       handle_tool_calls(config, chat_history, tools)
 
       // Save after each iteration
       chat_history.save_to_numbered_file()
     } catch {
+      PlayModeEnded => {
+        // Jarvis called end_play_mode tool
+        println_async("Play mode ended by Jarvis.")
+        break
+      }
       e => {
-        jarvis_says("Error in play mode: \{e}")
+        jarvis_cries("Error in play mode: \{e}")
         println_async("Ending play session.")
         break
       }
     }
-
-    // Small delay between iterations
-    let (_exit_code2, _) = @process.collect_output_merged("sh", [
-      "-c", "sleep 1",
-    ])
-
   }
   if iterations >= max_iterations {
     jarvis_says("Max iterations reached. Play mode ended.")

@@ -111,7 +111,7 @@ async fn generate_conversation_title(
     {
       role: "user",
       content: Some(
-        "请为以下对话生成一个简短的标题（不超过20个字，中文）。只返回标题本身，不要其他内容。\n\n对话内容：\n" +
+        "Generate a short title (maximum 20 characters) for the following conversation. Return only the title itself, nothing else.\n\nConversation:\n" +
         preview,
       ),
       tool_calls: None,
@@ -154,13 +154,13 @@ async fn generate_summary_with_title(
   let mut conversation_text = ""
   for msg in chat_history.messages {
     let role_text = match msg.role {
-      "user" => "用户"
+      "user" => "User"
       "assistant" => "Jarvis"
       _ => msg.role
     }
     let content = match msg.content {
       Some(c) => if c.length() > 500 { c[:500].to_string() + "..." } else { c }
-      None => "[无内容]"
+      None => "[No content]"
     }
     conversation_text = conversation_text + "**\{role_text}**: \{content}\n\n"
   }
@@ -171,7 +171,7 @@ async fn generate_summary_with_title(
     {
       role: "user",
       content: Some(
-        "请总结以下对话内容，用 Markdown 格式输出。包括：\n1. 对话主题\n2. 关键要点（用bullet points）\n3. 重要决定或结论\n4. 需要记住的信息\n\n对话内容：\n\n" +
+        "Summarize the following conversation in Markdown format. Include:\n1. Conversation topic\n2. Key points (use bullet points)\n3. Important decisions or conclusions\n4. Information to remember\n\nConversation:\n\n" +
         conversation_text,
       ),
       tool_calls: None,

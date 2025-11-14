@@ -39,13 +39,26 @@ async fn execute_tool_claude(tool_name : String, input : Json) -> String {
           }
         _ => "Error: Input must be a JSON object"
       }
+    "end_play_mode" => {
+      // Extract optional reason
+      let reason = match input {
+        Object(map) =>
+          match map.get("reason") {
+            Some(String(r)) => r
+            _ => "No reason provided"
+          }
+        _ => "No reason provided"
+      }
+      jarvis_says("Ending play mode: \{reason}")
+      raise PlayModeEnded
+    }
     _ => "Error: Unknown tool '\{tool_name}'"
   }
 }
 
 ///|
-fn get_available_tools() -> Array[Tool] {
-  let input_schema : Json = {
+fn get_available_tools(in_play_mode~ : Bool = false) -> Array[Tool] {
+  let execute_command_schema : Json = {
     "type": "object",
     "properties": {
       "command": {
@@ -55,13 +68,34 @@ fn get_available_tools() -> Array[Tool] {
     },
     "required": ["command"],
   }
-  [
+  let tools : Array[Tool] = [
     {
       name: "execute_command",
       description: "Execute a shell command and return the output. Use this when you need to interact with the system, run programs, or access files.",
-      input_schema,
+      input_schema: execute_command_schema,
     },
   ]
+
+  // Add end_play_mode tool only when in play mode
+  if in_play_mode {
+    let end_play_mode_schema : Json = {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Optional reason for ending play mode",
+        },
+      },
+      "required": [],
+    }
+    tools.push({
+      name: "end_play_mode",
+      description: "Call this tool when you're finished exploring and want to end play mode. You can optionally provide a reason.",
+      input_schema: end_play_mode_schema,
+    })
+  }
+
+  tools
 }
 
 ///|

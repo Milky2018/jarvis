@@ -199,7 +199,7 @@ async fn send_streaming_chat_request(
   let mut finish_reason = ""
 
   // Buffer for reading chunks
-  let buffer = FixedArray::make(16, b'\x00')
+  let buffer = FixedArray::make(1024, b'\x00')
   let mut accumulated_data = ""
   for {
     let bytes_read = client.read(buffer) catch {
@@ -266,7 +266,7 @@ async fn send_streaming_chat_request(
           if delta_map.get("content") is Some(String(content)) {
             full_content = full_content + content
             // Output immediately after parsing (ignore write errors)
-            let _ = @stdio.stdout.write(content) catch { _ => () }
+            @stdio.stdout.write(content) catch { _ => () }
 
           }
         }
