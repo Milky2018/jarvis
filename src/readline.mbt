@@ -18,16 +18,10 @@ struct ReadlineInterface {
 }
 
 ///|
-/// Create a new readline interface
-fn ReadlineInterface::new(history_size : Int) -> ReadlineInterface {
-  { prompt: "> ", history: CommandHistory::new(history_size) }
-}
-
-///|
 /// Create a new readline interface with pre-populated history
 fn ReadlineInterface::with_history(
   history_size : Int,
-  initial_history : Array[String]
+  initial_history : Array[String],
 ) -> ReadlineInterface {
   let history = CommandHistory::new(history_size)
   for entry in initial_history {

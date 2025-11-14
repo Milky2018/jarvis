@@ -68,7 +68,7 @@ async fn handle_tool_calls(
           Some(content_str) => if !used_streaming { jarvis_says(content_str) }
           None =>
             if !used_streaming {
-              jarvis_says("Error: No content in response")
+              jarvis_cries("Error: No content in response")
             }
         }
         // No tool calls, add message to history and break
@@ -163,10 +163,10 @@ async fn handle_tool_calls(
     }
   } catch {
     EnvVarNotSet(msg) =>
-      jarvis_says("Error: Environment variable not set: \{msg}")
-    HttpError(msg) => jarvis_says("Error: HTTP error: \{msg}")
-    JsonParseError(msg) => jarvis_says("Error: JSON parse error: \{msg}")
-    StringViewError(msg) => jarvis_says("Error: String view error: \{msg}")
+      jarvis_cries("Error: Environment variable not set: \{msg}")
+    HttpError(msg) => jarvis_cries("Error: HTTP error: \{msg}")
+    JsonParseError(msg) => jarvis_cries("Error: JSON parse error: \{msg}")
+    StringViewError(msg) => jarvis_cries("Error: String view error: \{msg}")
     e => raise e
   }
 }
@@ -273,11 +273,17 @@ async fn chat_loop(config : Config) -> Unit {
         // Start readline task in background
         group.spawn_bg(fn() {
           // Extract user messages from chat history for readline history
+          // Filter out tool result messages (they start with "Tool:")
           let user_inputs : Array[String] = []
           for msg in chat_history.messages {
             if msg.role == "user" {
               match msg.content {
-                Some(content) => user_inputs.push(content)
+                Some(content) => {
+                  // Skip tool result messages
+                  if !content.has_prefix("Tool:") {
+                    user_inputs.push(content)
+                  }
+                }
                 None => ()
               }
             }

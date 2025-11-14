@@ -17,9 +17,16 @@ let color_reset = "\u001b[0m"
 let color_bold = "\u001b[1m"
 
 ///|
+let color_red = "\u001b[31m"
+
+///|
 /// Print colored Jarvis prefix
 async fn print_jarvis_prefix() -> Unit {
-  @stdio.stdout.write(color_bold + color_cyan + "Jarvis" + color_reset + ": ")
+  @stdio.stdout.write(color_bold)
+  @stdio.stdout.write(color_cyan)
+  println_async("Jarvis")
+  @stdio.stdout.write(color_reset)
+  @stdio.stdout.write(": ")
 }
 
 ///|
@@ -29,12 +36,17 @@ async fn jarvis_says(message : String) -> Unit {
   println_async(message)
 }
 
+///|
+/// Jarvis cries (error output) - shows error in red
+async fn jarvis_cries(message : String) -> Unit {
+  print_jarvis_prefix()
+  @stdio.stdout.write(color_red)
+  println_async(message)
+  @stdio.stdout.write(color_reset)
+}
+
 async fn println_async(s : String) -> Unit {
   @stdio.stdout.write("\{s}\n")
-} 
-
-async fn errorln_async(s : String) -> Unit {
-  @stdio.stderr.write("\{s}\n")
 }
 
 ///|
