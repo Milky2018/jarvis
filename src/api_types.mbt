@@ -39,7 +39,7 @@ fn ChatRequest::with_tools(
   {
     messages: non_system_messages,
     model,
-    max_tokens: 4096,
+    max_tokens: MAX_RESPONSE_TOKENS,
     stream: false,
     tools: Some(tools), // Claude API supports tools with input_schema format
     system: system_param,

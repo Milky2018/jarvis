@@ -147,14 +147,14 @@ async fn send_streaming_chat_request(
     {
       "model": model,
       "messages": non_system_messages.to_json(),
-      "max_tokens": 4096,
+      "max_tokens": MAX_RESPONSE_TOKENS,
       "stream": true,
     }
   } else {
     {
       "model": model,
       "messages": non_system_messages.to_json(),
-      "max_tokens": 4096,
+      "max_tokens": MAX_RESPONSE_TOKENS,
       "stream": true,
       "system": system_content,
     }

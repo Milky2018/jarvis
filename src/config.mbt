@@ -22,6 +22,39 @@ const COLOR_RED : String = "\u001b[31m"
 const COLOR_GRAY : String = "\u001b[38;2;90;90;90m"
 
 ///|
+/// Summarization configuration
+/// Number of recent messages to keep when compacting conversation history
+const SUMMARIZE_KEEP_RECENT : Int = 8
+
+///|
+/// Token threshold percentage for automatic summarization (0-100)
+/// History will be compacted when token usage reaches this percentage
+const SUMMARIZE_THRESHOLD_PERCENT : Int = 80
+
+///|
+/// API configuration
+/// Maximum tokens for the context window
+const MAX_CONTEXT_TOKENS : Int = 200000
+
+///|
+/// Maximum tokens for model response
+const MAX_RESPONSE_TOKENS : Int = 4096
+
+///|
+/// Tool calling configuration
+/// Maximum iterations for tool calling loop to prevent infinite loops
+const MAX_TOOL_ITERATIONS : Int = 200
+
+///|
+/// Play mode configuration
+/// Maximum iterations for play mode to prevent runaway sessions
+const MAX_PLAY_ITERATIONS : Int = 100
+
+///|
+/// Default budget for play mode in USD
+const DEFAULT_PLAY_BUDGET : Double = 10.0
+
+///|
 /// Print colored Jarvis prefix
 async fn print_jarvis_prefix() -> Unit {
   @stdio.stdout.write(COLOR_BOLD)

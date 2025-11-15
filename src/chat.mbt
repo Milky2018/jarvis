@@ -14,7 +14,7 @@ struct ChatHistory {
 fn ChatHistory::new() -> ChatHistory {
   {
     messages: [],
-    max_context_tokens: 200000,
+    max_context_tokens: MAX_CONTEXT_TOKENS,
     current_model: "claude-sonnet-4-5-20250929",
     petite_model: "claude-haiku-4-5-20251001",
     usage_stats: UsageStats::new(),
@@ -232,7 +232,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
       }
       Some({
         messages,
-        max_context_tokens: 200000,
+        max_context_tokens: MAX_CONTEXT_TOKENS,
         current_model: model,
         petite_model: "claude-haiku-4-5-20251001",
         usage_stats: UsageStats::new(),
@@ -270,8 +270,8 @@ async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
   let percent = total * 100 / self.max_context_tokens
 
   // Color code based on usage
-  let color = if percent >= 80 {
-    "\u{001b}[31m" // Red for >= 80%
+  let color = if percent >= SUMMARIZE_THRESHOLD_PERCENT {
+    "\u{001b}[31m" // Red for >= threshold
   } else if percent >= 30 {
     "\u{001b}[33m" // Yellow for >= 30%
   } else {
@@ -319,13 +319,13 @@ async fn ChatHistory::manage_history(
   let total_tokens = estimate_total_tokens(self.messages)
   let max_tokens = self.max_context_tokens
 
-  // If under 80% of max tokens, no need to manage
-  if total_tokens < max_tokens * 8 / 10 {
+  // If under threshold, no need to manage
+  if total_tokens < max_tokens * SUMMARIZE_THRESHOLD_PERCENT / 100 {
     return false
   }
 
-  // Count recent messages to keep (4 turns = 8 messages, but may include tool messages)
-  let recent_keep = 8
+  // Count recent messages to keep
+  let recent_keep = SUMMARIZE_KEEP_RECENT
   let messages_count = self.messages.length()
   if messages_count <= recent_keep + 1 {
     // Not enough messages to summarize

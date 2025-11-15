@@ -11,7 +11,7 @@ async fn handle_tool_calls(
   chat_history : ChatHistory,
   tools : Array[Tool],
 ) -> Bool {
-  let mut max_iterations = 200 // Prevent infinite loops
+  let mut max_iterations = MAX_TOOL_ITERATIONS // Prevent infinite loops
   let mut first_request = true // Use streaming for first request only
   let mut used_streaming = false // Track if we used streaming
   try {

@@ -339,6 +339,49 @@ impl Command for SummarizeCommand with execute(
     e => jarvis_cries("Failed to save summary file: \{e}")
   }
 
+  // Compress the conversation history by replacing old messages with summary
+  // Force compression regardless of token count since user explicitly requested summarization
+  let messages_count = chat_history.messages.length()
+  let recent_keep = SUMMARIZE_KEEP_RECENT
+  if messages_count > recent_keep + 1 {
+    // Separate messages: first + middle + recent
+    let first_message = chat_history.messages[0]
+    let recent_start = messages_count - recent_keep
+
+    // Middle messages to summarize (skip first, keep recent)
+    let middle_messages : Array[Message] = []
+    for i = 1; i < recent_start; i = i + 1 {
+      middle_messages.push(chat_history.messages[i])
+    }
+    if middle_messages.length() > 0 {
+      // Generate summary
+      let summary_text = summarize_messages(
+        config,
+        middle_messages,
+        chat_history.current_model,
+      )
+      let summary_message = Message::new(
+        "system",
+        "Previous conversation summary: " + summary_text,
+      )
+
+      // Rebuild messages array: first + summary + recent
+      let new_messages : Array[Message] = [first_message, summary_message]
+      for i = recent_start; i < messages_count; i = i + 1 {
+        new_messages.push(chat_history.messages[i])
+      }
+
+      // Replace messages
+      while chat_history.messages.length() > 0 {
+        ignore(chat_history.messages.pop())
+      }
+      for msg in new_messages {
+        chat_history.messages.push(msg)
+      }
+      jarvis_says("(Conversation history compressed)")
+    }
+  }
+
   // Create new file and print notifications
   chat_history.create_new_file_after_summary()
   true
@@ -370,13 +413,13 @@ impl Command for PlayCommand with description(_self) {
 
 ///|
 impl Command for PlayCommand with execute(_self, parts, chat_history, config) {
-  // Parse budget (default $10)
+  // Parse budget (default from config)
   let budget = if parts.length() > 1 {
     @strconv.parse_double(parts[1]) catch {
-      _ => 10.0
+      _ => DEFAULT_PLAY_BUDGET
     }
   } else {
-    10.0
+    DEFAULT_PLAY_BUDGET
   }
   jarvis_says("Entering play mode with budget: $\{budget}")
   println_async("")
@@ -542,7 +585,7 @@ async fn start_play_mode(
 
   // First iteration - let Jarvis start autonomously
   let mut iterations = 0
-  let max_iterations = 100 // Safety limit
+  let max_iterations = MAX_PLAY_ITERATIONS // Safety limit
   while iterations < max_iterations {
     iterations = iterations + 1
 
@@ -590,8 +633,7 @@ async fn start_play_mode(
           // Jarvis just responded with text, add a continuation prompt
           chat_history.add(
             Message::new(
-              "user",
-              "Continue your exploration. If you're done or satisfied, use the end_play_mode tool to exit.",
+              "user", "Continue your exploration. If you're done or satisfied, use the end_play_mode tool to exit.",
             ),
           )
         }
