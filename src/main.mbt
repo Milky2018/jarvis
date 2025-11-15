@@ -10,8 +10,8 @@ async fn handle_tool_calls(
   config : Config,
   chat_history : ChatHistory,
   tools : Array[Tool],
-) -> Unit {
-  let mut max_iterations = 10 // Prevent infinite loops
+) -> Bool {
+  let mut max_iterations = 200 // Prevent infinite loops
   let mut first_request = true // Use streaming for first request only
   let mut used_streaming = false // Track if we used streaming
   try {
@@ -70,6 +70,7 @@ async fn handle_tool_calls(
           None =>
             if !used_streaming {
               jarvis_cries("Error: No content in response")
+              return false // Signal error to caller
             }
         }
         // No tool calls, add message to history and break
@@ -161,13 +162,26 @@ async fn handle_tool_calls(
     }
     if max_iterations == 0 {
       jarvis_cries("Maximum tool calling iterations reached")
+      return false
     }
+    true // Success
   } catch {
-    EnvVarNotSet(msg) =>
+    EnvVarNotSet(msg) => {
       jarvis_cries("Error: Environment variable not set: \{msg}")
-    HttpError(msg) => jarvis_cries("Error: HTTP error: \{msg}")
-    JsonParseError(msg) => jarvis_cries("Error: JSON parse error: \{msg}")
-    StringViewError(msg) => jarvis_cries("Error: String view error: \{msg}")
+      false
+    }
+    HttpError(msg) => {
+      jarvis_cries("Error: HTTP error: \{msg}")
+      false
+    }
+    JsonParseError(msg) => {
+      jarvis_cries("Error: JSON parse error: \{msg}")
+      false
+    }
+    StringViewError(msg) => {
+      jarvis_cries("Error: String view error: \{msg}")
+      false
+    }
     e => raise e
   }
 }
@@ -202,7 +216,7 @@ async fn handle_user_input(
 
   // Tool calling loop
   let tools = get_available_tools()
-  handle_tool_calls(config, chat_history, tools)
+  ignore(handle_tool_calls(config, chat_history, tools))
 
   // Save conversation after each interaction
   chat_history.save_to_numbered_file()

@@ -1,4 +1,438 @@
 ///|
+/// Command trait - defines interface for all commands
+pub(open) trait Command {
+  name(Self) -> String
+  aliases(Self) -> Array[String]
+  usage(Self) -> String
+  description(Self) -> String
+  async execute(Self, Array[String], ChatHistory, Config) -> Bool
+}
+
+///|
+/// Help Command
+struct HelpCommand {} derive(Default)
+
+///|
+impl Command for HelpCommand with name(_self) {
+  "help"
+}
+
+///|
+impl Command for HelpCommand with aliases(_self) {
+  ["h"]
+}
+
+///|
+impl Command for HelpCommand with usage(_self) {
+  ":help, :h"
+}
+
+///|
+impl Command for HelpCommand with description(_self) {
+  "Show this help message"
+}
+
+///|
+impl Command for HelpCommand with execute(_self, _parts, _chat_history, _config) {
+  let commands = get_all_commands()
+  let mut help_text = "Available commands:\n"
+  for cmd in commands {
+    help_text = help_text +
+      "  " +
+      cmd.usage() +
+      " - " +
+      cmd.description() +
+      "\n"
+  }
+  jarvis_says(help_text.trim(chars=" \n\t\r").to_string())
+  true
+}
+
+///|
+/// Model Command
+struct ModelCommand {} derive(Default)
+
+///|
+impl Command for ModelCommand with name(_self) {
+  "model"
+}
+
+///|
+impl Command for ModelCommand with aliases(_self) {
+  ["m"]
+}
+
+///|
+impl Command for ModelCommand with usage(_self) {
+  ":model [name]"
+}
+
+///|
+impl Command for ModelCommand with description(_self) {
+  "Show or set current model"
+}
+
+///|
+impl Command for ModelCommand with execute(_self, parts, chat_history, _config) {
+  if parts.length() == 1 {
+    jarvis_says("Current model: \{chat_history.current_model}")
+  } else {
+    let new_model = parts[1]
+    chat_history.set_model(new_model)
+    jarvis_says("Model changed to: \{new_model}")
+  }
+  true
+}
+
+///|
+/// Models Command
+struct ModelsCommand {} derive(Default)
+
+///|
+impl Command for ModelsCommand with name(_self) {
+  "models"
+}
+
+///|
+impl Command for ModelsCommand with aliases(_self) {
+  []
+}
+
+///|
+impl Command for ModelsCommand with usage(_self) {
+  ":models"
+}
+
+///|
+impl Command for ModelsCommand with description(_self) {
+  "List available models"
+}
+
+///|
+impl Command for ModelsCommand with execute(
+  _self,
+  _parts,
+  chat_history,
+  _config,
+) {
+  let current = chat_history.current_model
+  let petite = chat_history.petite_model
+  let sonnet_marker = if current == "claude-sonnet-4-5-20250929" {
+    " (current)"
+  } else if petite == "claude-sonnet-4-5-20250929" {
+    " (petite)"
+  } else {
+    ""
+  }
+  let haiku_marker = if current == "claude-haiku-4-5-20251001" {
+    " (current)"
+  } else if petite == "claude-haiku-4-5-20251001" {
+    " (petite)"
+  } else {
+    ""
+  }
+  let opus_marker = if current == "claude-opus-4-1-20250805" {
+    " (current)"
+  } else if petite == "claude-opus-4-1-20250805" {
+    " (petite)"
+  } else {
+    ""
+  }
+  jarvis_says(
+    (
+      $| Available models:
+      $|   claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)\{sonnet_marker}
+      $|   claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)\{haiku_marker}
+      $|   claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)\{opus_marker}
+      $|
+      $| Use ':model <name>' to switch models
+    ),
+  )
+  true
+}
+
+///|
+/// Petite Command
+struct PetiteCommand {} derive(Default)
+
+///|
+impl Command for PetiteCommand with name(_self) {
+  "petite"
+}
+
+///|
+impl Command for PetiteCommand with aliases(_self) {
+  ["p"]
+}
+
+///|
+impl Command for PetiteCommand with usage(_self) {
+  ":petite [name]"
+}
+
+///|
+impl Command for PetiteCommand with description(_self) {
+  "Show or set petite model for summaries"
+}
+
+///|
+impl Command for PetiteCommand with execute(_self, parts, chat_history, _config) {
+  if parts.length() == 1 {
+    jarvis_says("Current petite model: \{chat_history.petite_model}")
+  } else {
+    let new_model = parts[1]
+    chat_history.petite_model = new_model
+    jarvis_says("Petite model changed to: \{new_model}")
+  }
+  true
+}
+
+///|
+/// Clear Command
+struct ClearCommand {} derive(Default)
+
+///|
+impl Command for ClearCommand with name(_self) {
+  "clear"
+}
+
+///|
+impl Command for ClearCommand with aliases(_self) {
+  ["c"]
+}
+
+///|
+impl Command for ClearCommand with usage(_self) {
+  ":clear, :c"
+}
+
+///|
+impl Command for ClearCommand with description(_self) {
+  "Clear conversation history"
+}
+
+///|
+impl Command for ClearCommand with execute(_self, _parts, chat_history, _config) {
+  while chat_history.messages.length() > 0 {
+    ignore(chat_history.messages.pop())
+  }
+  jarvis_says("Conversation history cleared")
+  true
+}
+
+///|
+/// Cost Command
+struct CostCommand {} derive(Default)
+
+///|
+impl Command for CostCommand with name(_self) {
+  "cost"
+}
+
+///|
+impl Command for CostCommand with aliases(_self) {
+  []
+}
+
+///|
+impl Command for CostCommand with usage(_self) {
+  ":cost"
+}
+
+///|
+impl Command for CostCommand with description(_self) {
+  "Show API usage statistics"
+}
+
+///|
+impl Command for CostCommand with execute(_self, _parts, chat_history, _config) {
+  let stats = chat_history.usage_stats
+  let mut cost_breakdown = ""
+  stats.cost_by_model.each(fn(model, cost) {
+    let short_name = match model {
+      "claude-sonnet-4-5-20250929" => "Sonnet 4.5"
+      "claude-haiku-4-5-20251001" => "Haiku 4.5"
+      "claude-opus-4-1-20250805" => "Opus 4.1"
+      _ => model
+    }
+    cost_breakdown = cost_breakdown +
+      "  " +
+      short_name +
+      ": $" +
+      cost.to_string() +
+      "\n"
+  })
+  jarvis_says(
+    (
+      $| API Usage Statistics:
+      $|   Total requests:    \{stats.total_requests}
+      $|   Input tokens:      \{stats.total_input_tokens}
+      $|   Output tokens:     \{stats.total_output_tokens}
+      $|   Total tokens:      \{stats.total_input_tokens + stats.total_output_tokens}
+      $|   Estimated cost:    $\{stats.total_cost()}
+      $|
+      $| Cost by model:
+      $| \{cost_breakdown}
+    ),
+  )
+  true
+}
+
+///|
+/// Summarize Command
+struct SummarizeCommand {} derive(Default)
+
+///|
+impl Command for SummarizeCommand with name(_self) {
+  "summarize"
+}
+
+///|
+impl Command for SummarizeCommand with aliases(_self) {
+  ["sum"]
+}
+
+///|
+impl Command for SummarizeCommand with usage(_self) {
+  ":summarize, :sum"
+}
+
+///|
+impl Command for SummarizeCommand with description(_self) {
+  "Summarize and save current conversation"
+}
+
+///|
+impl Command for SummarizeCommand with execute(
+  _self,
+  _parts,
+  chat_history,
+  config,
+) {
+  if chat_history.messages.length() == 0 {
+    jarvis_says("No messages to summarize")
+    return true
+  }
+  jarvis_says("Summarizing conversation:")
+  let (title, summary) = generate_summary_with_title(chat_history, config)
+  if title.is_empty() || summary.is_empty() {
+    jarvis_says("Failed to generate summary")
+    return true
+  }
+
+  // Generate timestamp-based filename
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c", "date +%Y%m%d_%H%M%S",
+  ])
+  let timestamp = if exit_code == 0 {
+    output.text().trim(chars=" \n\t\r").to_string()
+  } else {
+    "unknown"
+  }
+
+  // Save markdown summary using @fs API
+  let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
+  try {
+    @fs.write_file(md_filename, summary, create=0o644)
+    jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
+  } catch {
+    e => jarvis_cries("Failed to save summary file: \{e}")
+  }
+
+  // Create new file and print notifications
+  chat_history.create_new_file_after_summary()
+  true
+}
+
+///|
+/// Play Command
+struct PlayCommand {} derive(Default)
+
+///|
+impl Command for PlayCommand with name(_self) {
+  "play"
+}
+
+///|
+impl Command for PlayCommand with aliases(_self) {
+  []
+}
+
+///|
+impl Command for PlayCommand with usage(_self) {
+  ":play [budget]"
+}
+
+///|
+impl Command for PlayCommand with description(_self) {
+  "Let Jarvis explore freely (default: $10)"
+}
+
+///|
+impl Command for PlayCommand with execute(_self, parts, chat_history, config) {
+  // Parse budget (default $10)
+  let budget = if parts.length() > 1 {
+    @strconv.parse_double(parts[1]) catch {
+      _ => 10.0
+    }
+  } else {
+    10.0
+  }
+  jarvis_says("Entering play mode with budget: $\{budget}")
+  println_async("")
+
+  // Start autonomous play session
+  start_play_mode(config, chat_history, budget)
+  true
+}
+
+///|
+/// Exit Command
+struct ExitCommand {} derive(Default)
+
+///|
+impl Command for ExitCommand with name(_self) {
+  "exit"
+}
+
+///|
+impl Command for ExitCommand with aliases(_self) {
+  ["quit", "q"]
+}
+
+///|
+impl Command for ExitCommand with usage(_self) {
+  ":exit, :quit, :q"
+}
+
+///|
+impl Command for ExitCommand with description(_self) {
+  "Exit Jarvis"
+}
+
+///|
+impl Command for ExitCommand with execute(_self, _parts, _chat_history, _config) {
+  jarvis_says("Goodbye!")
+  raise ExitRequested
+}
+
+///|
+/// Get all available commands
+fn get_all_commands() -> Array[&Command] {
+  [
+    HelpCommand::default(),
+    ModelCommand::default(),
+    ModelsCommand::default(),
+    PetiteCommand::default(),
+    ClearCommand::default(),
+    CostCommand::default(),
+    SummarizeCommand::default(),
+    PlayCommand::default(),
+    ExitCommand::default(),
+  ]
+}
+
+///|
 async fn handle_command(
   input : String,
   chat_history : ChatHistory,
@@ -14,133 +448,24 @@ async fn handle_command(
     return false
   }
   let command = parts[0]
-  match command {
-    "help" | "h" => {
-      jarvis_says(
-        (
-          #| Available commands:
-          #|   :help, :h           - Show this help message
-          #|   :model [name]       - Show or set current model
-          #|   :models             - List available models
-          #|   :cost               - Show API usage statistics
-          #|   :clear              - Clear conversation history
-          #|   :summarize          - Summarize and save current conversation
-          #|   :play [budget]      - Let Jarvis explore freely (default: $10)
-          #|   :exit, :quit, :q    - Exit Jarvis
-          #|   exit, quit          - Also exits Jarvis
-        ),
-      )
-      true
-    }
-    "model" | "m" => {
-      if parts.length() == 1 {
-        // Show current model
-        jarvis_says("Current model: \{chat_history.current_model}")
-      } else {
-        // Set model
-        let new_model = parts[1]
-        chat_history.set_model(new_model)
-        jarvis_says("Model changed to: \{new_model}")
-      }
-      true
-    }
-    "models" => {
-      jarvis_says(
-        (
-          #| Available models:
-          #|   claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)
-          #|   claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)
-          #|   claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)
-          #|
-          #| Use ':model <name>' to switch models
-        ),
-      )
-      true
-    }
-    "clear" | "c" => {
-      // Clear all messages
-      while chat_history.messages.length() > 0 {
-        ignore(chat_history.messages.pop())
-      }
-      jarvis_says("Conversation history cleared")
-      true
-    }
-    "cost" => {
-      let stats = chat_history.usage_stats
-      jarvis_says(
-        (
-          $| API Usage Statistics:
-          $|   Total requests:    \{stats.total_requests}
-          $|   Input tokens:      \{stats.total_input_tokens}
-          $|   Output tokens:     \{stats.total_output_tokens}
-          $|   Total tokens:      \{stats.total_input_tokens + stats.total_output_tokens}
-          $|   Estimated cost:    $\{stats.total_cost()}
-        ),
-      )
-      true
-    }
-    "summarize" | "sum" => {
-      if chat_history.messages.length() == 0 {
-        jarvis_says("No messages to summarize")
-        return true
-      }
-      jarvis_says("Summarizing conversation:")
-      let (title, summary) = generate_summary_with_title(chat_history, config)
-      if title.is_empty() || summary.is_empty() {
-        jarvis_says("Failed to generate summary")
-        return true
-      }
 
-      // Generate timestamp-based filename
-      let (exit_code, output) = @process.collect_output_merged("sh", [
-        "-c", "date +%Y%m%d_%H%M%S",
-      ])
-      let timestamp = if exit_code == 0 {
-        output.text().trim(chars=" \n\t\r").to_string()
-      } else {
-        "unknown"
-      }
-
-      // Save markdown summary using @fs API
-      // Note: conv_XXX.json already serves as the JSON archive, no need to duplicate
-      let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
-      try {
-        @fs.write_file(md_filename, summary, create=0o644)
-        jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
-      } catch {
-        e => jarvis_cries("Failed to save summary file: \{e}")
-      }
-
-      // Create new file and print notifications (shared logic with auto-compact)
-      chat_history.create_new_file_after_summary()
-      true
+  // Try to match command by name or aliases
+  let commands = get_all_commands()
+  for cmd in commands {
+    if cmd.name() == command {
+      return cmd.execute(parts, chat_history, config)
     }
-    "play" => {
-      // Parse budget (default $10)
-      let budget = if parts.length() > 1 {
-        @strconv.parse_double(parts[1]) catch {
-          _ => 10.0
-        }
-      } else {
-        10.0
+    for cmd_alias in cmd.aliases() {
+      if cmd_alias == command {
+        return cmd.execute(parts, chat_history, config)
       }
-      jarvis_says("Entering play mode with budget: $\{budget}")
-      println_async("")
-
-      // Start autonomous play session
-      start_play_mode(config, chat_history, budget)
-      true
-    }
-    "exit" | "quit" | "q" => {
-      jarvis_says("Goodbye!")
-      raise ExitRequested
-    }
-    _ => {
-      jarvis_says("Unknown command: :\{command}")
-      println_async("Type ':help' for available commands")
-      true
     }
   }
+
+  // Unknown command
+  jarvis_says("Unknown command: :\{command}")
+  println_async("Type ':help' for available commands")
+  true
 }
 
 ///|
@@ -194,7 +519,7 @@ async fn start_play_mode(
     #| BOUNDARIES:
     #| - Don't modify files outside ~/.jarvis/playground
     #| - Don't run commands that could harm the system
-    #| - Stop when budget is exhausted
+    #| - Stop when budget is exhausted or when you feel done
     #|
     #| REMEMBER:
     #| - You're exploring for YOUR enjoyment and learning
@@ -202,6 +527,7 @@ async fn start_play_mode(
     #| - Be creative and have fun!
     #| - Share what you're thinking and doing
     #| - If something interests you, dive deep!
+    #| - When you're satisfied with your exploration or feel done, use the end_play_mode tool to exit gracefully
     #|
     $| Current budget: $\{budget}
     #| What would you like to do first?
@@ -245,7 +571,31 @@ async fn start_play_mode(
 
       // Use the shared handle_tool_calls function with play mode tools
       let tools = get_available_tools(in_play_mode=true)
-      handle_tool_calls(config, chat_history, tools)
+      let success = handle_tool_calls(config, chat_history, tools)
+
+      // If handle_tool_calls returned false, it means there was an error (like empty response)
+      // Break out of the loop to avoid infinite iterations
+      if !success {
+        jarvis_says("Encountered error in play mode, ending session.")
+        break
+      }
+
+      // In play mode, if Jarvis responded without using tools, we need to add a user message
+      // to prompt continuation. Otherwise, the next iteration will fail because the last
+      // message is from assistant and Claude API requires alternating roles.
+      // Check if the last message is from assistant (which means no tool calls were made)
+      if chat_history.messages.length() > 0 {
+        let last_msg = chat_history.messages[chat_history.messages.length() - 1]
+        if last_msg.role == "assistant" {
+          // Jarvis just responded with text, add a continuation prompt
+          chat_history.add(
+            Message::new(
+              "user",
+              "Continue your exploration. If you're done or satisfied, use the end_play_mode tool to exit.",
+            ),
+          )
+        }
+      }
 
       // Save after each iteration
       chat_history.save_to_numbered_file()

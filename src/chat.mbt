@@ -5,6 +5,7 @@ struct ChatHistory {
   messages : Array[Message]
   max_context_tokens : Int // Maximum tokens for context (e.g., 4096)
   mut current_model : String // Current model to use
+  mut petite_model : String // Petite model for summaries and titles
   usage_stats : UsageStats // Track API usage
   mut current_file_number : Int // Current conversation file number
 }
@@ -15,6 +16,7 @@ fn ChatHistory::new() -> ChatHistory {
     messages: [],
     max_context_tokens: 200000,
     current_model: "claude-sonnet-4-5-20250929",
+    petite_model: "claude-haiku-4-5-20251001",
     usage_stats: UsageStats::new(),
     current_file_number: 0, // Will be set when loading/creating conversation
   } // Leave some room for response
@@ -123,7 +125,7 @@ async fn generate_conversation_title(
     config,
     title_messages,
     [],
-    chat_history.current_model,
+    chat_history.petite_model,
   ) catch {
     _ => return "conversation"
   }
@@ -185,7 +187,7 @@ async fn generate_summary_with_title(
     config,
     summary_messages,
     [],
-    chat_history.current_model,
+    chat_history.petite_model,
   ) catch {
     _ => {
       jarvis_cries("Failed to generate conversation summary")
@@ -229,6 +231,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         messages,
         max_context_tokens: 200000,
         current_model: model,
+        petite_model: "claude-haiku-4-5-20251001",
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
       })
