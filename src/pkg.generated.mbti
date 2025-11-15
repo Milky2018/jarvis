@@ -22,6 +22,9 @@ impl ToJson for ChatRequest
 type ChatResponse
 impl @json.FromJson for ChatResponse
 
+type ClearCommand
+impl Default for ClearCommand
+
 type CommandHistory
 
 type Config
@@ -30,9 +33,33 @@ impl Show for Config
 type ContentBlock
 impl @json.FromJson for ContentBlock
 
+type CostCommand
+impl Default for CostCommand
+
+type EditFileTool
+impl Default for EditFileTool
+
+type EndPlayModeTool
+impl Default for EndPlayModeTool
+
+type ExecuteCommandTool
+impl Default for ExecuteCommandTool
+
+type ExitCommand
+impl Default for ExitCommand
+
 type FunctionCall
 impl ToJson for FunctionCall
 impl @json.FromJson for FunctionCall
+
+type GlobTool
+impl Default for GlobTool
+
+type GrepTool
+impl Default for GrepTool
+
+type HelpCommand
+impl Default for HelpCommand
 
 type KeyPress
 
@@ -42,12 +69,30 @@ type Message
 impl ToJson for Message
 impl @json.FromJson for Message
 
+type ModelCommand
+impl Default for ModelCommand
+
+type ModelsCommand
+impl Default for ModelsCommand
+
+type PetiteCommand
+impl Default for PetiteCommand
+
+type PlayCommand
+impl Default for PlayCommand
+
+type ReadFileTool
+impl Default for ReadFileTool
+
 type ReadlineInterface
 
 type ResponseUsage
 impl @json.FromJson for ResponseUsage
 
 type Size
+
+type SummarizeCommand
+impl Default for SummarizeCommand
 
 type Tool
 impl ToJson for Tool
@@ -58,7 +103,24 @@ impl @json.FromJson for ToolCall
 
 type UsageStats
 
+type WriteFileTool
+impl Default for WriteFileTool
+
 // Type aliases
 
 // Traits
+pub(open) trait Command {
+  name(Self) -> String
+  aliases(Self) -> Array[String]
+  usage(Self) -> String
+  description(Self) -> String
+  async execute(Self, Array[String], ChatHistory, Config) -> Bool
+}
+
+pub(open) trait ToolImpl {
+  name(Self) -> String
+  description(Self) -> String
+  input_schema(Self) -> Json
+  async execute(Self, Json) -> String
+}
 
