@@ -1,6 +1,6 @@
 ///|
 /// ToolImpl trait - defines interface for tool implementations
-pub(open) trait ToolImpl {
+trait ToolImpl {
   name(Self) -> String
   description(Self) -> String
   input_schema(Self) -> Json

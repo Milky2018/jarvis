@@ -32,6 +32,10 @@ const SUMMARIZE_KEEP_RECENT : Int = 8
 const SUMMARIZE_THRESHOLD_PERCENT : Int = 80
 
 ///|
+/// Maximum tokens for the summary when compressing conversation history
+const MAX_SUMMARY_TOKENS : Int = 40000
+
+///|
 /// API configuration
 /// Maximum tokens for the context window
 const MAX_CONTEXT_TOKENS : Int = 200000

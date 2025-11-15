@@ -290,13 +290,15 @@ async fn summarize_messages(
   messages : Array[Message],
   model : String,
 ) -> String raise JarvisError {
+  // Calculate approximate token limit for the summary (40k tokens ≈ 160k characters)
+  let max_summary_chars = MAX_SUMMARY_TOKENS * 4
   let summary_prompt = {
-    let mut text = "Please summarize the following conversation history concisely, focusing on key points and context:\n\n"
+    let mut text = "Please provide a comprehensive summary of the following conversation history. Focus on key points, context, decisions made, and important details. You have up to \{MAX_SUMMARY_TOKENS} tokens for your summary.\n\n"
     for msg in messages {
       guard msg.content is Some(content) else { continue }
       text = text + msg.role + ": " + content + "\n\n"
     }
-    text + "Provide a brief summary in 2-3 sentences."
+    text + "Provide a detailed summary (maximum \{MAX_SUMMARY_TOKENS} tokens)."
   }
   let summary_messages : Array[Message] = [Message::new("user", summary_prompt)]
   let tools = get_available_tools()
@@ -304,7 +306,14 @@ async fn summarize_messages(
     config, summary_messages, tools, model,
   )
   match response.get_text_content() {
-    Some(text) => text
+    Some(text) =>
+      // Truncate if exceeds the character limit
+      if text.length() > max_summary_chars {
+        let truncated = text[:max_summary_chars].to_string() catch { _ => text }
+        truncated + "\n\n(Summary truncated at \{MAX_SUMMARY_TOKENS} tokens)"
+      } else {
+        text
+      }
     None => "Previous conversation history (summary unavailable)"
   }
 }

@@ -109,18 +109,7 @@ impl Default for WriteFileTool
 // Type aliases
 
 // Traits
-pub(open) trait Command {
-  name(Self) -> String
-  aliases(Self) -> Array[String]
-  usage(Self) -> String
-  description(Self) -> String
-  async execute(Self, Array[String], ChatHistory, Config) -> Bool
-}
+trait Command
 
-pub(open) trait ToolImpl {
-  name(Self) -> String
-  description(Self) -> String
-  input_schema(Self) -> Json
-  async execute(Self, Json) -> String
-}
+trait ToolImpl
 

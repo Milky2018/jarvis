@@ -1,6 +1,6 @@
 ///|
 /// Command trait - defines interface for all commands
-pub(open) trait Command {
+trait Command {
   name(Self) -> String
   aliases(Self) -> Array[String]
   usage(Self) -> String
