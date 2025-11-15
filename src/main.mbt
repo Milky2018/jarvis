@@ -250,7 +250,10 @@ async fn chat_loop(config : Config) -> Unit {
       history.add(initial_msg)
 
       // Create the first conversation file
-      let file_num = create_new_conversation_file(history.messages)
+      let file_num = create_new_conversation_file(
+        history.messages,
+        history.current_model,
+      )
       history.current_file_number = file_num
       jarvis_says("Created new conversation: conv_001.json")
       history

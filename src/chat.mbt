@@ -79,7 +79,10 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
   let old_num_str = format_conv_number(old_number)
 
   // Create new file with current messages
-  let next_number = create_new_conversation_file(self.messages)
+  let next_number = create_new_conversation_file(
+    self.messages,
+    self.current_model,
+  )
   self.current_file_number = next_number
   let num_str = format_conv_number(next_number)
 
