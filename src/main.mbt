@@ -120,18 +120,6 @@ async fn handle_tool_calls(
         let (tool_id, tool_name, tool_input) = tool_uses[i]
         let result = execute_tool_claude(tool_name, tool_input, chat_history)
 
-        // Display tool result immediately for user visibility
-        println_async("")
-        jarvis_says("Tool result for \{tool_name}:")
-        // Truncate very long results for display
-        let display_result = if result.length() > 500 {
-          (result[:500].to_string() catch { _ => result }) + "\n... (truncated)"
-        } else {
-          result
-        }
-        println_async(display_result)
-        println_async("")
-
         // Create tool_result content block
         let tool_result : Json = {
           "type": "tool_result",

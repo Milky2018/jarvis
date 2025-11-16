@@ -110,6 +110,11 @@ async fn execute_shell_command(
         "cd '\{tool.current_working_dir}' && \{command}",
       ])
       let output_text = output.text()
+
+      // Display output to user immediately
+      if !output_text.is_empty() {
+        println_async(output_text)
+      }
       if exit_code == 0 {
         if output_text.is_empty() {
           "Command executed successfully (no output)"
