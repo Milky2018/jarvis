@@ -517,7 +517,7 @@ async fn read_file_tool(path : String, params : Json) -> String {
   let total_lines = lines.length()
 
   // Apply offset and limit
-  let mut result = ""
+  let builder = StringBuilder::new()
   let mut line_num = offset + 1
   let end = if offset + limit < total_lines {
     offset + limit
@@ -525,13 +525,18 @@ async fn read_file_tool(path : String, params : Json) -> String {
     total_lines
   }
   for i = offset; i < end; i = i + 1 {
-    result = result + "\{line_num}→" + lines[i] + "\n"
+    builder.write_string(line_num.to_string())
+    builder.write_string("→")
+    builder.write_string(lines[i])
+    builder.write_string("\n")
     line_num = line_num + 1
   }
   if total_lines > end {
-    result = result + "\n... (\{total_lines - end} more lines)\n"
+    builder.write_string("\n... (")
+    builder.write_string((total_lines - end).to_string())
+    builder.write_string(" more lines)\n")
   }
-  result
+  builder.to_string()
 }
 
 ///|
@@ -550,10 +555,10 @@ async fn write_file_tool(path : String, content : String) -> String {
   @fs.write_file(path, content, create=0o644) catch {
     e => return "Error writing file: \{e}"
   }
-  let mut display = ""
-  if is_new_file {
+  let display = if is_new_file {
     // New file: show all content as green (added) with + prefix
-    display = display + "New file created:\n"
+    let builder = StringBuilder::new()
+    builder.write_string("New file created:\n")
     let lines_view = content.split("\n")
     let lines : Array[String] = []
     for line in lines_view {
@@ -562,15 +567,22 @@ async fn write_file_tool(path : String, content : String) -> String {
     let total_lines = lines.length()
     let show_lines = if total_lines > 50 { 50 } else { total_lines }
     for i = 0; i < show_lines; i = i + 1 {
-      display = display + "\{COLOR_GREEN}+ \{lines[i]}\{COLOR_RESET}\n"
+      builder.write_string(COLOR_GREEN)
+      builder.write_string("+ ")
+      builder.write_string(lines[i])
+      builder.write_string(COLOR_RESET)
+      builder.write_string("\n")
     }
     if total_lines > show_lines {
-      display = display + "... (\{total_lines - show_lines} more lines)\n"
+      builder.write_string("... (")
+      builder.write_string((total_lines - show_lines).to_string())
+      builder.write_string(" more lines)\n")
     }
+    builder.to_string()
   } else {
     // Existing file: show line-based diff
     let (prefix, removed, added, suffix) = compute_line_diff(old_text, content)
-    display = format_diff(prefix, removed, added, suffix)
+    format_diff(prefix, removed, added, suffix)
   }
   jarvis_says(display)
   "Successfully wrote \{content.length()} bytes to \{path}"
@@ -615,7 +627,7 @@ async fn edit_file_tool(
     }
 
     // Generate colored diff output and display to user
-    let mut display = ""
+    let builder = StringBuilder::new()
 
     // Show old content (red foreground)
     let old_lines_view = old_string.split("\n")
@@ -624,7 +636,11 @@ async fn edit_file_tool(
       old_lines.push(line.to_string())
     }
     for i = 0; i < old_lines.length(); i = i + 1 {
-      display = display + "\{COLOR_RED}- \{old_lines[i]}\{COLOR_RESET}\n"
+      builder.write_string(COLOR_RED)
+      builder.write_string("- ")
+      builder.write_string(old_lines[i])
+      builder.write_string(COLOR_RESET)
+      builder.write_string("\n")
     }
     // Show new content (green foreground)
     let new_lines_view = new_string.split("\n")
@@ -633,9 +649,13 @@ async fn edit_file_tool(
       new_lines.push(line.to_string())
     }
     for i = 0; i < new_lines.length(); i = i + 1 {
-      display = display + "\{COLOR_GREEN}+ \{new_lines[i]}\{COLOR_RESET}\n"
+      builder.write_string(COLOR_GREEN)
+      builder.write_string("+ ")
+      builder.write_string(new_lines[i])
+      builder.write_string(COLOR_RESET)
+      builder.write_string("\n")
     }
-    jarvis_says(display)
+    jarvis_says(builder.to_string())
     "Successfully edited \{path}"
   } catch {
     e => "Error: \{e}"

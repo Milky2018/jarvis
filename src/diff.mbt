@@ -66,32 +66,45 @@ fn format_diff(
   added : Array[String],
   suffix : Array[String],
 ) -> String {
-  let mut display = ""
+  let builder = StringBuilder::new()
   let mut line_num = 1
 
   // Show context before changes (limited to 3 lines)
   let context_before = if prefix.length() > 3 { 3 } else { prefix.length() }
   let skip_prefix = prefix.length() - context_before
   if skip_prefix > 0 {
-    display = display + "... (\{skip_prefix} unchanged lines)\n"
+    builder.write_string("... (")
+    builder.write_string(skip_prefix.to_string())
+    builder.write_string(" unchanged lines)\n")
     line_num = line_num + skip_prefix
   }
   for i = prefix.length() - context_before; i < prefix.length(); i = i + 1 {
-    display = display + "\{line_num}→\{prefix[i]}\n"
+    builder.write_string(line_num.to_string())
+    builder.write_string("→")
+    builder.write_string(prefix[i])
+    builder.write_string("\n")
     line_num = line_num + 1
   }
 
   // Show removed lines (red)
   if removed.length() > 0 {
     for i = 0; i < removed.length(); i = i + 1 {
-      display = display + "\{COLOR_RED}- \{removed[i]}\{COLOR_RESET}\n"
+      builder.write_string(COLOR_RED)
+      builder.write_string("- ")
+      builder.write_string(removed[i])
+      builder.write_string(COLOR_RESET)
+      builder.write_string("\n")
     }
   }
 
   // Show added lines (green)
   if added.length() > 0 {
     for i = 0; i < added.length(); i = i + 1 {
-      display = display + "\{COLOR_GREEN}+ \{added[i]}\{COLOR_RESET}\n"
+      builder.write_string(COLOR_GREEN)
+      builder.write_string("+ ")
+      builder.write_string(added[i])
+      builder.write_string(COLOR_RESET)
+      builder.write_string("\n")
     }
   }
   line_num = line_num + added.length()
@@ -99,12 +112,17 @@ fn format_diff(
   // Show context after changes (limited to 3 lines)
   let context_after = if suffix.length() > 3 { 3 } else { suffix.length() }
   for i = 0; i < context_after; i = i + 1 {
-    display = display + "\{line_num}→\{suffix[i]}\n"
+    builder.write_string(line_num.to_string())
+    builder.write_string("→")
+    builder.write_string(suffix[i])
+    builder.write_string("\n")
     line_num = line_num + 1
   }
   let skip_suffix = suffix.length() - context_after
   if skip_suffix > 0 {
-    display = display + "... (\{skip_suffix} unchanged lines)\n"
+    builder.write_string("... (")
+    builder.write_string(skip_suffix.to_string())
+    builder.write_string(" unchanged lines)\n")
   }
-  display
+  builder.to_string()
 }
