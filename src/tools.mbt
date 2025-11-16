@@ -163,7 +163,7 @@ impl ToolImpl for WriteFileTool with name(_self) {
 
 ///|
 impl ToolImpl for WriteFileTool with description(_self) {
-  "Write content to a file. This will overwrite the file if it exists or create a new file if it doesn't exist."
+  "Write entire file content. Use this ONLY when: (1) creating a new file, (2) completely rewriting a file, or (3) making changes to many different parts of a file. For small, localized changes, prefer edit_file instead."
 }
 
 ///|
@@ -212,7 +212,7 @@ impl ToolImpl for EditFileTool with name(_self) {
 
 ///|
 impl ToolImpl for EditFileTool with description(_self) {
-  "Edit a file by replacing an exact string with a new string. The old_string must appear exactly once in the file. Use this for precise, targeted edits to existing files."
+  "Edit a file by replacing exact text. PREFERRED for small, localized changes (fixing a bug, updating a function, changing a few lines). More efficient than write_file. The old_string must appear exactly once in the file - include enough context to make it unique."
 }
 
 ///|
@@ -620,7 +620,6 @@ async fn edit_file_tool(
     let mut display = ""
 
     // Show old content (red foreground)
-    display = display + "Removed:\n"
     let old_lines_view = old_string.split("\n")
     let old_lines : Array[String] = []
     for line in old_lines_view {
@@ -629,7 +628,6 @@ async fn edit_file_tool(
     for i = 0; i < old_lines.length(); i = i + 1 {
       display = display + "\{COLOR_RED}- \{old_lines[i]}\{COLOR_RESET}\n"
     }
-    display = display + "\nAdded:\n"
     // Show new content (green foreground)
     let new_lines_view = new_string.split("\n")
     let new_lines : Array[String] = []
