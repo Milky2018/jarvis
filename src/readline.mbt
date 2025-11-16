@@ -309,42 +309,17 @@ fn char_display_width(ch : Char) -> Int {
 }
 
 ///|
+/// Word separator characters
+let word_separators : Array[Char] = [
+  ' ', '\t', '\n', '/', '\\', '.', ',', ';', ':', '-', '_', '=', '+', '*', '&', '|',
+  '<', '>', '(', ')', '[', ']', '{', '}', '\'', '"', '`', '!', '?', '@', '#', '$',
+  '%', '^',
+]
+
+///|
 /// Check if a character is a word separator
 fn is_word_separator(ch : Char) -> Bool {
-  ch == ' ' ||
-  ch == '\t' ||
-  ch == '\n' ||
-  ch == '/' ||
-  ch == '\\' ||
-  ch == '.' ||
-  ch == ',' ||
-  ch == ';' ||
-  ch == ':' ||
-  ch == '-' ||
-  ch == '_' ||
-  ch == '=' ||
-  ch == '+' ||
-  ch == '*' ||
-  ch == '&' ||
-  ch == '|' ||
-  ch == '<' ||
-  ch == '>' ||
-  ch == '(' ||
-  ch == ')' ||
-  ch == '[' ||
-  ch == ']' ||
-  ch == '{' ||
-  ch == '}' ||
-  ch == '\'' ||
-  ch == '"' ||
-  ch == '`' ||
-  ch == '!' ||
-  ch == '?' ||
-  ch == '@' ||
-  ch == '#' ||
-  ch == '$' ||
-  ch == '%' ||
-  ch == '^'
+  word_separators.contains(ch)
 }
 
 ///|
@@ -523,8 +498,8 @@ async fn redraw_line(editor : LineEditor, prompt : String) -> Unit {
 }
 
 ///|
-/// Read escape sequence
-async fn read_escape_sequence() -> String? {
+/// Read escape sequence and return KeyPress directly
+async fn read_escape_sequence() -> KeyPress? {
   let buf = FixedArray::make(1, b'\x00')
   let n1 = @stdio.stdin.read(buf)
   if n1 == 0 {
@@ -536,12 +511,12 @@ async fn read_escape_sequence() -> String? {
       return None
     }
     match buf[0] {
-      b'A' => Some("up")
-      b'B' => Some("down")
-      b'C' => Some("right")
-      b'D' => Some("left")
-      b'H' => Some("home")
-      b'F' => Some("end")
+      b'A' => Some(Up)
+      b'B' => Some(Down)
+      b'C' => Some(Right)
+      b'D' => Some(Left)
+      b'H' => Some(Home)
+      b'F' => Some(End)
       b'1' => {
         // Check for modified keys like ESC[1;3C (Option+Right)
         let n3 = @stdio.stdin.read(buf)
@@ -562,16 +537,16 @@ async fn read_escape_sequence() -> String? {
           // modifier: 3 = Option, 9 = Command
           if modifier == b'3' {
             match key {
-              b'C' => Some("option-right") // Option+Right
-              b'D' => Some("option-left") // Option+Left
-              b'~' => Some("option-delete") // Option+Delete (ESC[1;3~)
+              b'C' => Some(OptionRight) // Option+Right
+              b'D' => Some(OptionLeft) // Option+Left
+              b'~' => Some(OptionDelete) // Option+Delete (ESC[1;3~)
               _ => None
             }
           } else if modifier == b'9' {
             match key {
-              b'C' => Some("cmd-right") // Command+Right
-              b'D' => Some("cmd-left") // Command+Left
-              b'~' => Some("cmd-delete") // Command+Delete (ESC[1;9~)
+              b'C' => Some(CmdRight) // Command+Right
+              b'D' => Some(CmdLeft) // Command+Left
+              b'~' => Some(CmdDelete) // Command+Delete (ESC[1;9~)
               _ => None
             }
           } else {
@@ -584,7 +559,7 @@ async fn read_escape_sequence() -> String? {
       b'3' => {
         let n3 = @stdio.stdin.read(buf)
         if n3 > 0 && buf[0] == b'~' {
-          Some("delete")
+          Some(Delete)
         } else {
           None
         }
@@ -605,7 +580,7 @@ async fn read_escape_sequence() -> String? {
               // ESC[200~ - paste start
               let n5 = @stdio.stdin.read(buf)
               if n5 > 0 && buf[0] == b'~' {
-                Some("paste-start")
+                Some(PasteStart)
               } else {
                 None
               }
@@ -614,7 +589,7 @@ async fn read_escape_sequence() -> String? {
               // ESC[201~ - paste end
               let n5 = @stdio.stdin.read(buf)
               if n5 > 0 && buf[0] == b'~' {
-                Some("paste-end")
+                Some(PasteEnd)
               } else {
                 None
               }
@@ -633,24 +608,24 @@ async fn read_escape_sequence() -> String? {
       return None
     }
     match buf[0] {
-      b'H' => Some("home")
-      b'F' => Some("end")
+      b'H' => Some(Home)
+      b'F' => Some(End)
       _ => None
     }
   } else if buf[0] == b'b' {
     // Option+Left alternative sequence (ESC b)
-    Some("option-left")
+    Some(OptionLeft)
   } else if buf[0] == b'f' {
     // Option+Right alternative sequence (ESC f)
-    Some("option-right")
+    Some(OptionRight)
   } else if buf[0] == b'd' {
     // Option+Delete alternative sequence (ESC d)
     // Some terminals send this for Option+Delete
-    Some("option-delete")
+    Some(OptionDelete)
   } else if buf[0] == backspace_byte {
     // Option+Backspace/Delete (ESC + 0x7F)
     // macOS Terminal often sends this for Option+Delete
-    Some("option-delete")
+    Some(OptionDelete)
   } else {
     None
   }
@@ -679,22 +654,8 @@ async fn parse_keypress() -> KeyPress? {
     b'\x1b' =>
       // Escape sequence
       match read_escape_sequence() {
-        Some("up") => Some(Up)
-        Some("down") => Some(Down)
-        Some("left") => Some(Left)
-        Some("right") => Some(Right)
-        Some("home") => Some(Home)
-        Some("end") => Some(End)
-        Some("delete") => Some(Delete)
-        Some("option-left") => Some(OptionLeft)
-        Some("option-right") => Some(OptionRight)
-        Some("option-delete") => Some(OptionDelete)
-        Some("cmd-left") => Some(CmdLeft)
-        Some("cmd-right") => Some(CmdRight)
-        Some("cmd-delete") => Some(CmdDelete)
-        Some("paste-start") => Some(PasteStart)
-        Some("paste-end") => Some(PasteEnd)
-        _ => Some(Unknown)
+        Some(keypress) => Some(keypress)
+        None => Some(Unknown)
       }
     _ =>
       // UTF-8 character

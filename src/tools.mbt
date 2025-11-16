@@ -48,7 +48,7 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
     Object(map) =>
       match map.get("command") {
         Some(String(cmd)) => {
-          jarvis_says("Executing: \{cmd}")
+          jarvis_says("\{COLOR_BOLD}Execute\{COLOR_RESET}(\{cmd})")
           execute_shell_command(cmd, chat_history)
         }
         Some(_) => tool_error("Error: 'command' must be a string")
@@ -72,24 +72,36 @@ async fn execute_shell_command(
       chat_history.current_working_dir
     }
 
+    // Print current working directory for debugging
+    println_async("Current working directory: \{cwd}")
+
     // Execute command in the current working directory
-    let full_command = "cd '\{cwd}' && \{command}"
+    // Escape single quotes in cwd by replacing ' with '\''
+    let escaped_cwd = cwd.replace(old="'", new="'\\''")
+    let full_command = "cd '\{escaped_cwd}' && \{command}"
     let (exit_code, output) = @process.collect_output_merged("sh", [
       "-c", full_command,
     ])
     let output_text = output.text()
 
     // Check if command is a cd command and update working directory
-    if command.trim(chars=" \t\n\r").to_string().has_prefix("cd ") {
+    let trimmed_cmd = command.trim(chars=" \t\n\r").to_string()
+    if trimmed_cmd.has_prefix("cd ") || trimmed_cmd == "cd" {
       if exit_code == 0 {
         // Get the new directory by running pwd after cd
-        let pwd_cmd = "cd '\{cwd}' && \{command} && pwd"
+        // We need to expand the command in a subshell to handle environment variables
+        // The command is already executed once above, so we just run it again with pwd
+        let escaped_cwd = cwd.replace(old="'", new="'\\''")
+        let pwd_cmd = "cd '\{escaped_cwd}' && \{command} && pwd"
         let (pwd_exit, pwd_output) = @process.collect_output_merged("sh", [
           "-c", pwd_cmd,
         ])
         if pwd_exit == 0 {
           let new_dir = pwd_output.text().trim(chars=" \n\t\r").to_string()
           chat_history.current_working_dir = new_dir
+          println_async("Updated working directory to: \{new_dir}")
+        } else {
+          jarvis_cries("Warning: cd command succeeded but pwd failed (exit code: \{pwd_exit})")
         }
       }
     }
@@ -149,7 +161,7 @@ impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match map.get("path") {
         Some(String(path)) => {
-          jarvis_says("Reading: \{path}")
+          jarvis_says("\{COLOR_BOLD}Read\{COLOR_RESET}(\{path})")
           read_file_tool(path, input)
         }
         Some(_) => tool_error("Error: 'path' must be a string")
@@ -197,7 +209,7 @@ impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("content")) {
         (Some(String(path)), Some(String(content))) => {
-          jarvis_says("Writing: \{path}")
+          jarvis_says("\{COLOR_BOLD}Write\{COLOR_RESET}(\{path})")
           write_file_tool(path, content)
         }
         (None, _) => tool_error("Error: Missing 'path' argument")
@@ -250,7 +262,7 @@ impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("old_string"), map.get("new_string")) {
         (Some(String(path)), Some(String(old)), Some(String(new))) => {
-          jarvis_says("Editing: \{path}")
+          jarvis_says("\{COLOR_BOLD}Edit\{COLOR_RESET}(\{path})")
           edit_file_tool(path, old, new)
         }
         (None, _, _) => tool_error("Error: Missing 'path' argument")
@@ -304,7 +316,7 @@ impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          jarvis_says("Searching for: \{pattern}")
+          jarvis_says("\{COLOR_BOLD}Grep\{COLOR_RESET}(\{pattern})")
           grep_tool(pattern, path)
         }
         Some(_) => tool_error("Error: 'pattern' must be a string")
@@ -356,7 +368,7 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          jarvis_says("Finding files: \{pattern}")
+          jarvis_says("\{COLOR_BOLD}Glob\{COLOR_RESET}(\{pattern})")
           glob_tool(pattern, path)
         }
         Some(_) => tool_error("Error: 'pattern' must be a string")
@@ -404,7 +416,7 @@ impl ToolImpl for EndPlayModeTool with execute(_self, input, _chat_history) {
       }
     _ => "No reason provided"
   }
-  jarvis_says("Ending play mode: \{reason}")
+  jarvis_says("\{COLOR_BOLD}End\{COLOR_RESET}(\{reason})")
   raise PlayModeEnded
 }
 
@@ -456,7 +468,7 @@ impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
             }
             _ => 5
           }
-          jarvis_says("Searching web for: \{query}")
+          jarvis_says("\{COLOR_BOLD}Browse\{COLOR_RESET}(\{query})")
           web_search_tool(query, num_results)
         }
         Some(_) => tool_error("Error: 'query' must be a string")
@@ -495,11 +507,7 @@ async fn execute_tool_claude(
 async fn read_file_tool(path : String, params : Json) -> String {
   // Read file content
   let content_data = @fs.read_file(path) catch {
-    e => {
-      let msg = "Error reading file: \{e}"
-      jarvis_cries(msg)
-      return msg
-    }
+    e => return tool_error("Error reading file: \{e}")
   }
   let content = content_data.text()
 
@@ -564,11 +572,7 @@ async fn write_file_tool(path : String, content : String) -> String {
 
   // Write new content
   @fs.write_file(path, content, create=0o644) catch {
-    e => {
-      let msg = "Error writing file: \{e}"
-      jarvis_cries(msg)
-      return msg
-    }
+    e => return tool_error("Error writing file: \{e}")
   }
   let display = if is_new_file {
     // New file: show all content as green (added) with + prefix
@@ -613,19 +617,13 @@ async fn edit_file_tool(
   try {
     // Read current content
     let content_data = @fs.read_file(path) catch {
-      e => {
-        let msg = "Error reading file: \{e}"
-        jarvis_cries(msg)
-        return msg
-      }
+      e => return tool_error("Error reading file: \{e}")
     }
     let content = content_data.text()
 
     // Check if old_string exists
     if !content.contains(old_string) {
-      let msg = "Error: old_string not found in file"
-      jarvis_cries(msg)
-      return msg
+      return tool_error("Error: old_string not found in file")
     }
 
     // Count occurrences by splitting
@@ -636,9 +634,9 @@ async fn edit_file_tool(
     }
     let count = parts.length() - 1
     if count > 1 {
-      let msg = "Error: old_string appears \{count} times in file. Please make it more specific or use write_file to replace entire content."
-      jarvis_cries(msg)
-      return msg
+      return tool_error(
+        "Error: old_string appears \{count} times in file. Please make it more specific or use write_file to replace entire content.",
+      )
     }
 
     // Perform replacement
@@ -646,11 +644,7 @@ async fn edit_file_tool(
 
     // Write back
     @fs.write_file(path, new_content, create=0o644) catch {
-      e => {
-        let msg = "Error writing file: \{e}"
-        jarvis_cries(msg)
-        return msg
-      }
+      e => return tool_error("Error writing file: \{e}")
     }
 
     // Generate colored diff output and display to user
@@ -701,16 +695,12 @@ async fn web_search_tool(query : String, num_results : Int) -> String {
 
     // Make HTTP request
     let (response, body) = @http.get(url) catch {
-      e => {
-        let msg = "Error: Failed to connect to search engine: \{e}"
-        jarvis_cries(msg)
-        return msg
-      }
+      e => return tool_error("Error: Failed to connect to search engine: \{e}")
     }
     if response.code != 200 {
-      let msg = "Error: Search engine returned status code \{response.code}"
-      jarvis_cries(msg)
-      return msg
+      return tool_error(
+        "Error: Search engine returned status code \{response.code}",
+      )
     }
     let html = body.text()
 
@@ -734,24 +724,6 @@ async fn web_search_tool(query : String, num_results : Int) -> String {
   } catch {
     e => "Error: \{e}"
   }
-}
-
-///|
-/// Simple URL encoding function
-fn url_encode(s : String) -> String {
-  let mut result = ""
-  for i = 0; i < s.length(); i = i + 1 {
-    let c = s[i]
-    match c {
-      ' ' => result = result + "+"
-      'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' =>
-        result = "\{result}\{c}"
-      _ =>
-        // Percent encode other characters - simple approach
-        result = "\{result}\{c}"
-    }
-  }
-  result
 }
 
 ///|
