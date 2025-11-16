@@ -17,10 +17,13 @@ struct ChatHistory {
   usage_stats : UsageStats // Track API usage
   mut current_file_number : Int // Current conversation file number
   mut plan_state : PlanState // Plan mode state machine
+  mut current_working_dir : String // Current working directory for shell commands
 }
 
 ///|
 fn ChatHistory::new() -> ChatHistory {
+  // Get initial working directory from environment
+  let initial_cwd = @sys.get_env_vars().get("PWD").unwrap_or(".")
   {
     messages: [],
     max_context_tokens: MAX_CONTEXT_TOKENS,
@@ -29,6 +32,7 @@ fn ChatHistory::new() -> ChatHistory {
     usage_stats: UsageStats::new(),
     current_file_number: 0, // Will be set when loading/creating conversation
     plan_state: Idle,
+    current_working_dir: initial_cwd,
   } // Leave some room for response
 }
 
@@ -240,6 +244,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         Some(String(s)) => s
         _ => "claude-sonnet-4-5-20250929"
       }
+      let initial_cwd = @sys.get_env_vars().get("PWD").unwrap_or(".")
       Some({
         messages,
         max_context_tokens: MAX_CONTEXT_TOKENS,
@@ -248,6 +253,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
         plan_state: Idle,
+        current_working_dir: initial_cwd,
       })
     }
     _ => None

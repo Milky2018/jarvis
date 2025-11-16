@@ -115,7 +115,7 @@ async fn handle_tool_calls(
       let tool_results : Array[Json] = []
       for i = 0; i < tool_uses.length(); i = i + 1 {
         let (tool_id, tool_name, tool_input) = tool_uses[i]
-        let result = execute_tool_claude(tool_name, tool_input)
+        let result = execute_tool_claude(tool_name, tool_input, chat_history)
 
         // Create tool_result content block
         let tool_result : Json = {

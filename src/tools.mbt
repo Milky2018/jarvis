@@ -4,7 +4,7 @@ trait ToolImpl {
   name(Self) -> String
   description(Self) -> String
   input_schema(Self) -> Json
-  async execute(Self, Json) -> String
+  async execute(Self, Json, ChatHistory) -> String
 }
 
 ///|
@@ -36,13 +36,13 @@ impl ToolImpl for ExecuteCommandTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for ExecuteCommandTool with execute(_self, input) {
+impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
   match input {
     Object(map) =>
       match map.get("command") {
         Some(String(cmd)) => {
           jarvis_says("Executing: \{cmd}")
-          execute_shell_command(cmd)
+          execute_shell_command(cmd, chat_history)
         }
         Some(_) => "Error: 'command' must be a string"
         None => "Error: Missing 'command' argument"
@@ -53,21 +53,64 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input) {
 
 ///|
 /// Helper function for executing shell commands
-async fn execute_shell_command(command : String) -> String {
+async fn execute_shell_command(
+  command : String,
+  chat_history : ChatHistory,
+) -> String {
   try {
-    // Use sh -c to execute the command
-    let (exit_code, output) = @process.collect_output_merged("sh", [
-      "-c", command,
-    ])
-    let output_text = output.text()
-    if exit_code == 0 {
-      if output_text.is_empty() {
-        "Command executed successfully (no output)"
+    // Check if this is a cd command
+    let trimmed = command.trim(chars=" \n\t\r").to_string()
+    if trimmed.has_prefix("cd ") || trimmed == "cd" {
+      // Extract target directory
+      let target_dir = if trimmed == "cd" {
+        // cd without argument goes to home
+        @sys.get_env_vars().get("HOME").unwrap_or("~")
       } else {
-        output_text
+        // cd with argument
+        let parts_view = trimmed[3:].split(" ")
+        let parts : Array[String] = []
+        for part in parts_view {
+          let p = part.to_string()
+          if !p.is_empty() {
+            parts.push(p)
+          }
+        }
+        if parts.length() > 0 {
+          parts[0]
+        } else {
+          @sys.get_env_vars().get("HOME").unwrap_or("~")
+        }
+      }
+
+      // Execute cd in a shell to resolve the path
+      let (exit_code, output) = @process.collect_output_merged("sh", [
+        "-c",
+        "cd '\{chat_history.current_working_dir}' && cd '\{target_dir}' && pwd",
+      ])
+      if exit_code == 0 {
+        let new_dir = output.text().trim(chars=" \n\t\r").to_string()
+        chat_history.current_working_dir = new_dir
+        "Changed directory to: \{new_dir}"
+      } else {
+        let error_text = output.text()
+        "Error changing directory: \{error_text}"
       }
     } else {
-      "Command failed with exit code \{exit_code}\nOutput:\n\{output_text}"
+      // Regular command - execute in current working directory
+      let (exit_code, output) = @process.collect_output_merged("sh", [
+        "-c",
+        "cd '\{chat_history.current_working_dir}' && \{command}",
+      ])
+      let output_text = output.text()
+      if exit_code == 0 {
+        if output_text.is_empty() {
+          "Command executed successfully (no output)"
+        } else {
+          output_text
+        }
+      } else {
+        "Command failed with exit code \{exit_code}\nOutput:\n\{output_text}"
+      }
     }
   } catch {
     e => "Error executing command: \{e}"
@@ -111,7 +154,7 @@ impl ToolImpl for ReadFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for ReadFileTool with execute(_self, input) {
+impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("path") {
@@ -159,7 +202,7 @@ impl ToolImpl for WriteFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for WriteFileTool with execute(_self, input) {
+impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match (map.get("path"), map.get("content")) {
@@ -212,7 +255,7 @@ impl ToolImpl for EditFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for EditFileTool with execute(_self, input) {
+impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match (map.get("path"), map.get("old_string"), map.get("new_string")) {
@@ -262,7 +305,7 @@ impl ToolImpl for GrepTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for GrepTool with execute(_self, input) {
+impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("pattern") {
@@ -314,7 +357,7 @@ impl ToolImpl for GlobTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for GlobTool with execute(_self, input) {
+impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("pattern") {
@@ -362,7 +405,7 @@ impl ToolImpl for EndPlayModeTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for EndPlayModeTool with execute(_self, input) {
+impl ToolImpl for EndPlayModeTool with execute(_self, input, _chat_history) {
   let reason = match input {
     Object(map) =>
       match map.get("reason") {
@@ -405,7 +448,7 @@ impl ToolImpl for WebSearchTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for WebSearchTool with execute(_self, input) {
+impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("query") {
@@ -435,14 +478,18 @@ impl ToolImpl for WebSearchTool with execute(_self, input) {
 
 ///|
 /// Execute tool with Claude API format (takes tool name and input JSON directly)
-async fn execute_tool_claude(tool_name : String, input : Json) -> String {
+async fn execute_tool_claude(
+  tool_name : String,
+  input : Json,
+  chat_history : ChatHistory,
+) -> String {
   // Get all available tools (including end_play_mode if needed)
   let all_tools = get_all_tool_impls(in_play_mode=true)
 
   // Find and execute the matching tool
   for tool in all_tools {
     if tool.name() == tool_name {
-      return tool.execute(input)
+      return tool.execute(input, chat_history)
     }
   }
 
