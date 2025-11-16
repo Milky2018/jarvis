@@ -90,12 +90,9 @@ async fn handle_tool_calls(
       }
 
       // We have tool calls to execute
-      // First, display any text content (AI's thinking/planning)
-      if content_text is Some(content_str) {
-        let trimmed = content_str.trim(chars=" \n\t\r").to_string()
-        if !trimmed.is_empty() {
-          jarvis_says(content_str)
-        }
+      // First, display any text content
+      if content_text is Some(content_str) && !content_str.is_blank() {
+        jarvis_says(content_str)
       }
 
       // Build assistant message with the full response for history

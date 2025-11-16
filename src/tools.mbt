@@ -4,20 +4,12 @@ trait ToolImpl {
   name(Self) -> String
   description(Self) -> String
   input_schema(Self) -> Json
-  async execute(Self, Json) -> String
+  async execute(Self, Json, ChatHistory) -> String
 }
 
 ///|
 /// Execute Command Tool
-struct ExecuteCommandTool {
-  mut current_working_dir : String
-}
-
-///|
-fn ExecuteCommandTool::new() -> ExecuteCommandTool {
-  let initial_cwd = @sys.get_env_vars().get("PWD").unwrap_or(".")
-  { current_working_dir: initial_cwd }
-}
+struct ExecuteCommandTool {} derive(Default)
 
 ///|
 impl ToolImpl for ExecuteCommandTool with name(_self) {
@@ -44,13 +36,13 @@ impl ToolImpl for ExecuteCommandTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for ExecuteCommandTool with execute(self, input) {
+impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
   match input {
     Object(map) =>
       match map.get("command") {
         Some(String(cmd)) => {
           jarvis_says("Executing: \{cmd}")
-          execute_shell_command(cmd, self)
+          execute_shell_command(cmd, chat_history)
         }
         Some(_) => "Error: 'command' must be a string"
         None => "Error: Missing 'command' argument"
@@ -63,67 +55,45 @@ impl ToolImpl for ExecuteCommandTool with execute(self, input) {
 /// Helper function for executing shell commands
 async fn execute_shell_command(
   command : String,
-  tool : ExecuteCommandTool,
+  chat_history : ChatHistory,
 ) -> String {
   try {
-    // Check if this is a cd command
-    let trimmed = command.trim(chars=" \n\t\r").to_string()
-    if trimmed.has_prefix("cd ") || trimmed == "cd" {
-      // Extract target directory
-      let target_dir = if trimmed == "cd" {
-        // cd without argument goes to home
-        @sys.get_env_vars().get("HOME").unwrap_or("~")
-      } else {
-        // cd with argument
-        let parts_view = trimmed[3:].split(" ")
-        let parts : Array[String] = []
-        for part in parts_view {
-          let p = part.to_string()
-          if !p.is_empty() {
-            parts.push(p)
-          }
-        }
-        if parts.length() > 0 {
-          parts[0]
-        } else {
-          @sys.get_env_vars().get("HOME").unwrap_or("~")
+    // Get current working directory
+    let cwd = if chat_history.current_working_dir.is_empty() {
+      "."
+    } else {
+      chat_history.current_working_dir
+    }
+
+    // Execute command in the current working directory
+    let full_command = "cd '\{cwd}' && \{command}"
+    let (exit_code, output) = @process.collect_output_merged("sh", [
+      "-c", full_command,
+    ])
+    let output_text = output.text()
+
+    // Check if command is a cd command and update working directory
+    if command.trim(chars=" \t\n\r").to_string().has_prefix("cd ") {
+      if exit_code == 0 {
+        // Get the new directory by running pwd after cd
+        let pwd_cmd = "cd '\{cwd}' && \{command} && pwd"
+        let (pwd_exit, pwd_output) = @process.collect_output_merged("sh", [
+          "-c", pwd_cmd,
+        ])
+        if pwd_exit == 0 {
+          let new_dir = pwd_output.text().trim(chars=" \n\t\r").to_string()
+          chat_history.current_working_dir = new_dir
         }
       }
-
-      // Execute cd in a shell to resolve the path
-      let (exit_code, output) = @process.collect_output_merged("sh", [
-        "-c",
-        "cd '\{tool.current_working_dir}' && cd '\{target_dir}' && pwd",
-      ])
-      if exit_code == 0 {
-        let new_dir = output.text().trim(chars=" \n\t\r").to_string()
-        tool.current_working_dir = new_dir
-        "Changed directory to: \{new_dir}"
+    }
+    if exit_code == 0 {
+      if output_text.is_empty() {
+        "Command executed successfully (no output)"
       } else {
-        let error_text = output.text()
-        "Error changing directory: \{error_text}"
+        output_text
       }
     } else {
-      // Regular command - execute in current working directory
-      let (exit_code, output) = @process.collect_output_merged("sh", [
-        "-c",
-        "cd '\{tool.current_working_dir}' && \{command}",
-      ])
-      let output_text = output.text()
-
-      // Display output to user immediately
-      if !output_text.is_empty() {
-        println_async(output_text)
-      }
-      if exit_code == 0 {
-        if output_text.is_empty() {
-          "Command executed successfully (no output)"
-        } else {
-          output_text
-        }
-      } else {
-        "Command failed with exit code \{exit_code}\nOutput:\n\{output_text}"
-      }
+      "Command failed with exit code \{exit_code}\nOutput:\n\{output_text}"
     }
   } catch {
     e => "Error executing command: \{e}"
@@ -167,7 +137,7 @@ impl ToolImpl for ReadFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for ReadFileTool with execute(_self, input) {
+impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("path") {
@@ -215,7 +185,7 @@ impl ToolImpl for WriteFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for WriteFileTool with execute(_self, input) {
+impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match (map.get("path"), map.get("content")) {
@@ -268,7 +238,7 @@ impl ToolImpl for EditFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for EditFileTool with execute(_self, input) {
+impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match (map.get("path"), map.get("old_string"), map.get("new_string")) {
@@ -318,7 +288,7 @@ impl ToolImpl for GrepTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for GrepTool with execute(_self, input) {
+impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("pattern") {
@@ -370,7 +340,7 @@ impl ToolImpl for GlobTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for GlobTool with execute(_self, input) {
+impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("pattern") {
@@ -418,7 +388,7 @@ impl ToolImpl for EndPlayModeTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for EndPlayModeTool with execute(_self, input) {
+impl ToolImpl for EndPlayModeTool with execute(_self, input, _chat_history) {
   let reason = match input {
     Object(map) =>
       match map.get("reason") {
@@ -461,7 +431,7 @@ impl ToolImpl for WebSearchTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for WebSearchTool with execute(_self, input) {
+impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
   match input {
     Object(map) =>
       match map.get("query") {
@@ -496,10 +466,8 @@ async fn execute_tool_claude(
   input : Json,
   chat_history : ChatHistory,
 ) -> String {
-  // Handle execute_command specially using the persistent tool instance
-  if tool_name == "execute_command" {
-    return chat_history.execute_command_tool.execute(input)
-  }
+  // Initialize working directory if needed
+  chat_history.init_working_dir()
 
   // Get all available tools (including end_play_mode if needed)
   let all_tools = get_all_tool_impls(in_play_mode=true)
@@ -507,7 +475,7 @@ async fn execute_tool_claude(
   // Find and execute the matching tool
   for tool in all_tools {
     if tool.name() == tool_name {
-      return tool.execute(input)
+      return tool.execute(input, chat_history)
     }
   }
 
@@ -827,9 +795,10 @@ async fn glob_tool(pattern : String, path : String) -> String {
 }
 
 ///|
-/// Get all available tool implementations (excluding execute_command which is managed by ChatHistory)
+/// Get all available tool implementations
 fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
   let tools : Array[&ToolImpl] = [
+    ExecuteCommandTool::default(),
     ReadFileTool::default(),
     WriteFileTool::default(),
     EditFileTool::default(),
@@ -847,16 +816,6 @@ fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
 fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
   let tool_impls = get_all_tool_impls(in_play_mode~)
   let tools : Array[Tool] = []
-
-  // Add execute_command tool first
-  let exec_tool = ExecuteCommandTool::new()
-  tools.push({
-    name: exec_tool.name(),
-    description: exec_tool.description(),
-    input_schema: exec_tool.input_schema(),
-  })
-
-  // Add other tools
   for tool_impl in tool_impls {
     tools.push({
       name: tool_impl.name(),

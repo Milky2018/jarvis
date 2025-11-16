@@ -43,6 +43,7 @@ type EndPlayModeTool
 impl Default for EndPlayModeTool
 
 type ExecuteCommandTool
+impl Default for ExecuteCommandTool
 
 type ExitCommand
 impl Default for ExitCommand
@@ -76,10 +77,6 @@ impl Default for ModelsCommand
 
 type PetiteCommand
 impl Default for PetiteCommand
-
-type PlanCommand
-
-type PlanState
 
 type PlayCommand
 impl Default for PlayCommand
