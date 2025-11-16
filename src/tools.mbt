@@ -212,7 +212,7 @@ impl ToolImpl for EditFileTool with name(_self) {
 
 ///|
 impl ToolImpl for EditFileTool with description(_self) {
-  "Write content to a file. This will overwrite the file if it exists or create a new file if it doesn't exist."
+  "Edit a file by replacing an exact string with a new string. The old_string must appear exactly once in the file. Use this for precise, targeted edits to existing files."
 }
 
 ///|

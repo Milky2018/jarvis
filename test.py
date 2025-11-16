@@ -1,12 +1,12 @@
 def fibonacci(n):
     """
-    计算斐波那契数列的第n个数
+    Calculate the nth Fibonacci number
     
-    参数:
-        n: 要计算的斐波那契数列位置（从0开始）
+    Args:
+        n: The position in the Fibonacci sequence (starting from 0)
     
-    返回:
-        第n个斐波那契数
+    Returns:
+        The nth Fibonacci number
     """
     if n < 0:
         raise ValueError("n must be non-negative")
@@ -20,13 +20,13 @@ def fibonacci(n):
 
 def fibonacci_iterative(n):
     """
-    使用迭代方法计算斐波那契数列的第n个数（更高效）
+    Calculate the nth Fibonacci number using iterative method (more efficient)
     
-    参数:
-        n: 要计算的斐波那契数列位置（从0开始）
+    Args:
+        n: The position in the Fibonacci sequence (starting from 0)
     
-    返回:
-        第n个斐波那契数
+    Returns:
+        The nth Fibonacci number
     """
     if n < 0:
         raise ValueError("n must be non-negative")
@@ -43,13 +43,13 @@ def fibonacci_iterative(n):
 
 def fibonacci_sequence(n):
     """
-    生成前n个斐波那契数列
+    Generate the first n Fibonacci numbers
     
-    参数:
-        n: 要生成的斐波那契数列长度
+    Args:
+        n: The length of the Fibonacci sequence to generate
     
-    返回:
-        包含前n个斐波那契数的列表
+    Returns:
+        A list containing the first n Fibonacci numbers
     """
     if n <= 0:
         return []
@@ -62,25 +62,25 @@ def fibonacci_sequence(n):
     return sequence
 
 
-# 测试代码
+# Test code
 if __name__ == "__main__":
-    print("斐波那契数列测试：")
+    print("Fibonacci Sequence Test:")
     print("-" * 40)
     
-    # 测试单个斐波那契数
+    # Test individual Fibonacci number
     test_n = 10
     print(f"fibonacci({test_n}) = {fibonacci(test_n)}")
     print(f"fibonacci_iterative({test_n}) = {fibonacci_iterative(test_n)}")
     
     print()
     
-    # 测试斐波那契数列
-    print(f"前15个斐波那契数：")
+    # Test Fibonacci sequence
+    print(f"First 15 Fibonacci numbers:")
     print(fibonacci_sequence(15))
     
     print()
     
-    # 性能比较
-    print("前10个斐波那契数（递归方法）：")
+    # Performance comparison
+    print("First 10 Fibonacci numbers (recursive method):")
     for i in range(10):
         print(f"F({i}) = {fibonacci(i)}")
