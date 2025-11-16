@@ -460,6 +460,53 @@ impl Command for ExitCommand with execute(_self, _parts, _chat_history, _config)
 }
 
 ///|
+/// Plan Command
+struct PlanCommand {} derive(Default)
+
+///|
+impl Command for PlanCommand with name(_self) {
+  "plan"
+}
+
+///|
+impl Command for PlanCommand with aliases(_self) {
+  []
+}
+
+///|
+impl Command for PlanCommand with usage(_self) {
+  ":plan <task description>"
+}
+
+///|
+impl Command for PlanCommand with description(_self) {
+  "Create a plan for a task before executing"
+}
+
+///|
+impl Command for PlanCommand with execute(_self, parts, chat_history, config) {
+  if parts.length() < 2 {
+    jarvis_says("Usage: :plan <task description>")
+    return true
+  }
+
+  // Join all parts after ":plan" as the task description
+  let mut task = ""
+  for i = 1; i < parts.length(); i = i + 1 {
+    if i > 1 {
+      task = task + " "
+    }
+    task = task + parts[i]
+  }
+  jarvis_says("Entering plan mode for task: \{task}")
+  println_async("")
+
+  // Start plan mode
+  start_plan_mode(config, chat_history, task)
+  true
+}
+
+///|
 /// Get all available commands
 fn get_all_commands() -> Array[&Command] {
   [
@@ -471,6 +518,7 @@ fn get_all_commands() -> Array[&Command] {
     CostCommand::default(),
     SummarizeCommand::default(),
     PlayCommand::default(),
+    PlanCommand::default(),
     ExitCommand::default(),
   ]
 }
@@ -660,6 +708,196 @@ async fn start_play_mode(
   let final_cost = chat_history.usage_stats.total_cost()
   let total_spent = final_cost - start_cost
   jarvis_says("Play session complete! Total spent: $\{total_spent}")
+}
+
+///|
+/// Start plan mode where Jarvis creates a plan and waits for approval
+async fn start_plan_mode(
+  config : Config,
+  chat_history : ChatHistory,
+  task : String,
+) -> Unit {
+  // Create plan mode system message
+  let plan_prompt =
+    #| === PLAN MODE ACTIVATED ===
+    #|
+    #| You are now in plan mode. Your task is to create a detailed execution plan before taking any action.
+    #|
+    #| INSTRUCTIONS:
+    #| 1. Analyze the user's task carefully
+    #| 2. Break it down into clear, numbered steps
+    #| 3. For each step, specify:
+    #|    - What you will do
+    #|    - Which tools you will use
+    #|    - Estimated complexity (simple/medium/complex)
+    #| 4. Present the complete plan in a clear format
+    #| 5. DO NOT execute anything yet - just present the plan
+    #|
+    #| PLAN FORMAT:
+    #| Use markdown with clear numbering:
+    #|
+    #| # Plan: [Task Title]
+    #|
+    #| ## Steps:
+    #| 1. [Step description]
+    #|    - Tools: [tool1, tool2]
+    #|    - Complexity: [simple/medium/complex]
+    #|
+    #| 2. [Next step...]
+    #|    - Tools: [...]
+    #|    - Complexity: [...]
+    #|
+    #| ## Estimated Total Time: [estimate]
+    #|
+    $| USER TASK: {task}
+    #|
+    #| Please create a detailed plan for this task.
+
+  // Add plan mode message to history
+  chat_history.add(Message::new("system", plan_prompt))
+
+  // Add user task message
+  chat_history.add(Message::new("user", "Create a plan for: \{task}"))
+
+  // Generate the plan
+  jarvis_says("Generating plan...")
+  println_async("")
+  try {
+    // Get plan from Jarvis
+    let tools = get_available_tools()
+    let success = handle_tool_calls(config, chat_history, tools)
+    if !success {
+      jarvis_cries("Failed to generate plan")
+      return
+    }
+
+    // The plan should now be in the last assistant message
+    if chat_history.messages.length() > 0 {
+      let last_msg = chat_history.messages[chat_history.messages.length() - 1]
+      if last_msg.role == "assistant" {
+        match last_msg.content {
+          Some(plan_text) => {
+            // Display the plan
+            print_separator()
+            println_async(plan_text)
+            print_separator()
+            println_async("")
+
+            // Wait for user approval
+            jarvis_says("Do you approve this plan? (yes/no/modify)")
+            let approval = wait_for_approval()
+            match approval {
+              "yes" => {
+                jarvis_says("Plan approved! Executing...")
+                println_async("")
+                execute_approved_plan(config, chat_history, task)
+              }
+              "no" => jarvis_says("Plan rejected. Exiting plan mode.")
+              _ => {
+                // User wants to modify
+                jarvis_says(
+                  "Plan modification requested. Please provide your changes:",
+                )
+                // For now, just exit - we can enhance this later
+                jarvis_says(
+                  "Plan mode ended. You can start a new plan with your modifications.",
+                )
+              }
+            }
+          }
+          None => jarvis_cries("No plan was generated")
+        }
+      }
+    }
+
+    // Save conversation
+    chat_history.save_to_numbered_file()
+  } catch {
+    e => jarvis_cries("Error in plan mode: \{e}")
+  }
+}
+
+///|
+/// Wait for user approval (yes/no/modify)
+async fn wait_for_approval() -> String {
+  let input_queue : @aqueue.Queue[String] = @aqueue.Queue::new()
+
+  // Start readline in background
+  @async.with_task_group(fn(group) {
+    group.spawn_bg(fn() {
+      let rl = ReadlineInterface::with_history(0, [])
+      while rl.read_to_queue(input_queue) {
+
+      }
+    })
+
+    // Wait for input in main task
+    let response = input_queue
+      .get()
+      .trim(chars=" \n\t\r")
+      .to_string()
+      .to_lower()
+    response
+  })
+}
+
+///|
+/// Execute the approved plan
+async fn execute_approved_plan(
+  config : Config,
+  chat_history : ChatHistory,
+  _task : String,
+) -> Unit {
+  // Add execution instruction message
+  let execute_msg = Message::new(
+    "user", "The plan is approved. Please proceed with execution step by step. After each step, report your progress.",
+  )
+  chat_history.add(execute_msg)
+
+  // Execute with normal tools
+  let tools = get_available_tools()
+  let mut max_iterations = 50 // Reasonable limit for plan execution
+  while max_iterations > 0 {
+    max_iterations = max_iterations - 1
+    let success = handle_tool_calls(config, chat_history, tools)
+    if !success {
+      jarvis_cries("Encountered error during execution")
+      break
+    }
+
+    // Check if Jarvis finished execution
+    // If the last message is from assistant and doesn't request tools, we're done
+    if chat_history.messages.length() > 0 {
+      let last_msg = chat_history.messages[chat_history.messages.length() - 1]
+      if last_msg.role == "assistant" {
+        // Check if the response indicates completion
+        match last_msg.content {
+          Some(text) =>
+            if text.contains("completed") ||
+              text.contains("finished") ||
+              text.contains("done") {
+              break
+            }
+          None => ()
+        }
+
+        // Add continuation message
+        chat_history.add(
+          Message::new(
+            "user", "Continue with the next step, or say DONE if finished.",
+          ),
+        )
+      }
+    }
+
+    // Save progress after each iteration
+    chat_history.save_to_numbered_file()
+  }
+  if max_iterations == 0 {
+    jarvis_says("Plan execution reached iteration limit")
+  }
+  jarvis_says("Plan execution complete!")
+  chat_history.save_to_numbered_file()
 }
 
 ///|

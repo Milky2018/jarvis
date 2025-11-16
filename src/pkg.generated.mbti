@@ -78,6 +78,9 @@ impl Default for ModelsCommand
 type PetiteCommand
 impl Default for PetiteCommand
 
+type PlanCommand
+impl Default for PlanCommand
+
 type PlayCommand
 impl Default for PlayCommand
 
