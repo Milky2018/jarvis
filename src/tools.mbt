@@ -376,6 +376,64 @@ impl ToolImpl for EndPlayModeTool with execute(_self, input) {
 }
 
 ///|
+/// Web Search Tool
+struct WebSearchTool {} derive(Default)
+
+///|
+impl ToolImpl for WebSearchTool with name(_self) {
+  "web_search"
+}
+
+///|
+impl ToolImpl for WebSearchTool with description(_self) {
+  "Search the web for current information. Returns search results with titles, URLs, and snippets. Use this to find up-to-date information beyond your knowledge cutoff."
+}
+
+///|
+impl ToolImpl for WebSearchTool with input_schema(_self) {
+  {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string", "description": "The search query" },
+      "num_results": {
+        "type": "number",
+        "description": "Number of results to return (default: 5, max: 10)",
+      },
+    },
+    "required": ["query"],
+  }
+}
+
+///|
+impl ToolImpl for WebSearchTool with execute(_self, input) {
+  match input {
+    Object(map) =>
+      match map.get("query") {
+        Some(String(query)) => {
+          let num_results = match map.get("num_results") {
+            Some(Number(n, ..)) => {
+              let num = n.to_int()
+              if num > 10 {
+                10
+              } else if num < 1 {
+                1
+              } else {
+                num
+              }
+            }
+            _ => 5
+          }
+          jarvis_says("Searching web for: \{query}")
+          web_search_tool(query, num_results)
+        }
+        Some(_) => "Error: 'query' must be a string"
+        None => "Error: Missing 'query' argument"
+      }
+    _ => "Error: Input must be a JSON object"
+  }
+}
+
+///|
 /// Execute tool with Claude API format (takes tool name and input JSON directly)
 async fn execute_tool_claude(tool_name : String, input : Json) -> String {
   // Get all available tools (including end_play_mode if needed)
@@ -496,6 +554,227 @@ async fn edit_file_tool(
 }
 
 ///|
+/// Web search tool implementation using DuckDuckGo
+async fn web_search_tool(query : String, num_results : Int) -> String {
+  try {
+    // URL encode the query
+    let encoded_query = url_encode(query)
+
+    // Use DuckDuckGo HTML search
+    let url = "https://html.duckduckgo.com/html/?q=\{encoded_query}"
+
+    // Make HTTP request
+    let (response, body) = @http.get(url) catch {
+      e => return "Error: Failed to connect to search engine: \{e}"
+    }
+    if response.code != 200 {
+      return "Error: Search engine returned status code \{response.code}"
+    }
+    let html = body.text()
+
+    // Parse search results from HTML (simple parsing)
+    let results = parse_duckduckgo_results(html, num_results)
+    if results.is_empty() {
+      "No search results found for query: \{query}"
+    } else {
+      let mut output = "Search results for '\{query}':\n\n"
+      for i = 0; i < results.length(); i = i + 1 {
+        let (title, url_str, snippet) = results[i]
+        output = output + "\{i + 1}. \{title}\n"
+        output = output + "   URL: \{url_str}\n"
+        if !snippet.is_empty() {
+          output = output + "   \{snippet}\n"
+        }
+        output = output + "\n"
+      }
+      output
+    }
+  } catch {
+    e => "Error: \{e}"
+  }
+}
+
+///|
+/// Simple URL encoding function
+fn url_encode(s : String) -> String {
+  let mut result = ""
+  for i = 0; i < s.length(); i = i + 1 {
+    let c = s[i]
+    match c {
+      ' ' => result = result + "+"
+      'A'
+      | 'B'
+      | 'C'
+      | 'D'
+      | 'E'
+      | 'F'
+      | 'G'
+      | 'H'
+      | 'I'
+      | 'J'
+      | 'K'
+      | 'L'
+      | 'M'
+      | 'N'
+      | 'O'
+      | 'P'
+      | 'Q'
+      | 'R'
+      | 'S'
+      | 'T'
+      | 'U'
+      | 'V'
+      | 'W'
+      | 'X'
+      | 'Y'
+      | 'Z'
+      | 'a'
+      | 'b'
+      | 'c'
+      | 'd'
+      | 'e'
+      | 'f'
+      | 'g'
+      | 'h'
+      | 'i'
+      | 'j'
+      | 'k'
+      | 'l'
+      | 'm'
+      | 'n'
+      | 'o'
+      | 'p'
+      | 'q'
+      | 'r'
+      | 's'
+      | 't'
+      | 'u'
+      | 'v'
+      | 'w'
+      | 'x'
+      | 'y'
+      | 'z'
+      | '0'
+      | '1'
+      | '2'
+      | '3'
+      | '4'
+      | '5'
+      | '6'
+      | '7'
+      | '8'
+      | '9'
+      | '-'
+      | '_'
+      | '.'
+      | '~' => result = result + c.to_string()
+      _ =>
+        // Percent encode other characters - simple approach
+        result = result + c.to_string()
+    }
+  }
+  result
+}
+
+///|
+/// Parse DuckDuckGo HTML results (simple extraction)
+fn parse_duckduckgo_results(
+  html : String,
+  max_results : Int,
+) -> Array[(String, String, String)] {
+  let results : Array[(String, String, String)] = []
+
+  // Simple HTML parsing - look for result divs
+  // DuckDuckGo uses class="result" for each search result
+  let parts_view = html.split("<div class=\"result")
+  let parts : Array[String] = []
+  for part in parts_view {
+    parts.push(part.to_string())
+  }
+
+  // Skip first part (before first result)
+  for i = 1; i < parts.length() && results.length() < max_results; i = i + 1 {
+    let part = parts[i]
+
+    // Extract title and URL from <a class="result__a" href="...">title</a>
+    let title = extract_between(part, "result__a\">", "</a>")
+    let url_str = extract_between(part, "result__url\" href=\"", "\"")
+
+    // Extract snippet from <a class="result__snippet">...</a>
+    let snippet = extract_between(part, "result__snippet\">", "</a>")
+    if !title.is_empty() && !url_str.is_empty() {
+      // Clean HTML entities and tags
+      let clean_title = clean_html(title)
+      let clean_snippet = clean_html(snippet)
+      results.push((clean_title, url_str, clean_snippet))
+    }
+  }
+  results
+}
+
+///|
+/// Extract text between two markers
+fn extract_between(
+  text : String,
+  start_marker : String,
+  end_marker : String,
+) -> String {
+  if text.contains(start_marker) {
+    let parts_view = text.split(start_marker)
+    let parts : Array[String] = []
+    for part in parts_view {
+      parts.push(part.to_string())
+    }
+    if parts.length() > 1 {
+      let after_start = parts[1]
+      if after_start.contains(end_marker) {
+        let end_parts_view = after_start.split(end_marker)
+        let end_parts : Array[String] = []
+        for part in end_parts_view {
+          end_parts.push(part.to_string())
+        }
+        if end_parts.length() > 0 {
+          return end_parts[0]
+        }
+      }
+    }
+  }
+  ""
+}
+
+///|
+/// Clean HTML tags and entities from text
+fn clean_html(text : String) -> String {
+  let mut result = text
+
+  // Remove HTML tags
+  let mut in_tag = false
+  let mut cleaned = ""
+  for i = 0; i < result.length(); i = i + 1 {
+    let c = result[i]
+    if c == '<' {
+      in_tag = true
+    } else if c == '>' {
+      in_tag = false
+    } else if !in_tag {
+      cleaned = cleaned + c.to_string()
+    }
+  }
+  result = cleaned
+
+  // Replace common HTML entities
+  result = result.replace(old="&amp;", new="&")
+  result = result.replace(old="&lt;", new="<")
+  result = result.replace(old="&gt;", new=">")
+  result = result.replace(old="&quot;", new="\"")
+  result = result.replace(old="&#39;", new="'")
+  result = result.replace(old="&nbsp;", new=" ")
+
+  // Trim whitespace
+  result.trim(chars=" \n\t\r").to_string()
+}
+
+///|
 /// Grep tool implementation (search file contents)
 async fn grep_tool(pattern : String, path : String) -> String {
   try {
@@ -556,6 +835,7 @@ fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
     EditFileTool::default(),
     GrepTool::default(),
     GlobTool::default(),
+    WebSearchTool::default(),
   ]
   if in_play_mode {
     tools.push(EndPlayModeTool::default())
