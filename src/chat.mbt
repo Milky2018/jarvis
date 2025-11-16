@@ -1,4 +1,12 @@
 ///|
+/// Plan mode state
+enum PlanState {
+  Idle // Not in plan mode
+  WaitingForApproval(String, String) // (task, plan_text)
+  Executing(String) // task
+}
+
+///|
 /// Chat history
 /// Manages conversation history
 struct ChatHistory {
@@ -8,6 +16,7 @@ struct ChatHistory {
   mut petite_model : String // Petite model for summaries and titles
   usage_stats : UsageStats // Track API usage
   mut current_file_number : Int // Current conversation file number
+  mut plan_state : PlanState // Plan mode state machine
 }
 
 ///|
@@ -19,6 +28,7 @@ fn ChatHistory::new() -> ChatHistory {
     petite_model: "claude-haiku-4-5-20251001",
     usage_stats: UsageStats::new(),
     current_file_number: 0, // Will be set when loading/creating conversation
+    plan_state: Idle,
   } // Leave some room for response
 }
 
@@ -237,6 +247,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         petite_model: "claude-haiku-4-5-20251001",
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
+        plan_state: Idle,
       })
     }
     _ => None

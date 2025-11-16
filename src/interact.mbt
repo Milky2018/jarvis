@@ -18,6 +18,49 @@ async fn interact(
     raise ExitRequested
   }
 
+  // Check plan mode state
+  match chat_history.plan_state {
+    WaitingForApproval(task, _plan_text) => {
+      // Process approval response
+      let response = user_input.trim(chars=" \n\t\r").to_string().to_lower()
+      match response {
+        "yes" => {
+          jarvis_says("Plan approved! Executing...")
+          println_async("")
+          chat_history.plan_state = Executing(task)
+          execute_approved_plan(config, chat_history, task)
+          chat_history.plan_state = Idle
+        }
+        "no" => {
+          jarvis_says("Plan rejected. Exiting plan mode.")
+          chat_history.plan_state = Idle
+        }
+        _ => {
+          // User wants to modify or provided other input
+          jarvis_says(
+            "Plan modification requested. Please provide your changes:",
+          )
+          jarvis_says(
+            "Plan mode ended. You can start a new plan with your modifications.",
+          )
+          chat_history.plan_state = Idle
+        }
+      }
+      println_async("")
+      return
+    }
+    Executing(_task) => {
+      // Should not happen - execution is synchronous
+      jarvis_cries("Unexpected state: already executing")
+      chat_history.plan_state = Idle
+      println_async("")
+      return
+    }
+    Idle =>
+      // Normal processing
+      ()
+  }
+
   // Handle special commands
   if handle_command(user_input, chat_history, config) {
     println_async("")

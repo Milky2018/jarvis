@@ -501,8 +501,8 @@ impl Command for PlanCommand with execute(_self, parts, chat_history, config) {
   jarvis_says("Entering plan mode for task: \{task}")
   println_async("")
 
-  // Start plan mode
-  start_plan_mode(config, chat_history, task)
+  // Start plan mode by generating the plan
+  generate_plan(config, chat_history, task)
   true
 }
 
@@ -711,8 +711,8 @@ async fn start_play_mode(
 }
 
 ///|
-/// Start plan mode where Jarvis creates a plan and waits for approval
-async fn start_plan_mode(
+/// Generate a plan for the given task
+async fn generate_plan(
   config : Config,
   chat_history : ChatHistory,
   task : String,
@@ -783,48 +783,11 @@ async fn start_plan_mode(
             print_separator()
             println_async("")
 
-            // Wait for user approval
+            // Set state to waiting for approval
+            chat_history.plan_state = WaitingForApproval(task, plan_text)
+
+            // Prompt user
             jarvis_says("Do you approve this plan? (yes/no/modify)")
-
-            // Wait for approval using the same pattern as main loop
-            let approval = @async.with_task_group(fn(group) {
-              let approval_queue : @aqueue.Queue[String] = @aqueue.Queue::new()
-
-              // Start readline in background
-              group.spawn_bg(fn() {
-                let rl = ReadlineInterface::with_history(0, [])
-                while rl.read_to_queue(approval_queue) {
-
-                }
-              })
-
-              // Wait for input
-              let response = approval_queue
-                .get()
-                .trim(chars=" \n\t\r")
-                .to_string()
-                .to_lower()
-              println_async("") // Print newline after input
-              response
-            })
-            match approval {
-              "yes" => {
-                jarvis_says("Plan approved! Executing...")
-                println_async("")
-                execute_approved_plan(config, chat_history, task)
-              }
-              "no" => jarvis_says("Plan rejected. Exiting plan mode.")
-              _ => {
-                // User wants to modify
-                jarvis_says(
-                  "Plan modification requested. Please provide your changes:",
-                )
-                // For now, just exit - we can enhance this later
-                jarvis_says(
-                  "Plan mode ended. You can start a new plan with your modifications.",
-                )
-              }
-            }
           }
           None => jarvis_cries("No plan was generated")
         }

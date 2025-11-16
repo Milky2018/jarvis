@@ -81,6 +81,8 @@ impl Default for PetiteCommand
 type PlanCommand
 impl Default for PlanCommand
 
+type PlanState
+
 type PlayCommand
 impl Default for PlayCommand
 
