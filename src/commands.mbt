@@ -213,10 +213,23 @@ impl Command for ClearCommand with description(_self) {
 
 ///|
 impl Command for ClearCommand with execute(_self, _parts, chat_history, _config) {
+  // Preserve the first message (system prompt) if it exists
+  let first_msg = if chat_history.messages.length() > 0 {
+    Some(chat_history.messages[0])
+  } else {
+    None
+  }
   while chat_history.messages.length() > 0 {
     ignore(chat_history.messages.pop())
   }
-  jarvis_says("Conversation history cleared")
+  // Restore the system prompt
+  match first_msg {
+    Some(msg) => {
+      chat_history.messages.push(msg)
+      jarvis_says("Conversation history cleared (system prompt preserved)")
+    }
+    None => jarvis_says("Conversation history cleared")
+  }
   true
 }
 

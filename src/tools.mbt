@@ -540,7 +540,25 @@ async fn write_file_tool(path : String, content : String) -> String {
   @fs.write_file(path, content, create=0o644) catch {
     e => return "Error writing file: \{e}"
   }
-  "Successfully wrote \{content.length()} bytes to \{path}"
+
+  // Show content with line numbers (limit to first 50 lines for readability)
+  let lines_view = content.split("\n")
+  let lines : Array[String] = []
+  for line in lines_view {
+    lines.push(line.to_string())
+  }
+  let total_lines = lines.length()
+  let show_lines = if total_lines > 50 { 50 } else { total_lines }
+  let mut result = "Successfully wrote \{content.length()} bytes to \{path}\n\n"
+  result = result + "Content written:\n"
+  for i = 0; i < show_lines; i = i + 1 {
+    let line_num = i + 1
+    result = result + "\{line_num}→\{lines[i]}\n"
+  }
+  if total_lines > show_lines {
+    result = result + "... (\{total_lines - show_lines} more lines)\n"
+  }
+  result
 }
 
 ///|
@@ -580,7 +598,34 @@ async fn edit_file_tool(
     @fs.write_file(path, new_content, create=0o644) catch {
       e => return "Error writing file: \{e}"
     }
-    "Successfully edited \{path}: replaced \{old_string.length()} bytes with \{new_string.length()} bytes"
+
+    // Generate colored diff output
+    let red_bg = "\u001b[41m" // Red background for deletions
+    let green_bg = "\u001b[42m" // Green background for additions
+    let reset = "\u001b[0m"
+    let mut result = "Successfully edited \{path}\n\n"
+
+    // Show old content (red background)
+    result = result + "Removed:\n"
+    let old_lines_view = old_string.split("\n")
+    let old_lines : Array[String] = []
+    for line in old_lines_view {
+      old_lines.push(line.to_string())
+    }
+    for i = 0; i < old_lines.length(); i = i + 1 {
+      result = result + "\{red_bg}- \{old_lines[i]}\{reset}\n"
+    }
+    result = result + "\nAdded:\n"
+    // Show new content (green background)
+    let new_lines_view = new_string.split("\n")
+    let new_lines : Array[String] = []
+    for line in new_lines_view {
+      new_lines.push(line.to_string())
+    }
+    for i = 0; i < new_lines.length(); i = i + 1 {
+      result = result + "\{green_bg}+ \{new_lines[i]}\{reset}\n"
+    }
+    result
   } catch {
     e => "Error: \{e}"
   }
