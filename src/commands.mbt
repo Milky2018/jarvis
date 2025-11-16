@@ -520,12 +520,12 @@ async fn save_plan_to_file(
   let content =
     #| # Plan Document
     #|
-    $| **Task:** {task}
-    $| **Created:** {timestamp}
+    $| **Task:** \{task}
+    $| **Created:** \{timestamp}
     #|
     #| ---
     #|
-    $| {plan_text}
+    $| \{plan_text}
   try {
 
     // Save to file
