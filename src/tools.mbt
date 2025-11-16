@@ -549,16 +549,18 @@ async fn write_file_tool(path : String, content : String) -> String {
   }
   let total_lines = lines.length()
   let show_lines = if total_lines > 50 { 50 } else { total_lines }
-  let mut result = "Successfully wrote \{content.length()} bytes to \{path}\n\n"
-  result = result + "Content written:\n"
+
+  // Display to user
+  let mut display = "Content written:\n"
   for i = 0; i < show_lines; i = i + 1 {
     let line_num = i + 1
-    result = result + "\{line_num}→\{lines[i]}\n"
+    display = display + "\{line_num}→\{lines[i]}\n"
   }
   if total_lines > show_lines {
-    result = result + "... (\{total_lines - show_lines} more lines)\n"
+    display = display + "... (\{total_lines - show_lines} more lines)\n"
   }
-  result
+  jarvis_says(display)
+  "Successfully wrote \{content.length()} bytes to \{path}"
 }
 
 ///|
@@ -599,23 +601,23 @@ async fn edit_file_tool(
       e => return "Error writing file: \{e}"
     }
 
-    // Generate colored diff output
+    // Generate colored diff output and display to user
     let red_bg = "\u001b[41m" // Red background for deletions
     let green_bg = "\u001b[42m" // Green background for additions
     let reset = "\u001b[0m"
-    let mut result = "Successfully edited \{path}\n\n"
+    let mut display = ""
 
     // Show old content (red background)
-    result = result + "Removed:\n"
+    display = display + "Removed:\n"
     let old_lines_view = old_string.split("\n")
     let old_lines : Array[String] = []
     for line in old_lines_view {
       old_lines.push(line.to_string())
     }
     for i = 0; i < old_lines.length(); i = i + 1 {
-      result = result + "\{red_bg}- \{old_lines[i]}\{reset}\n"
+      display = display + "\{red_bg}- \{old_lines[i]}\{reset}\n"
     }
-    result = result + "\nAdded:\n"
+    display = display + "\nAdded:\n"
     // Show new content (green background)
     let new_lines_view = new_string.split("\n")
     let new_lines : Array[String] = []
@@ -623,9 +625,10 @@ async fn edit_file_tool(
       new_lines.push(line.to_string())
     }
     for i = 0; i < new_lines.length(); i = i + 1 {
-      result = result + "\{green_bg}+ \{new_lines[i]}\{reset}\n"
+      display = display + "\{green_bg}+ \{new_lines[i]}\{reset}\n"
     }
-    result
+    jarvis_says(display)
+    "Successfully edited \{path}"
   } catch {
     e => "Error: \{e}"
   }
