@@ -19,6 +19,9 @@ const COLOR_BOLD : String = "\u001b[1m"
 const COLOR_RED : String = "\u001b[31m"
 
 ///|
+const COLOR_GREEN : String = "\u001b[32m"
+
+///|
 const COLOR_GRAY : String = "\u001b[38;2;90;90;90m"
 
 ///|

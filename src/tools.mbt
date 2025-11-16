@@ -535,6 +535,61 @@ async fn read_file_tool(path : String, params : Json) -> String {
 }
 
 ///|
+/// Simple line-based diff algorithm
+/// Returns: (common_prefix_lines, removed_lines, added_lines, common_suffix_lines)
+fn compute_line_diff(
+  old_text : String,
+  new_text : String,
+) -> (Array[String], Array[String], Array[String], Array[String]) {
+  let old_lines_view = old_text.split("\n")
+  let old_lines : Array[String] = []
+  for line in old_lines_view {
+    old_lines.push(line.to_string())
+  }
+  let new_lines_view = new_text.split("\n")
+  let new_lines : Array[String] = []
+  for line in new_lines_view {
+    new_lines.push(line.to_string())
+  }
+
+  // Find common prefix
+  let mut prefix_len = 0
+  while prefix_len < old_lines.length() &&
+        prefix_len < new_lines.length() &&
+        old_lines[prefix_len] == new_lines[prefix_len] {
+    prefix_len = prefix_len + 1
+  }
+
+  // Find common suffix (excluding prefix)
+  let mut suffix_len = 0
+  while suffix_len < old_lines.length() - prefix_len &&
+        suffix_len < new_lines.length() - prefix_len &&
+        old_lines[old_lines.length() - 1 - suffix_len] ==
+        new_lines[new_lines.length() - 1 - suffix_len] {
+    suffix_len = suffix_len + 1
+  }
+
+  // Extract parts
+  let prefix : Array[String] = []
+  for i = 0; i < prefix_len; i = i + 1 {
+    prefix.push(old_lines[i])
+  }
+  let removed : Array[String] = []
+  for i = prefix_len; i < old_lines.length() - suffix_len; i = i + 1 {
+    removed.push(old_lines[i])
+  }
+  let added : Array[String] = []
+  for i = prefix_len; i < new_lines.length() - suffix_len; i = i + 1 {
+    added.push(new_lines[i])
+  }
+  let suffix : Array[String] = []
+  for i = old_lines.length() - suffix_len; i < old_lines.length(); i = i + 1 {
+    suffix.push(old_lines[i])
+  }
+  (prefix, removed, added, suffix)
+}
+
+///|
 /// Write file tool implementation
 async fn write_file_tool(path : String, content : String) -> String {
   // Try to read old content first (if file exists)
@@ -550,9 +605,6 @@ async fn write_file_tool(path : String, content : String) -> String {
   @fs.write_file(path, content, create=0o644) catch {
     e => return "Error writing file: \{e}"
   }
-  let green_bg = "\u001b[42m" // Green background for additions
-  let red_bg = "\u001b[41m" // Red background for deletions
-  let reset = "\u001b[0m"
   let mut display = ""
   if is_new_file {
     // New file: show all content as green (added)
@@ -566,45 +618,53 @@ async fn write_file_tool(path : String, content : String) -> String {
     let show_lines = if total_lines > 50 { 50 } else { total_lines }
     for i = 0; i < show_lines; i = i + 1 {
       let line_num = i + 1
-      display = display + "\{green_bg}\{line_num}→\{lines[i]}\{reset}\n"
+      display = display +
+        "\{COLOR_GREEN}\{line_num}→\{lines[i]}\{COLOR_RESET}\n"
     }
     if total_lines > show_lines {
       display = display + "... (\{total_lines - show_lines} more lines)\n"
     }
   } else {
-    // Existing file: show diff
-    display = display + "File overwritten:\n\n"
+    // Existing file: show line-based diff
+    let (prefix, removed, added, suffix) = compute_line_diff(old_text, content)
+    let mut line_num = 1
 
-    // Show old content (red)
-    display = display + "Removed:\n"
-    let old_lines_view = old_text.split("\n")
-    let old_lines : Array[String] = []
-    for line in old_lines_view {
-      old_lines.push(line.to_string())
+    // Show context before changes (limited)
+    let context_before = if prefix.length() > 3 { 3 } else { prefix.length() }
+    let skip_prefix = prefix.length() - context_before
+    if skip_prefix > 0 {
+      display = display + "... (\{skip_prefix} unchanged lines)\n"
+      line_num = line_num + skip_prefix
     }
-    let old_show = if old_lines.length() > 30 { 30 } else { old_lines.length() }
-    for i = 0; i < old_show; i = i + 1 {
-      display = display + "\{red_bg}- \{old_lines[i]}\{reset}\n"
-    }
-    if old_lines.length() > old_show {
-      display = display +
-        "... (\{old_lines.length() - old_show} more lines removed)\n"
+    for i = prefix.length() - context_before; i < prefix.length(); i = i + 1 {
+      display = display + "\{line_num}→\{prefix[i]}\n"
+      line_num = line_num + 1
     }
 
-    // Show new content (green)
-    display = display + "\nAdded:\n"
-    let new_lines_view = content.split("\n")
-    let new_lines : Array[String] = []
-    for line in new_lines_view {
-      new_lines.push(line.to_string())
+    // Show removed lines (red)
+    if removed.length() > 0 {
+      for i = 0; i < removed.length(); i = i + 1 {
+        display = display + "\{COLOR_RED}- \{removed[i]}\{COLOR_RESET}\n"
+      }
     }
-    let new_show = if new_lines.length() > 30 { 30 } else { new_lines.length() }
-    for i = 0; i < new_show; i = i + 1 {
-      display = display + "\{green_bg}+ \{new_lines[i]}\{reset}\n"
+
+    // Show added lines (green)
+    if added.length() > 0 {
+      for i = 0; i < added.length(); i = i + 1 {
+        display = display + "\{COLOR_GREEN}+ \{added[i]}\{COLOR_RESET}\n"
+      }
     }
-    if new_lines.length() > new_show {
-      display = display +
-        "... (\{new_lines.length() - new_show} more lines added)\n"
+    line_num = line_num + added.length()
+
+    // Show context after changes (limited)
+    let context_after = if suffix.length() > 3 { 3 } else { suffix.length() }
+    for i = 0; i < context_after; i = i + 1 {
+      display = display + "\{line_num}→\{suffix[i]}\n"
+      line_num = line_num + 1
+    }
+    let skip_suffix = suffix.length() - context_after
+    if skip_suffix > 0 {
+      display = display + "... (\{skip_suffix} unchanged lines)\n"
     }
   }
   jarvis_says(display)
@@ -650,12 +710,9 @@ async fn edit_file_tool(
     }
 
     // Generate colored diff output and display to user
-    let red_bg = "\u001b[41m" // Red background for deletions
-    let green_bg = "\u001b[42m" // Green background for additions
-    let reset = "\u001b[0m"
     let mut display = ""
 
-    // Show old content (red background)
+    // Show old content (red foreground)
     display = display + "Removed:\n"
     let old_lines_view = old_string.split("\n")
     let old_lines : Array[String] = []
@@ -663,17 +720,17 @@ async fn edit_file_tool(
       old_lines.push(line.to_string())
     }
     for i = 0; i < old_lines.length(); i = i + 1 {
-      display = display + "\{red_bg}- \{old_lines[i]}\{reset}\n"
+      display = display + "\{COLOR_RED}- \{old_lines[i]}\{COLOR_RESET}\n"
     }
     display = display + "\nAdded:\n"
-    // Show new content (green background)
+    // Show new content (green foreground)
     let new_lines_view = new_string.split("\n")
     let new_lines : Array[String] = []
     for line in new_lines_view {
       new_lines.push(line.to_string())
     }
     for i = 0; i < new_lines.length(); i = i + 1 {
-      display = display + "\{green_bg}+ \{new_lines[i]}\{reset}\n"
+      display = display + "\{COLOR_GREEN}+ \{new_lines[i]}\{COLOR_RESET}\n"
     }
     jarvis_says(display)
     "Successfully edited \{path}"

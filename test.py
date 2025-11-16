@@ -1,4 +1,4 @@
-def fibonacci(n):
+def fibonacci(n: int) -> int:
     """
     Calculate the nth Fibonacci number
     
@@ -18,7 +18,7 @@ def fibonacci(n):
         return fibonacci(n - 1) + fibonacci(n - 2)
 
 
-def fibonacci_iterative(n):
+def fibonacci_iterative(n: int) -> int:
     """
     Calculate the nth Fibonacci number using iterative method (more efficient)
     
@@ -41,7 +41,7 @@ def fibonacci_iterative(n):
     return curr
 
 
-def fibonacci_sequence(n):
+def fibonacci_sequence(n: int) -> list[int]:
     """
     Generate the first n Fibonacci numbers
     
