@@ -8,6 +8,13 @@ trait ToolImpl {
 }
 
 ///|
+/// Helper function to report tool errors
+async fn tool_error(msg : String) -> String {
+  jarvis_cries(msg)
+  msg
+}
+
+///|
 /// Execute Command Tool
 struct ExecuteCommandTool {} derive(Default)
 
@@ -44,10 +51,10 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
           jarvis_says("Executing: \{cmd}")
           execute_shell_command(cmd, chat_history)
         }
-        Some(_) => "Error: 'command' must be a string"
-        None => "Error: Missing 'command' argument"
+        Some(_) => tool_error("Error: 'command' must be a string")
+        None => tool_error("Error: Missing 'command' argument")
       }
-    _ => "Error: Input must be a JSON object"
+    _ => tool_error("Error: Input must be a JSON object")
   }
 }
 
@@ -145,10 +152,10 @@ impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
           jarvis_says("Reading: \{path}")
           read_file_tool(path, input)
         }
-        Some(_) => "Error: 'path' must be a string"
-        None => "Error: Missing 'path' argument"
+        Some(_) => tool_error("Error: 'path' must be a string")
+        None => tool_error("Error: Missing 'path' argument")
       }
-    _ => "Error: Input must be a JSON object"
+    _ => tool_error("Error: Input must be a JSON object")
   }
 }
 
@@ -193,11 +200,11 @@ impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
           jarvis_says("Writing: \{path}")
           write_file_tool(path, content)
         }
-        (None, _) => "Error: Missing 'path' argument"
-        (_, None) => "Error: Missing 'content' argument"
-        _ => "Error: 'path' and 'content' must be strings"
+        (None, _) => tool_error("Error: Missing 'path' argument")
+        (_, None) => tool_error("Error: Missing 'content' argument")
+        _ => tool_error("Error: 'path' and 'content' must be strings")
       }
-    _ => "Error: Input must be a JSON object"
+    _ => tool_error("Error: Input must be a JSON object")
   }
 }
 
@@ -246,12 +253,12 @@ impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
           jarvis_says("Editing: \{path}")
           edit_file_tool(path, old, new)
         }
-        (None, _, _) => "Error: Missing 'path' argument"
-        (_, None, _) => "Error: Missing 'old_string' argument"
-        (_, _, None) => "Error: Missing 'new_string' argument"
-        _ => "Error: Arguments must be strings"
+        (None, _, _) => tool_error("Error: Missing 'path' argument")
+        (_, None, _) => tool_error("Error: Missing 'old_string' argument")
+        (_, _, None) => tool_error("Error: Missing 'new_string' argument")
+        _ => tool_error("Error: Arguments must be strings")
       }
-    _ => "Error: Input must be a JSON object"
+    _ => tool_error("Error: Input must be a JSON object")
   }
 }
 
@@ -300,10 +307,10 @@ impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
           jarvis_says("Searching for: \{pattern}")
           grep_tool(pattern, path)
         }
-        Some(_) => "Error: 'pattern' must be a string"
-        None => "Error: Missing 'pattern' argument"
+        Some(_) => tool_error("Error: 'pattern' must be a string")
+        None => tool_error("Error: Missing 'pattern' argument")
       }
-    _ => "Error: Input must be a JSON object"
+    _ => tool_error("Error: Input must be a JSON object")
   }
 }
 
@@ -352,10 +359,10 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
           jarvis_says("Finding files: \{pattern}")
           glob_tool(pattern, path)
         }
-        Some(_) => "Error: 'pattern' must be a string"
-        None => "Error: Missing 'pattern' argument"
+        Some(_) => tool_error("Error: 'pattern' must be a string")
+        None => tool_error("Error: Missing 'pattern' argument")
       }
-    _ => "Error: Input must be a JSON object"
+    _ => tool_error("Error: Input must be a JSON object")
   }
 }
 
@@ -452,10 +459,10 @@ impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
           jarvis_says("Searching web for: \{query}")
           web_search_tool(query, num_results)
         }
-        Some(_) => "Error: 'query' must be a string"
-        None => "Error: Missing 'query' argument"
+        Some(_) => tool_error("Error: 'query' must be a string")
+        None => tool_error("Error: Missing 'query' argument")
       }
-    _ => "Error: Input must be a JSON object"
+    _ => tool_error("Error: Input must be a JSON object")
   }
 }
 
@@ -488,7 +495,11 @@ async fn execute_tool_claude(
 async fn read_file_tool(path : String, params : Json) -> String {
   // Read file content
   let content_data = @fs.read_file(path) catch {
-    e => return "Error reading file: \{e}"
+    e => {
+      let msg = "Error reading file: \{e}"
+      jarvis_cries(msg)
+      return msg
+    }
   }
   let content = content_data.text()
 
@@ -553,7 +564,11 @@ async fn write_file_tool(path : String, content : String) -> String {
 
   // Write new content
   @fs.write_file(path, content, create=0o644) catch {
-    e => return "Error writing file: \{e}"
+    e => {
+      let msg = "Error writing file: \{e}"
+      jarvis_cries(msg)
+      return msg
+    }
   }
   let display = if is_new_file {
     // New file: show all content as green (added) with + prefix
@@ -598,13 +613,19 @@ async fn edit_file_tool(
   try {
     // Read current content
     let content_data = @fs.read_file(path) catch {
-      e => return "Error reading file: \{e}"
+      e => {
+        let msg = "Error reading file: \{e}"
+        jarvis_cries(msg)
+        return msg
+      }
     }
     let content = content_data.text()
 
     // Check if old_string exists
     if !content.contains(old_string) {
-      return "Error: old_string not found in file"
+      let msg = "Error: old_string not found in file"
+      jarvis_cries(msg)
+      return msg
     }
 
     // Count occurrences by splitting
@@ -615,7 +636,9 @@ async fn edit_file_tool(
     }
     let count = parts.length() - 1
     if count > 1 {
-      return "Error: old_string appears \{count} times in file. Please make it more specific or use write_file to replace entire content."
+      let msg = "Error: old_string appears \{count} times in file. Please make it more specific or use write_file to replace entire content."
+      jarvis_cries(msg)
+      return msg
     }
 
     // Perform replacement
@@ -623,7 +646,11 @@ async fn edit_file_tool(
 
     // Write back
     @fs.write_file(path, new_content, create=0o644) catch {
-      e => return "Error writing file: \{e}"
+      e => {
+        let msg = "Error writing file: \{e}"
+        jarvis_cries(msg)
+        return msg
+      }
     }
 
     // Generate colored diff output and display to user
@@ -674,10 +701,16 @@ async fn web_search_tool(query : String, num_results : Int) -> String {
 
     // Make HTTP request
     let (response, body) = @http.get(url) catch {
-      e => return "Error: Failed to connect to search engine: \{e}"
+      e => {
+        let msg = "Error: Failed to connect to search engine: \{e}"
+        jarvis_cries(msg)
+        return msg
+      }
     }
     if response.code != 200 {
-      return "Error: Search engine returned status code \{response.code}"
+      let msg = "Error: Search engine returned status code \{response.code}"
+      jarvis_cries(msg)
+      return msg
     }
     let html = body.text()
 
