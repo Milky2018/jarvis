@@ -734,8 +734,12 @@ fn parse_duckduckgo_results(
 ) -> Array[(String, String, String)] {
   let results : Array[(String, String, String)] = []
 
-  // Simple HTML parsing - look for result divs
-  // DuckDuckGo uses class="result" for each search result
+  // Try multiple patterns for robustness
+  // Pattern 1: <div class="result" (standard)
+  // Pattern 2: <div class='result' (alternative quotes)
+  // Pattern 3: Links-based extraction as fallback
+
+  // First try: Look for result divs
   let parts_view = html.split("<div class=\"result")
   let parts : Array[String] = []
   for part in parts_view {
@@ -746,12 +750,33 @@ fn parse_duckduckgo_results(
   for i = 1; i < parts.length() && results.length() < max_results; i = i + 1 {
     let part = parts[i]
 
-    // Extract title and URL from <a class="result__a" href="...">title</a>
-    let title = extract_between(part, "result__a\">", "</a>")
-    let url_str = extract_between(part, "result__url\" href=\"", "\"")
+    // Try multiple extraction patterns for title and URL
+    let mut title = extract_between(part, "result__a\">", "</a>")
+    if title.is_empty() {
+      title = extract_between(part, "result__a\" href=\"", "\">")
+      if !title.is_empty() {
+        // Extract just the text after the href
+        title = extract_between(part, "\">", "</a>")
+      }
+    }
 
-    // Extract snippet from <a class="result__snippet">...</a>
+    let mut url_str = extract_between(part, "result__url\" href=\"", "\"")
+    if url_str.is_empty() {
+      // Try alternative: uddg= parameter (DuckDuckGo redirect)
+      url_str = extract_between(part, "uddg=", "\"")
+      if !url_str.is_empty() {
+        // URL decode the uddg parameter (basic decoding)
+        url_str = url_str.replace(old="%3A", new=":")
+        url_str = url_str.replace(old="%2F", new="/")
+        url_str = url_str.replace(old="%3F", new="?")
+        url_str = url_str.replace(old="%3D", new="=")
+        url_str = url_str.replace(old="%26", new="&")
+      }
+    }
+
+    // Extract snippet
     let snippet = extract_between(part, "result__snippet\">", "</a>")
+
     if !title.is_empty() && !url_str.is_empty() {
       // Clean HTML entities and tags
       let clean_title = clean_html(title)

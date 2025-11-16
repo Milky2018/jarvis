@@ -1,0 +1,354 @@
+///|
+/// Testing utilities and mocks for Jarvis
+///
+/// This module provides comprehensive mocking infrastructure for testing:
+/// - LLM API mocking
+/// - File system mocking
+/// - I/O (stdout/stderr) mocking
+
+///|
+/// Mock LLM response for testing
+struct MockLLMResponse {
+  text : String // Text content to return
+  tool_calls : Array[(String, String, Json)] // (id, name, input)
+  input_tokens : Int
+  output_tokens : Int
+}
+
+///|
+/// Mock LLM client that returns pre-configured responses
+struct MockLLMClient {
+  responses : Array[MockLLMResponse] // Queue of responses to return
+  mut current_index : Int // Current position in response queue
+  mut request_count : Int // Number of requests made
+  mut last_messages : Array[Message] // Last messages sent to the LLM
+}
+
+///|
+/// Create a new mock LLM client with given responses
+fn MockLLMClient::new(responses : Array[MockLLMResponse]) -> MockLLMClient {
+  { responses, current_index: 0, request_count: 0, last_messages: [] }
+}
+
+///|
+/// Get the next mock response
+fn MockLLMClient::get_next_response(
+  self : MockLLMClient
+) -> MockLLMResponse? {
+  if self.current_index < self.responses.length() {
+    let response = self.responses[self.current_index]
+    self.current_index = self.current_index + 1
+    self.request_count = self.request_count + 1
+    Some(response)
+  } else {
+    None
+  }
+}
+
+///|
+/// Record the messages sent in a request
+fn MockLLMClient::record_messages(
+  self : MockLLMClient,
+  messages : Array[Message]
+) -> Unit {
+  self.last_messages = messages
+}
+
+///|
+/// Mock file system for testing
+struct MockFileSystem {
+  files : Map[String, String] // path -> content
+}
+
+///|
+/// Create a new mock file system
+fn MockFileSystem::new() -> MockFileSystem {
+  { files: Map::new() }
+}
+
+///|
+/// Add a file to the mock file system
+fn MockFileSystem::add_file(
+  self : MockFileSystem,
+  path : String,
+  content : String,
+) -> Unit {
+  self.files.set(path, content)
+}
+
+///|
+/// Read a file from the mock file system
+fn MockFileSystem::read_file(self : MockFileSystem, path : String) -> String? {
+  self.files.get(path)
+}
+
+///|
+/// Write a file to the mock file system
+fn MockFileSystem::write_file(
+  self : MockFileSystem,
+  path : String,
+  content : String,
+) -> Unit {
+  self.files.set(path, content)
+}
+
+///|
+/// Check if a file exists in the mock file system
+fn MockFileSystem::file_exists(self : MockFileSystem, path : String) -> Bool {
+  self.files.contains(path)
+}
+
+///|
+/// Delete a file from the mock file system
+fn MockFileSystem::delete_file(self : MockFileSystem, path : String) -> Unit {
+  ignore(self.files.remove(path))
+}
+
+///|
+/// List all files in the mock file system
+fn MockFileSystem::list_files(self : MockFileSystem) -> Array[String] {
+  let files : Array[String] = []
+  self.files.each(fn(path, _) { files.push(path) })
+  files
+}
+
+///|
+/// Mock output capture for testing stdout/stderr
+struct MockOutputCapture {
+  mut stdout_lines : Array[String]
+  mut stderr_lines : Array[String]
+}
+
+///|
+/// Create a new mock output capture
+fn MockOutputCapture::new() -> MockOutputCapture {
+  { stdout_lines: [], stderr_lines: [] }
+}
+
+///|
+/// Record a line to stdout
+fn MockOutputCapture::write_stdout(self : MockOutputCapture, line : String) -> Unit {
+  self.stdout_lines.push(line)
+}
+
+///|
+/// Record a line to stderr
+fn MockOutputCapture::write_stderr(self : MockOutputCapture, line : String) -> Unit {
+  self.stderr_lines.push(line)
+}
+
+///|
+/// Get all stdout output as a single string
+fn MockOutputCapture::get_stdout(self : MockOutputCapture) -> String {
+  let mut result = ""
+  for i = 0; i < self.stdout_lines.length(); i = i + 1 {
+    result = result + self.stdout_lines[i] + "\n"
+  }
+  result
+}
+
+///|
+/// Get all stderr output as a single string
+fn MockOutputCapture::get_stderr(self : MockOutputCapture) -> String {
+  let mut result = ""
+  for i = 0; i < self.stderr_lines.length(); i = i + 1 {
+    result = result + self.stderr_lines[i] + "\n"
+  }
+  result
+}
+
+///|
+/// Clear all captured output
+fn MockOutputCapture::clear(self : MockOutputCapture) -> Unit {
+  self.stdout_lines = []
+  self.stderr_lines = []
+}
+
+///|
+/// Test helper: Create a simple text-only mock response
+fn mock_text_response(text : String) -> MockLLMResponse {
+  { text, tool_calls: [], input_tokens: 100, output_tokens: 50 }
+}
+
+///|
+/// Test helper: Create a mock response with tool calls
+fn mock_tool_response(
+  text : String,
+  tool_calls : Array[(String, String, Json)],
+) -> MockLLMResponse {
+  { text, tool_calls, input_tokens: 100, output_tokens: 50 }
+}
+
+///|
+/// Test helper: Create a mock execute_command tool call
+fn mock_execute_command(command : String) -> (String, String, Json) {
+  let id = "toolu_test_001"
+  let name = "execute_command"
+  let input : Json = { "command": command }
+  (id, name, input)
+}
+
+///|
+/// Test helper: Create a mock read_file tool call
+fn mock_read_file(path : String) -> (String, String, Json) {
+  let id = "toolu_test_002"
+  let name = "read_file"
+  let input : Json = { "path": path }
+  (id, name, input)
+}
+
+///|
+/// Test helper: Create a mock write_file tool call
+fn mock_write_file(path : String, content : String) -> (String, String, Json) {
+  let id = "toolu_test_003"
+  let name = "write_file"
+  let input : Json = { "path": path, "content": content }
+  (id, name, input)
+}
+
+///|
+/// Integration test context that bundles all mocks together
+struct TestContext {
+  llm_client : MockLLMClient
+  file_system : MockFileSystem
+  output_capture : MockOutputCapture
+  chat_history : ChatHistory
+}
+
+///|
+/// Create a new test context
+fn TestContext::new(llm_responses : Array[MockLLMResponse]) -> TestContext {
+  {
+    llm_client: MockLLMClient::new(llm_responses),
+    file_system: MockFileSystem::new(),
+    output_capture: MockOutputCapture::new(),
+    chat_history: ChatHistory::new(),
+  }
+}
+
+///|
+/// Example test using the framework
+test "mock_llm_client_basic" {
+  let responses = [mock_text_response("Hello, I'm Jarvis!")]
+  let client = MockLLMClient::new(responses)
+
+  let response = client.get_next_response()
+  inspect(response.is_empty(), content="false")
+
+  match response {
+    Some(r) => inspect(r.text, content="Hello, I'm Jarvis!")
+    None => @test.fail("Expected a response")
+  }
+}
+
+///|
+test "mock_file_system_operations" {
+  let fs = MockFileSystem::new()
+
+  // Initially empty
+  inspect(fs.file_exists("/test.txt"), content="false")
+
+  // Add a file
+  fs.add_file("/test.txt", "Hello, World!")
+  inspect(fs.file_exists("/test.txt"), content="true")
+
+  // Read the file
+  match fs.read_file("/test.txt") {
+    Some(content) => inspect(content, content="Hello, World!")
+    None => @test.fail("Expected file content")
+  }
+
+  // Write to the file
+  fs.write_file("/test.txt", "Updated content")
+  match fs.read_file("/test.txt") {
+    Some(content) => inspect(content, content="Updated content")
+    None => @test.fail("Expected updated content")
+  }
+
+  // Delete the file
+  fs.delete_file("/test.txt")
+  inspect(fs.file_exists("/test.txt"), content="false")
+}
+
+///|
+test "mock_output_capture" {
+  let capture = MockOutputCapture::new()
+
+  capture.write_stdout("Line 1")
+  capture.write_stdout("Line 2")
+  capture.write_stderr("Error 1")
+
+  let stdout = capture.get_stdout()
+  inspect(stdout.contains("Line 1"), content="true")
+  inspect(stdout.contains("Line 2"), content="true")
+
+  let stderr = capture.get_stderr()
+  inspect(stderr.contains("Error 1"), content="true")
+
+  // Clear and verify
+  capture.clear()
+  inspect(capture.get_stdout(), content="")
+}
+
+///|
+/// Test: Mock LLM client with conversation flow
+test "integration: mock llm conversation with tools" {
+  let responses = [
+    mock_text_response("First response"),
+    mock_text_response("Second response"),
+    mock_text_response("Third response"),
+  ]
+
+  let client = MockLLMClient::new(responses)
+
+  // First request
+  match client.get_next_response() {
+    Some(r) => {
+      inspect(r.text, content="First response")
+      inspect(client.request_count, content="1")
+    }
+    None => @test.fail("Expected first response")
+  }
+
+  // Second request
+  match client.get_next_response() {
+    Some(r) => {
+      inspect(r.text, content="Second response")
+      inspect(client.request_count, content="2")
+    }
+    None => @test.fail("Expected second response")
+  }
+
+  // Third request
+  match client.get_next_response() {
+    Some(r) => inspect(r.text, content="Third response")
+    None => @test.fail("Expected third response")
+  }
+
+  // No more responses
+  match client.get_next_response() {
+    Some(_) => @test.fail("Should have no more responses")
+    None => inspect(client.request_count, content="3")
+  }
+}
+
+///|
+test "integration: test context with all mocks" {
+  let responses = [mock_text_response("Hello")]
+  let ctx = TestContext::new(responses)
+
+  // Test LLM client
+  match ctx.llm_client.get_next_response() {
+    Some(r) => inspect(r.text, content="Hello")
+    None => @test.fail("Expected response")
+  }
+
+  // Test file system
+  ctx.file_system.write_file("/test.txt", "content")
+  inspect(ctx.file_system.file_exists("/test.txt"), content="true")
+
+  // Test output capture
+  ctx.output_capture.write_stdout("test output")
+  inspect(ctx.output_capture.get_stdout().contains("test output"), content="true")
+}
+

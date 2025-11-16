@@ -66,7 +66,38 @@ async fn handle_tool_calls(
       // Display text content if present and not using streaming
       if tool_uses.length() == 0 {
         match content_text {
-          Some(content_str) => if !used_streaming { jarvis_says(content_str) }
+          Some(content_str) => {
+            if !used_streaming {
+              jarvis_says(content_str)
+            }
+
+            // Check if message ends with a colon (: or ：)
+            // This often indicates Claude is about to describe an action but hasn't taken it
+            let trimmed = content_str.trim(chars=" \t\n\r").to_string()
+            let ends_with_colon = trimmed.has_suffix(":") || trimmed.has_suffix("：")
+
+            if ends_with_colon {
+              // Message added to history
+              let assistant_msg = {
+                role: "assistant",
+                content: Some(content_str),
+                tool_calls: None,
+                tool_call_id: None,
+                name: None,
+              }
+              chat_history.add(assistant_msg)
+
+              // Prompt Claude to actually call the tool instead of just describing
+              let continuation_prompt = Message::new(
+                "user",
+                "Please proceed with the actual tool call now. Do not describe what you will do - execute the tool.",
+              )
+              chat_history.add(continuation_prompt)
+
+              // Continue the loop to get the actual tool call
+              continue
+            }
+          }
           None =>
             if !used_streaming {
               jarvis_cries("Error: No content in response")
