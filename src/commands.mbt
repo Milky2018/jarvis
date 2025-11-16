@@ -230,6 +230,8 @@ impl Command for ClearCommand with execute(_self, _parts, chat_history, _config)
     }
     None => jarvis_says("Conversation history cleared")
   }
+  // Persist the cleared state to file
+  chat_history.save_to_numbered_file()
   true
 }
 
