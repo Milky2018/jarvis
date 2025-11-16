@@ -552,7 +552,7 @@ async fn write_file_tool(path : String, content : String) -> String {
   }
   let mut display = ""
   if is_new_file {
-    // New file: show all content as green (added)
+    // New file: show all content as green (added) with + prefix
     display = display + "New file created:\n"
     let lines_view = content.split("\n")
     let lines : Array[String] = []
@@ -562,9 +562,7 @@ async fn write_file_tool(path : String, content : String) -> String {
     let total_lines = lines.length()
     let show_lines = if total_lines > 50 { 50 } else { total_lines }
     for i = 0; i < show_lines; i = i + 1 {
-      let line_num = i + 1
-      display = display +
-        "\{COLOR_GREEN}\{line_num}→\{lines[i]}\{COLOR_RESET}\n"
+      display = display + "\{COLOR_GREEN}+ \{lines[i]}\{COLOR_RESET}\n"
     }
     if total_lines > show_lines {
       display = display + "... (\{total_lines - show_lines} more lines)\n"
