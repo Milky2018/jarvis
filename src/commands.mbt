@@ -461,7 +461,80 @@ impl Command for ExitCommand with execute(_self, _parts, _chat_history, _config)
 
 ///|
 /// Plan Command
-struct PlanCommand {} derive(Default)
+struct PlanCommand {
+  plandoc_dir : String // Directory to store plan documents
+}
+
+///|
+fn PlanCommand::new() -> PlanCommand {
+  let jarvis_dir = get_jarvis_dir()
+  let plandoc_dir = jarvis_dir + "/plandoc"
+  { plandoc_dir, }
+}
+
+///|
+/// Ensure plandoc directory exists
+async fn ensure_plandoc_dir(plandoc_dir : String) -> Unit {
+  let (_exit_code, _) = @process.collect_output_merged("sh", [
+    "-c",
+    "mkdir -p '\{plandoc_dir}'",
+  ])
+
+}
+
+///|
+/// Save plan to markdown file
+async fn save_plan_to_file(
+  task : String,
+  plan_text : String,
+  plandoc_dir : String,
+) -> Unit {
+  // Generate timestamp-based filename
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c", "date +%Y%m%d_%H%M%S",
+  ])
+  let timestamp = if exit_code == 0 {
+    output.text().trim(chars=" \n\t\r").to_string()
+  } else {
+    "unknown"
+  }
+
+  // Create safe filename from task (replace spaces and special chars)
+  let safe_task = task
+    .replace(old=" ", new="_")
+    .replace(old="/", new="_")
+    .replace(old=":", new="_")
+    .replace(old="\\", new="_")
+
+  // Limit filename length
+  let task_part = if safe_task.length() > 50 {
+    safe_task[:50].to_string() catch {
+      _ => safe_task
+    }
+  } else {
+    safe_task
+  }
+  let filename = plandoc_dir + "/" + timestamp + "_" + task_part + ".md"
+
+  // Create markdown content with metadata
+  let content =
+    #| # Plan Document
+    #|
+    $| **Task:** {task}
+    $| **Created:** {timestamp}
+    #|
+    #| ---
+    #|
+    $| {plan_text}
+  try {
+
+    // Save to file
+    @fs.write_file(filename, content, create=0o644)
+    jarvis_says("Plan saved to: " + filename)
+  } catch {
+    e => jarvis_cries("Failed to save plan file: \{e}")
+  }
+}
 
 ///|
 impl Command for PlanCommand with name(_self) {
@@ -484,7 +557,7 @@ impl Command for PlanCommand with description(_self) {
 }
 
 ///|
-impl Command for PlanCommand with execute(_self, parts, chat_history, config) {
+impl Command for PlanCommand with execute(self, parts, chat_history, config) {
   if parts.length() < 2 {
     jarvis_says("Usage: :plan <task description>")
     return true
@@ -502,7 +575,7 @@ impl Command for PlanCommand with execute(_self, parts, chat_history, config) {
   println_async("")
 
   // Start plan mode by generating the plan
-  generate_plan(config, chat_history, task)
+  generate_plan(config, chat_history, task, self.plandoc_dir)
   true
 }
 
@@ -518,7 +591,7 @@ fn get_all_commands() -> Array[&Command] {
     CostCommand::default(),
     SummarizeCommand::default(),
     PlayCommand::default(),
-    PlanCommand::default(),
+    PlanCommand::new(),
     ExitCommand::default(),
   ]
 }
@@ -716,7 +789,11 @@ async fn generate_plan(
   config : Config,
   chat_history : ChatHistory,
   task : String,
+  plandoc_dir : String,
 ) -> Unit {
+  // Ensure plandoc directory exists
+  ensure_plandoc_dir(plandoc_dir)
+
   // Create plan mode system message
   let plan_prompt =
     #| === PLAN MODE ACTIVATED ===
@@ -777,6 +854,9 @@ async fn generate_plan(
       if last_msg.role == "assistant" {
         match last_msg.content {
           Some(plan_text) => {
+            // Save plan to file
+            save_plan_to_file(task, plan_text, plandoc_dir)
+
             // Display the plan
             print_separator()
             println_async(plan_text)
