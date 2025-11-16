@@ -4,12 +4,20 @@ trait ToolImpl {
   name(Self) -> String
   description(Self) -> String
   input_schema(Self) -> Json
-  async execute(Self, Json, ChatHistory) -> String
+  async execute(Self, Json) -> String
 }
 
 ///|
 /// Execute Command Tool
-struct ExecuteCommandTool {} derive(Default)
+struct ExecuteCommandTool {
+  mut current_working_dir : String
+}
+
+///|
+fn ExecuteCommandTool::new() -> ExecuteCommandTool {
+  let initial_cwd = @sys.get_env_vars().get("PWD").unwrap_or(".")
+  { current_working_dir: initial_cwd }
+}
 
 ///|
 impl ToolImpl for ExecuteCommandTool with name(_self) {
@@ -36,13 +44,13 @@ impl ToolImpl for ExecuteCommandTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
+impl ToolImpl for ExecuteCommandTool with execute(self, input) {
   match input {
     Object(map) =>
       match map.get("command") {
         Some(String(cmd)) => {
           jarvis_says("Executing: \{cmd}")
-          execute_shell_command(cmd, chat_history)
+          execute_shell_command(cmd, self)
         }
         Some(_) => "Error: 'command' must be a string"
         None => "Error: Missing 'command' argument"
@@ -55,7 +63,7 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
 /// Helper function for executing shell commands
 async fn execute_shell_command(
   command : String,
-  chat_history : ChatHistory,
+  tool : ExecuteCommandTool,
 ) -> String {
   try {
     // Check if this is a cd command
@@ -85,11 +93,11 @@ async fn execute_shell_command(
       // Execute cd in a shell to resolve the path
       let (exit_code, output) = @process.collect_output_merged("sh", [
         "-c",
-        "cd '\{chat_history.current_working_dir}' && cd '\{target_dir}' && pwd",
+        "cd '\{tool.current_working_dir}' && cd '\{target_dir}' && pwd",
       ])
       if exit_code == 0 {
         let new_dir = output.text().trim(chars=" \n\t\r").to_string()
-        chat_history.current_working_dir = new_dir
+        tool.current_working_dir = new_dir
         "Changed directory to: \{new_dir}"
       } else {
         let error_text = output.text()
@@ -99,7 +107,7 @@ async fn execute_shell_command(
       // Regular command - execute in current working directory
       let (exit_code, output) = @process.collect_output_merged("sh", [
         "-c",
-        "cd '\{chat_history.current_working_dir}' && \{command}",
+        "cd '\{tool.current_working_dir}' && \{command}",
       ])
       let output_text = output.text()
       if exit_code == 0 {
@@ -154,7 +162,7 @@ impl ToolImpl for ReadFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
+impl ToolImpl for ReadFileTool with execute(_self, input) {
   match input {
     Object(map) =>
       match map.get("path") {
@@ -202,7 +210,7 @@ impl ToolImpl for WriteFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
+impl ToolImpl for WriteFileTool with execute(_self, input) {
   match input {
     Object(map) =>
       match (map.get("path"), map.get("content")) {
@@ -255,7 +263,7 @@ impl ToolImpl for EditFileTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
+impl ToolImpl for EditFileTool with execute(_self, input) {
   match input {
     Object(map) =>
       match (map.get("path"), map.get("old_string"), map.get("new_string")) {
@@ -305,7 +313,7 @@ impl ToolImpl for GrepTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
+impl ToolImpl for GrepTool with execute(_self, input) {
   match input {
     Object(map) =>
       match map.get("pattern") {
@@ -357,7 +365,7 @@ impl ToolImpl for GlobTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
+impl ToolImpl for GlobTool with execute(_self, input) {
   match input {
     Object(map) =>
       match map.get("pattern") {
@@ -405,7 +413,7 @@ impl ToolImpl for EndPlayModeTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for EndPlayModeTool with execute(_self, input, _chat_history) {
+impl ToolImpl for EndPlayModeTool with execute(_self, input) {
   let reason = match input {
     Object(map) =>
       match map.get("reason") {
@@ -448,7 +456,7 @@ impl ToolImpl for WebSearchTool with input_schema(_self) {
 }
 
 ///|
-impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
+impl ToolImpl for WebSearchTool with execute(_self, input) {
   match input {
     Object(map) =>
       match map.get("query") {
@@ -483,13 +491,18 @@ async fn execute_tool_claude(
   input : Json,
   chat_history : ChatHistory,
 ) -> String {
+  // Handle execute_command specially using the persistent tool instance
+  if tool_name == "execute_command" {
+    return chat_history.execute_command_tool.execute(input)
+  }
+
   // Get all available tools (including end_play_mode if needed)
   let all_tools = get_all_tool_impls(in_play_mode=true)
 
   // Find and execute the matching tool
   for tool in all_tools {
     if tool.name() == tool_name {
-      return tool.execute(input, chat_history)
+      return tool.execute(input)
     }
   }
 
@@ -809,10 +822,9 @@ async fn glob_tool(pattern : String, path : String) -> String {
 }
 
 ///|
-/// Get all available tool implementations
+/// Get all available tool implementations (excluding execute_command which is managed by ChatHistory)
 fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
   let tools : Array[&ToolImpl] = [
-    ExecuteCommandTool::default(),
     ReadFileTool::default(),
     WriteFileTool::default(),
     EditFileTool::default(),
@@ -830,6 +842,16 @@ fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
 fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
   let tool_impls = get_all_tool_impls(in_play_mode~)
   let tools : Array[Tool] = []
+
+  // Add execute_command tool first
+  let exec_tool = ExecuteCommandTool::new()
+  tools.push({
+    name: exec_tool.name(),
+    description: exec_tool.description(),
+    input_schema: exec_tool.input_schema(),
+  })
+
+  // Add other tools
   for tool_impl in tool_impls {
     tools.push({
       name: tool_impl.name(),
