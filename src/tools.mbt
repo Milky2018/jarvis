@@ -537,29 +537,75 @@ async fn read_file_tool(path : String, params : Json) -> String {
 ///|
 /// Write file tool implementation
 async fn write_file_tool(path : String, content : String) -> String {
+  // Try to read old content first (if file exists)
+  let (old_text, is_new_file) = try {
+    let old_content = @fs.read_file(path)
+    let text = old_content.text()
+    (text, false)
+  } catch {
+    _ => ("", true)
+  }
+
+  // Write new content
   @fs.write_file(path, content, create=0o644) catch {
     e => return "Error writing file: \{e}"
   }
-
-  // Show content with line numbers and green background (limit to first 50 lines)
   let green_bg = "\u001b[42m" // Green background for additions
+  let red_bg = "\u001b[41m" // Red background for deletions
   let reset = "\u001b[0m"
-  let lines_view = content.split("\n")
-  let lines : Array[String] = []
-  for line in lines_view {
-    lines.push(line.to_string())
-  }
-  let total_lines = lines.length()
-  let show_lines = if total_lines > 50 { 50 } else { total_lines }
+  let mut display = ""
+  if is_new_file {
+    // New file: show all content as green (added)
+    display = display + "New file created:\n"
+    let lines_view = content.split("\n")
+    let lines : Array[String] = []
+    for line in lines_view {
+      lines.push(line.to_string())
+    }
+    let total_lines = lines.length()
+    let show_lines = if total_lines > 50 { 50 } else { total_lines }
+    for i = 0; i < show_lines; i = i + 1 {
+      let line_num = i + 1
+      display = display + "\{green_bg}\{line_num}→\{lines[i]}\{reset}\n"
+    }
+    if total_lines > show_lines {
+      display = display + "... (\{total_lines - show_lines} more lines)\n"
+    }
+  } else {
+    // Existing file: show diff
+    display = display + "File overwritten:\n\n"
 
-  // Display to user with green background
-  let mut display = "Content written:\n"
-  for i = 0; i < show_lines; i = i + 1 {
-    let line_num = i + 1
-    display = display + "\{green_bg}\{line_num}→\{lines[i]}\{reset}\n"
-  }
-  if total_lines > show_lines {
-    display = display + "... (\{total_lines - show_lines} more lines)\n"
+    // Show old content (red)
+    display = display + "Removed:\n"
+    let old_lines_view = old_text.split("\n")
+    let old_lines : Array[String] = []
+    for line in old_lines_view {
+      old_lines.push(line.to_string())
+    }
+    let old_show = if old_lines.length() > 30 { 30 } else { old_lines.length() }
+    for i = 0; i < old_show; i = i + 1 {
+      display = display + "\{red_bg}- \{old_lines[i]}\{reset}\n"
+    }
+    if old_lines.length() > old_show {
+      display = display +
+        "... (\{old_lines.length() - old_show} more lines removed)\n"
+    }
+
+    // Show new content (green)
+    display = display + "\nAdded:\n"
+    let new_lines_view = content.split("\n")
+    let new_lines : Array[String] = []
+    for line in new_lines_view {
+      new_lines.push(line.to_string())
+    }
+    let new_show = if new_lines.length() > 30 { 30 } else { new_lines.length() }
+    for i = 0; i < new_show; i = i + 1 {
+      display = display + "\{green_bg}+ \{new_lines[i]}\{reset}\n"
+    }
+    if new_lines.length() > new_show {
+      display = display +
+        "... (\{new_lines.length() - new_show} more lines added)\n"
+    }
   }
   jarvis_says(display)
   "Successfully wrote \{content.length()} bytes to \{path}"
