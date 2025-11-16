@@ -62,13 +62,15 @@ def fibonacci_sequence(n: int) -> list[int]:
     return sequence
 
 
-# Test code
-if __name__ == "__main__":
+def main() -> None:
+    """
+    Main function to test Fibonacci functions
+    """
     print("Fibonacci Sequence Test:")
     print("-" * 40)
     
     # Test individual Fibonacci number
-    test_n = 10
+    test_n: int = 10
     print(f"fibonacci({test_n}) = {fibonacci(test_n)}")
     print(f"fibonacci_iterative({test_n}) = {fibonacci_iterative(test_n)}")
     
@@ -84,3 +86,7 @@ if __name__ == "__main__":
     print("First 10 Fibonacci numbers (recursive method):")
     for i in range(10):
         print(f"F({i}) = {fibonacci(i)}")
+
+
+if __name__ == "__main__":
+    main()
