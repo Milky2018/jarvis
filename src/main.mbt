@@ -244,7 +244,7 @@ async fn chat_loop(config : Config) -> Unit {
     None => {
       // Create new conversation with initial system message
       let initial_msg = Message::new(
-        "system", "You are Jarvis, a helpful AI assistant. You can execute shell commands when needed.",
+        "system", "You are Jarvis, a helpful AI assistant. You can execute shell commands when needed. A playground directory is available at ~/.jarvis/playground for experiments and temporary files.",
       )
       let history = ChatHistory::new()
       history.add(initial_msg)
