@@ -527,7 +527,6 @@ async fn save_plan_to_file(
     #|
     $| \{plan_text}
   try {
-
     // Save to file
     @fs.write_file(filename, content, create=0o644)
     jarvis_says("Plan saved to: " + filename)

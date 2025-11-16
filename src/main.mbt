@@ -90,9 +90,12 @@ async fn handle_tool_calls(
       }
 
       // We have tool calls to execute
-      // First, display any text content
-      if content_text is Some(content_str) && !content_str.is_blank() {
-        jarvis_says(content_str)
+      // First, display any text content (AI's thinking/planning)
+      if content_text is Some(content_str) {
+        let trimmed = content_str.trim(chars=" \n\t\r").to_string()
+        if !trimmed.is_empty() {
+          jarvis_says(content_str)
+        }
       }
 
       // Build assistant message with the full response for history
@@ -116,6 +119,18 @@ async fn handle_tool_calls(
       for i = 0; i < tool_uses.length(); i = i + 1 {
         let (tool_id, tool_name, tool_input) = tool_uses[i]
         let result = execute_tool_claude(tool_name, tool_input, chat_history)
+
+        // Display tool result immediately for user visibility
+        println_async("")
+        jarvis_says("Tool result for \{tool_name}:")
+        // Truncate very long results for display
+        let display_result = if result.length() > 500 {
+          (result[:500].to_string() catch { _ => result }) + "\n... (truncated)"
+        } else {
+          result
+        }
+        println_async(display_result)
+        println_async("")
 
         // Create tool_result content block
         let tool_result : Json = {
