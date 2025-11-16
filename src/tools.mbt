@@ -541,7 +541,9 @@ async fn write_file_tool(path : String, content : String) -> String {
     e => return "Error writing file: \{e}"
   }
 
-  // Show content with line numbers (limit to first 50 lines for readability)
+  // Show content with line numbers and green background (limit to first 50 lines)
+  let green_bg = "\u001b[42m" // Green background for additions
+  let reset = "\u001b[0m"
   let lines_view = content.split("\n")
   let lines : Array[String] = []
   for line in lines_view {
@@ -550,11 +552,11 @@ async fn write_file_tool(path : String, content : String) -> String {
   let total_lines = lines.length()
   let show_lines = if total_lines > 50 { 50 } else { total_lines }
 
-  // Display to user
+  // Display to user with green background
   let mut display = "Content written:\n"
   for i = 0; i < show_lines; i = i + 1 {
     let line_num = i + 1
-    display = display + "\{line_num}→\{lines[i]}\n"
+    display = display + "\{green_bg}\{line_num}→\{lines[i]}\{reset}\n"
   }
   if total_lines > show_lines {
     display = display + "... (\{total_lines - show_lines} more lines)\n"
