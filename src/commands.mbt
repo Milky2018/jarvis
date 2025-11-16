@@ -785,7 +785,28 @@ async fn start_plan_mode(
 
             // Wait for user approval
             jarvis_says("Do you approve this plan? (yes/no/modify)")
-            let approval = wait_for_approval()
+
+            // Wait for approval using the same pattern as main loop
+            let approval = @async.with_task_group(fn(group) {
+              let approval_queue : @aqueue.Queue[String] = @aqueue.Queue::new()
+
+              // Start readline in background
+              group.spawn_bg(fn() {
+                let rl = ReadlineInterface::with_history(0, [])
+                while rl.read_to_queue(approval_queue) {
+
+                }
+              })
+
+              // Wait for input
+              let response = approval_queue
+                .get()
+                .trim(chars=" \n\t\r")
+                .to_string()
+                .to_lower()
+              println_async("") // Print newline after input
+              response
+            })
             match approval {
               "yes" => {
                 jarvis_says("Plan approved! Executing...")
@@ -815,30 +836,6 @@ async fn start_plan_mode(
   } catch {
     e => jarvis_cries("Error in plan mode: \{e}")
   }
-}
-
-///|
-/// Wait for user approval (yes/no/modify)
-async fn wait_for_approval() -> String {
-  let input_queue : @aqueue.Queue[String] = @aqueue.Queue::new()
-
-  // Start readline in background
-  @async.with_task_group(fn(group) {
-    group.spawn_bg(fn() {
-      let rl = ReadlineInterface::with_history(0, [])
-      while rl.read_to_queue(input_queue) {
-
-      }
-    })
-
-    // Wait for input in main task
-    let response = input_queue
-      .get()
-      .trim(chars=" \n\t\r")
-      .to_string()
-      .to_lower()
-    response
-  })
 }
 
 ///|
