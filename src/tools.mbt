@@ -694,7 +694,7 @@ async fn web_search_tool(query : String, num_results : Int) -> String {
     let url = "https://html.duckduckgo.com/html/?q=\{encoded_query}"
 
     // Make HTTP request
-    let (response, body) = @http.get(url) catch {
+    let (response, body) = get_with_proxy(url) catch {
       e => return tool_error("Error: Failed to connect to search engine: \{e}")
     }
     if response.code != 200 {

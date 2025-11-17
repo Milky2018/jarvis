@@ -233,7 +233,7 @@ test "mock_llm_client_basic" {
   let client = MockLLMClient::new(responses)
 
   let response = client.get_next_response()
-  inspect(response.is_empty(), content="false")
+  inspect(response is None, content="false")
 
   match response {
     Some(r) => inspect(r.text, content="Hello, I'm Jarvis!")
@@ -269,6 +269,36 @@ test "mock_file_system_operations" {
   fs.delete_file("/test.txt")
   inspect(fs.file_exists("/test.txt"), content="false")
 }
+
+///|
+test "mock_file_system_list_files" {
+  let fs = MockFileSystem::new()
+
+  // Initially empty
+  let files = fs.list_files()
+  inspect(files.length(), content="0")
+
+  // Add multiple files
+  fs.add_file("/file1.txt", "Content 1")
+  fs.add_file("/file2.txt", "Content 2")
+  fs.add_file("/dir/file3.txt", "Content 3")
+
+  // List all files
+  let files = fs.list_files()
+  inspect(files.length(), content="3")
+  inspect(files.contains("/file1.txt"), content="true")
+  inspect(files.contains("/file2.txt"), content="true")
+  inspect(files.contains("/dir/file3.txt"), content="true")
+
+  // Delete one file
+  fs.delete_file("/file2.txt")
+  let files = fs.list_files()
+  inspect(files.length(), content="2")
+  inspect(files.contains("/file1.txt"), content="true")
+  inspect(files.contains("/file2.txt"), content="false")
+  inspect(files.contains("/dir/file3.txt"), content="true")
+}
+
 
 ///|
 test "mock_output_capture" {
@@ -351,4 +381,200 @@ test "integration: test context with all mocks" {
   ctx.output_capture.write_stdout("test output")
   inspect(ctx.output_capture.get_stdout().contains("test output"), content="true")
 }
+
+///|
+test "mock_llm_client_record_messages" {
+  let responses = [mock_text_response("Response 1"), mock_text_response("Response 2")]
+  let client = MockLLMClient::new(responses)
+
+  // Create test messages
+  let messages : Array[Message] = [
+    {
+      role: "user",
+      content: Some("Hello"),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+    {
+      role: "assistant",
+      content: Some("Hi there!"),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+  ]
+
+  // Record the messages
+  client.record_messages(messages)
+
+  // Verify the messages were recorded
+  inspect(client.last_messages.length(), content="2")
+  inspect(client.last_messages[0].role, content="user")
+  match client.last_messages[0].content {
+    Some(c) => inspect(c, content="Hello")
+    None => @test.fail("Expected content")
+  }
+  inspect(client.last_messages[1].role, content="assistant")
+  match client.last_messages[1].content {
+    Some(c) => inspect(c, content="Hi there!")
+    None => @test.fail("Expected content")
+  }
+}
+
+///|
+test "mock_llm_client_track_requests" {
+  let responses = [
+    mock_text_response("Response 1"),
+    mock_text_response("Response 2"),
+    mock_text_response("Response 3"),
+  ]
+  let client = MockLLMClient::new(responses)
+
+  // Initially no requests
+  inspect(client.request_count, content="0")
+
+  // Make first request
+  let _ = client.get_next_response()
+  inspect(client.request_count, content="1")
+
+  // Make second request
+  let _ = client.get_next_response()
+  inspect(client.request_count, content="2")
+
+  // Make third request
+  let _ = client.get_next_response()
+  inspect(client.request_count, content="3")
+
+  // No more responses
+  match client.get_next_response() {
+    Some(_) => @test.fail("Expected no more responses")
+    None => ()
+  }
+  inspect(client.request_count, content="3") // Count shouldn't increase
+}
+
+///|
+test "mock_llm_client_message_history" {
+  let responses = [mock_text_response("OK")]
+  let client = MockLLMClient::new(responses)
+
+  // Record first conversation
+  let messages1 : Array[Message] = [
+    {
+      role: "user",
+      content: Some("First message"),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+  ]
+  client.record_messages(messages1)
+  inspect(client.last_messages.length(), content="1")
+  match client.last_messages[0].content {
+    Some(c) => inspect(c, content="First message")
+    None => @test.fail("Expected content")
+  }
+
+  // Record second conversation (should replace)
+  let messages2 : Array[Message] = [
+    {
+      role: "user",
+      content: Some("Second message"),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+    {
+      role: "assistant",
+      content: Some("Reply"),
+      tool_calls: None,
+      tool_call_id: None,
+      name: None,
+    },
+  ]
+  client.record_messages(messages2)
+  inspect(client.last_messages.length(), content="2")
+  match client.last_messages[0].content {
+    Some(c) => inspect(c, content="Second message")
+    None => @test.fail("Expected content")
+  }
+  match client.last_messages[1].content {
+    Some(c) => inspect(c, content="Reply")
+    None => @test.fail("Expected content")
+  }
+}
+
+///|
+test "mock_tool_helpers" {
+  // Test mock_execute_command
+  let (id1, name1, input1) = mock_execute_command("ls -la")
+  inspect(id1, content="toolu_test_001")
+  inspect(name1, content="execute_command")
+  match input1 {
+    Object(map) =>
+      match map.get("command") {
+        Some(String(cmd)) => inspect(cmd, content="ls -la")
+        _ => @test.fail("Expected command string")
+      }
+    _ => @test.fail("Expected JSON object")
+  }
+
+  // Test mock_read_file
+  let (id2, name2, input2) = mock_read_file("/test.txt")
+  inspect(id2, content="toolu_test_002")
+  inspect(name2, content="read_file")
+  match input2 {
+    Object(map) =>
+      match map.get("path") {
+        Some(String(p)) => inspect(p, content="/test.txt")
+        _ => @test.fail("Expected path string")
+      }
+    _ => @test.fail("Expected JSON object")
+  }
+
+  // Test mock_write_file
+  let (id3, name3, input3) = mock_write_file("/output.txt", "Hello")
+  inspect(id3, content="toolu_test_003")
+  inspect(name3, content="write_file")
+  match input3 {
+    Object(map) => {
+      match map.get("path") {
+        Some(String(p)) => inspect(p, content="/output.txt")
+        _ => @test.fail("Expected path string")
+      }
+      match map.get("content") {
+        Some(String(c)) => inspect(c, content="Hello")
+        _ => @test.fail("Expected content string")
+      }
+    }
+    _ => @test.fail("Expected JSON object")
+  }
+}
+
+///|
+test "mock_tool_response_with_tools" {
+  // Create a response with tool calls
+  let tool_calls = [
+    mock_execute_command("pwd"),
+    mock_read_file("/config.json"),
+  ]
+  let response = mock_tool_response("Let me check that", tool_calls)
+
+  inspect(response.text, content="Let me check that")
+  inspect(response.tool_calls.length(), content="2")
+  inspect(response.input_tokens, content="100")
+  inspect(response.output_tokens, content="50")
+
+  // Verify first tool call
+  let (id1, name1, _) = response.tool_calls[0]
+  inspect(id1, content="toolu_test_001")
+  inspect(name1, content="execute_command")
+
+  // Verify second tool call
+  let (id2, name2, _) = response.tool_calls[1]
+  inspect(id2, content="toolu_test_002")
+  inspect(name2, content="read_file")
+}
+
 

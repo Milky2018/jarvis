@@ -1,16 +1,18 @@
 {
   "name": "Milky2018/jarvis",
   "version": "0.1.0",
-  "source": "src",
   "deps": {
-    "moonbitlang/async": "0.12.0",
+    "moonbitlang/async": "0.13.1",
     "moonbitlang/x": "0.4.36",
     "TheWaWaR/clap": "0.2.6"
   },
   "readme": "README.mbt.md",
   "repository": "",
   "license": "Apache-2.0",
-  "keywords": ["agent"],
+  "keywords": [
+    "agent"
+  ],
   "description": "",
+  "source": "src",
   "preferred-target": "native"
 }

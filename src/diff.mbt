@@ -126,3 +126,81 @@ fn format_diff(
   }
   builder.to_string()
 }
+
+///|
+test "compute_line_diff: simple change" {
+  let old_text = "line1\nline2\nline3"
+  let new_text = "line1\nmodified\nline3"
+  let (prefix, removed, added, suffix) = compute_line_diff(old_text, new_text)
+  inspect(prefix.length(), content="1")
+  inspect(prefix[0], content="line1")
+  inspect(removed.length(), content="1")
+  inspect(removed[0], content="line2")
+  inspect(added.length(), content="1")
+  inspect(added[0], content="modified")
+  inspect(suffix.length(), content="1")
+  inspect(suffix[0], content="line3")
+}
+
+///|
+test "compute_line_diff: add lines" {
+  let old_text = "line1\nline3"
+  let new_text = "line1\nline2\nline3"
+  let (prefix, removed, added, suffix) = compute_line_diff(old_text, new_text)
+  inspect(prefix.length(), content="1")
+  inspect(prefix[0], content="line1")
+  inspect(removed.length(), content="0")
+  inspect(added.length(), content="1")
+  inspect(added[0], content="line2")
+  inspect(suffix.length(), content="1")
+  inspect(suffix[0], content="line3")
+}
+
+///|
+test "compute_line_diff: remove lines" {
+  let old_text = "line1\nline2\nline3"
+  let new_text = "line1\nline3"
+  let (prefix, removed, added, suffix) = compute_line_diff(old_text, new_text)
+  inspect(prefix.length(), content="1")
+  inspect(prefix[0], content="line1")
+  inspect(removed.length(), content="1")
+  inspect(removed[0], content="line2")
+  inspect(added.length(), content="0")
+  inspect(suffix.length(), content="1")
+  inspect(suffix[0], content="line3")
+}
+
+///|
+test "compute_line_diff: identical texts" {
+  let old_text = "line1\nline2\nline3"
+  let new_text = "line1\nline2\nline3"
+  let (prefix, removed, added, suffix) = compute_line_diff(old_text, new_text)
+  inspect(prefix.length(), content="3")
+  inspect(removed.length(), content="0")
+  inspect(added.length(), content="0")
+  inspect(suffix.length(), content="0")
+}
+
+///|
+test "compute_line_diff: empty to content" {
+  let old_text = ""
+  let new_text = "line1\nline2"
+  let (prefix, removed, added, suffix) = compute_line_diff(old_text, new_text)
+  inspect(prefix.length(), content="0")
+  inspect(removed.length(), content="1") // Empty string splits into [""]
+  inspect(added.length(), content="2")
+  inspect(suffix.length(), content="0")
+}
+
+///|
+test "format_diff: basic output" {
+  let prefix : Array[String] = ["line1"]
+  let removed : Array[String] = ["old_line"]
+  let added : Array[String] = ["new_line"]
+  let suffix : Array[String] = ["line3"]
+  let result = format_diff(prefix, removed, added, suffix)
+  inspect(result.contains("1→line1"), content="true")
+  inspect(result.contains("- old_line"), content="true")
+  inspect(result.contains("+ new_line"), content="true")
+  inspect(result.contains("3→line3"), content="true")
+}

@@ -12,3 +12,13 @@
   - 已实现：检测响应末尾的冒号（:和：），自动提示继续执行工具调用
 - [x] 实现一套完整的测试框架。这是一个大工程，可能包括 LLM Mock、log mock（输出等）、memory mock（conv_001.json这种文件）
   - 已实现：包含MockLLMClient、MockFileSystem、MockOutputCapture的完整测试框架，共13个测试全部通过
+- [x] 测试 utils 文件命名为 mock.mbt，然后将所有的测试块移动到相应的函数实现附近
+  - 已完成：将test_utils.mbt重命名为mock.mbt，测试已放在相应函数附近
+- [x] 更加全面的测试，尽量提升覆盖率
+  - 已完成：为diff.mbt添加了7个测试，为proxy.mbt添加了6个测试，总计25个测试全部通过
+- [x] 实现 Search 工具，用于在本地文件中查找
+  - 已完成：通过grep和glob工具实现，grep支持文本模式搜索，glob支持文件名模式匹配
+- [x] record_messages 函数没有被用到，显然这个函数是用来测试某一类功能的，请实现这些测试
+  - 已完成：添加了3个测试来验证record_messages功能，测试消息记录、请求追踪和消息历史，总计28个测试全部通过
+- [x] list_files 和其他mock辅助函数也需要测试覆盖
+  - 已完成：添加了3个测试（mock_file_system_list_files、mock_tool_helpers、mock_tool_response_with_tools），总计31个测试全部通过
