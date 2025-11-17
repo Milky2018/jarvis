@@ -543,9 +543,32 @@ async fn read_file_tool(path : String, params : Json) -> String {
   } else {
     total_lines
   }
+
+  // Calculate max width for line numbers based on the end line number
+  let max_line = end
+  let max_width = if max_line < 10 {
+    1
+  } else if max_line < 100 {
+    2
+  } else if max_line < 1000 {
+    3
+  } else if max_line < 10000 {
+    4
+  } else {
+    5
+  }
+
   for i = offset; i < end; i = i + 1 {
-    builder.write_string(line_num.to_string())
-    builder.write_string("→")
+    let num_str = line_num.to_string()
+    let padding = max_width - num_str.length()
+
+    // Add leading spaces for alignment
+    for j = 0; j < padding; j = j + 1 {
+      builder.write_string(" ")
+    }
+
+    builder.write_string(num_str)
+    builder.write_string(": ")
     builder.write_string(lines[i])
     builder.write_string("\n")
     line_num = line_num + 1
@@ -585,9 +608,32 @@ async fn write_file_tool(path : String, content : String) -> String {
     }
     let total_lines = lines.length()
     let show_lines = if total_lines > 50 { 50 } else { total_lines }
+
+    // Calculate max width for line numbers
+    let max_width = if show_lines < 10 {
+      1
+    } else if show_lines < 100 {
+      2
+    } else if show_lines < 1000 {
+      3
+    } else {
+      4
+    }
+
     for i = 0; i < show_lines; i = i + 1 {
       builder.write_string(COLOR_GREEN)
       builder.write_string("+ ")
+
+      // Add line number with padding
+      let line_num = i + 1
+      let num_str = line_num.to_string()
+      let padding = max_width - num_str.length()
+      for j = 0; j < padding; j = j + 1 {
+        builder.write_string(" ")
+      }
+      builder.write_string(num_str)
+      builder.write_string(": ")
+
       builder.write_string(lines[i])
       builder.write_string(COLOR_RESET)
       builder.write_string("\n")

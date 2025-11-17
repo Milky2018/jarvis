@@ -69,6 +69,18 @@ fn format_diff(
   let builder = StringBuilder::new()
   let mut line_num = 1
 
+  // Calculate max line number for width alignment
+  let total_lines = prefix.length() + added.length() + suffix.length()
+  let max_width = if total_lines < 10 {
+    1
+  } else if total_lines < 100 {
+    2
+  } else if total_lines < 1000 {
+    3
+  } else {
+    4
+  }
+
   // Show context before changes (limited to 3 lines)
   let context_before = if prefix.length() > 3 { 3 } else { prefix.length() }
   let skip_prefix = prefix.length() - context_before
@@ -79,8 +91,7 @@ fn format_diff(
     line_num = line_num + skip_prefix
   }
   for i = prefix.length() - context_before; i < prefix.length(); i = i + 1 {
-    builder.write_string(line_num.to_string())
-    builder.write_string("→")
+    write_line_number(builder, line_num, max_width)
     builder.write_string(prefix[i])
     builder.write_string("\n")
     line_num = line_num + 1
@@ -112,8 +123,7 @@ fn format_diff(
   // Show context after changes (limited to 3 lines)
   let context_after = if suffix.length() > 3 { 3 } else { suffix.length() }
   for i = 0; i < context_after; i = i + 1 {
-    builder.write_string(line_num.to_string())
-    builder.write_string("→")
+    write_line_number(builder, line_num, max_width)
     builder.write_string(suffix[i])
     builder.write_string("\n")
     line_num = line_num + 1
@@ -125,6 +135,21 @@ fn format_diff(
     builder.write_string(" unchanged lines)\n")
   }
   builder.to_string()
+}
+
+///|
+/// Write line number with padding to ensure equal width
+fn write_line_number(builder : StringBuilder, line_num : Int, width : Int) -> Unit {
+  let num_str = line_num.to_string()
+  let padding = width - num_str.length()
+
+  // Add leading spaces for alignment
+  for i = 0; i < padding; i = i + 1 {
+    builder.write_string(" ")
+  }
+
+  builder.write_string(num_str)
+  builder.write_string(": ")
 }
 
 ///|
@@ -199,8 +224,8 @@ test "format_diff: basic output" {
   let added : Array[String] = ["new_line"]
   let suffix : Array[String] = ["line3"]
   let result = format_diff(prefix, removed, added, suffix)
-  inspect(result.contains("1→line1"), content="true")
+  inspect(result.contains("1: line1"), content="true")
   inspect(result.contains("- old_line"), content="true")
   inspect(result.contains("+ new_line"), content="true")
-  inspect(result.contains("3→line3"), content="true")
+  inspect(result.contains("3: line3"), content="true")
 }
