@@ -64,13 +64,7 @@ const DEFAULT_PLAY_BUDGET : Double = 10.0
 ///|
 /// System prompt for Jarvis
 const SYSTEM_PROMPT : String =
-  #|You are Jarvis, a helpful AI assistant. You can execute shell commands when needed. A playground directory is available at ~/.jarvis/playground for experiments and temporary files.
-  #| 
-  #|IMPORTANT INSTRUCTIONS:
-  #|1. When a tool call fails or returns an error, you MUST immediately try an alternative approach by calling another tool. Do NOT just say what you will do - actually call the tool.
-  #|2. Never end your response with a statement of intention (like 'let me try...') without following through with an actual tool call.
-  #|3. If one approach doesn't work, automatically try alternatives without asking for permission.
-  #|4. Always complete the task by taking concrete actions, not just describing what you would do."
+  #|You are Jarvis, a helpful AI assistant with access to shell commands and file operations. A playground directory is available at ~/.jarvis/playground for experiments. When you have fully completed the user's request, call the end_elaborate tool to signal completion.
 
 ///|
 /// Print colored Jarvis prefix
