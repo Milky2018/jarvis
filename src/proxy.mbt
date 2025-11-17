@@ -12,9 +12,13 @@ fn parse_proxy_url(proxy_url : String) -> (String, Int)? {
 
   // Remove protocol prefix
   let url = if proxy_url.has_prefix("http://") {
-    proxy_url[7:].to_string() catch { _ => proxy_url }
+    proxy_url[7:].to_string() catch {
+      _ => proxy_url
+    }
   } else if proxy_url.has_prefix("https://") {
-    proxy_url[8:].to_string() catch { _ => proxy_url }
+    proxy_url[8:].to_string() catch {
+      _ => proxy_url
+    }
   } else {
     proxy_url
   }
@@ -112,4 +116,3 @@ test "parse_proxy_url: host only" {
   let result = parse_proxy_url("proxy.example.com")
   inspect(result, content="Some((\"proxy.example.com\", 8080))")
 }
-

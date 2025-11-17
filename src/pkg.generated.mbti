@@ -2,10 +2,13 @@
 package "Milky2018/jarvis"
 
 import(
+  "moonbitlang/async/http"
+  "moonbitlang/async/io"
   "moonbitlang/core/json"
 )
 
 // Values
+async fn get_with_proxy(String) -> (@http.Response, &@io.Data)
 
 // Errors
 type JarvisError
@@ -39,6 +42,9 @@ impl Default for CostCommand
 type EditFileTool
 impl Default for EditFileTool
 
+type EndElaborateTool
+impl Default for EndElaborateTool
+
 type EndPlayModeTool
 impl Default for EndPlayModeTool
 
@@ -69,6 +75,14 @@ type Message
 impl ToJson for Message
 impl @json.FromJson for Message
 
+type MockFileSystem
+
+type MockLLMClient
+
+type MockLLMResponse
+
+type MockOutputCapture
+
 type ModelCommand
 impl Default for ModelCommand
 
@@ -93,6 +107,8 @@ type Size
 
 type SummarizeCommand
 impl Default for SummarizeCommand
+
+type TestContext
 
 type Tool
 impl ToJson for Tool

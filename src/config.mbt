@@ -167,6 +167,5 @@ async fn load_config() -> Config raise JarvisError {
     Some(v) => v
     None => raise EnvVarNotSet("JARVIS_AUTH_TOKEN")
   }
-
   Config::new(base_url, auth_token)
 }

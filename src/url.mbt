@@ -113,7 +113,10 @@ test "url_encode: multiple spaces" {
 
 ///|
 test "url_encode: mixed safe and unsafe" {
-  inspect(url_encode("foo bar-baz_qux.test~ok"), content="foo+bar-baz_qux.test~ok")
+  inspect(
+    url_encode("foo bar-baz_qux.test~ok"),
+    content="foo+bar-baz_qux.test~ok",
+  )
 }
 
 ///|
@@ -123,13 +126,15 @@ test "url_encode: Chinese characters" {
   // "世" = U+4E16 = UTF-8: E4 B8 96
   // "界" = U+754C = UTF-8: E7 95 8C
   inspect(
-    url_encode("你好世界"), content="%E4%BD%A0%E5%A5%BD%E4%B8%96%E7%95%8C",
+    url_encode("你好世界"),
+    content="%E4%BD%A0%E5%A5%BD%E4%B8%96%E7%95%8C",
   )
 }
 
 ///|
 test "url_encode: symbols and punctuation" {
   inspect(
-    url_encode("hello!@#$%^&*()"), content="hello%21%40%23%24%25%5E%26%2A%28%29",
+    url_encode("hello!@#$%^&*()"),
+    content="hello%21%40%23%24%25%5E%26%2A%28%29",
   )
 }

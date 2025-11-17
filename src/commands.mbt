@@ -667,5 +667,3 @@ async fn start_play_mode(
   let total_spent = final_cost - start_cost
   jarvis_says("Play session complete! Total spent: $\{total_spent}")
 }
-
-///|

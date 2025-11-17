@@ -139,7 +139,11 @@ fn format_diff(
 
 ///|
 /// Write line number with padding to ensure equal width
-fn write_line_number(builder : StringBuilder, line_num : Int, width : Int) -> Unit {
+fn write_line_number(
+  builder : StringBuilder,
+  line_num : Int,
+  width : Int,
+) -> Unit {
   let num_str = line_num.to_string()
   let padding = width - num_str.length()
 
@@ -147,7 +151,6 @@ fn write_line_number(builder : StringBuilder, line_num : Int, width : Int) -> Un
   for i = 0; i < padding; i = i + 1 {
     builder.write_string(" ")
   }
-
   builder.write_string(num_str)
   builder.write_string(": ")
 }

@@ -110,7 +110,9 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
   // Print notifications
   system_notify("Created new conversation file: conv_\{num_str}.json")
   if old_number > 0 {
-    system_notify("(Previous conversation archived in conv_\{old_num_str}.json)")
+    system_notify(
+      "(Previous conversation archived in conv_\{old_num_str}.json)",
+    )
   }
 }
 
