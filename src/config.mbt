@@ -4,6 +4,8 @@
 struct Config {
   base_url : String
   auth_token : String
+  http_proxy : String // HTTP proxy URL (from HTTP_PROXY or http_proxy env var)
+  https_proxy : String // HTTPS proxy URL (from HTTPS_PROXY or https_proxy env var)
 } derive(Show)
 
 ///|
@@ -118,8 +120,13 @@ async fn print_separator() -> Unit {
 }
 
 ///|
-fn Config::new(base_url : String, auth_token : String) -> Config {
-  { base_url, auth_token }
+fn Config::new(
+  base_url : String,
+  auth_token : String,
+  http_proxy : String,
+  https_proxy : String,
+) -> Config {
+  { base_url, auth_token, http_proxy, https_proxy }
 }
 
 ///|
@@ -130,6 +137,16 @@ fn Config::base_url(self : Config) -> String {
 ///|
 fn Config::auth_token(self : Config) -> String {
   self.auth_token
+}
+
+///|
+fn Config::http_proxy(self : Config) -> String {
+  self.http_proxy
+}
+
+///|
+fn Config::https_proxy(self : Config) -> String {
+  self.https_proxy
 }
 
 ///|
@@ -153,5 +170,25 @@ async fn load_config() -> Config raise JarvisError {
     Some(v) => v
     None => raise EnvVarNotSet("JARVIS_AUTH_TOKEN")
   }
-  Config::new(base_url, auth_token)
+
+  // Read proxy settings from environment (try both uppercase and lowercase)
+  let http_proxy = match env_vars.get("HTTP_PROXY") {
+    Some(v) => v
+    None =>
+      match env_vars.get("http_proxy") {
+        Some(v) => v
+        None => "" // No proxy configured
+      }
+  }
+
+  let https_proxy = match env_vars.get("HTTPS_PROXY") {
+    Some(v) => v
+    None =>
+      match env_vars.get("https_proxy") {
+        Some(v) => v
+        None => "" // No proxy configured
+      }
+  }
+
+  Config::new(base_url, auth_token, http_proxy, https_proxy)
 }
