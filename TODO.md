@@ -22,3 +22,5 @@
   - 已完成：添加了3个测试来验证record_messages功能，测试消息记录、请求追踪和消息历史，总计28个测试全部通过
 - [x] list_files 和其他mock辅助函数也需要测试覆盖
   - 已完成：添加了3个测试（mock_file_system_list_files、mock_tool_helpers、mock_tool_response_with_tools），总计31个测试全部通过
+- [x] chat_history 需要测试工具调用后的状态变化
+  - 已完成：添加了4个测试来验证chat_history在不同场景下的行为（基本操作、单个工具调用、多个工具调用、TestContext集成），总计35个测试全部通过

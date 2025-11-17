@@ -577,4 +577,186 @@ test "mock_tool_response_with_tools" {
   inspect(name2, content="read_file")
 }
 
+///|
+test "chat_history_basic_operations" {
+  let history = ChatHistory::new()
+
+  // Initially empty
+  inspect(history.messages.length(), content="0")
+
+  // Add user message
+  let user_msg = {
+    role: "user",
+    content: Some("Hello"),
+    tool_calls: None,
+    tool_call_id: None,
+    name: None,
+  }
+  history.add(user_msg)
+  inspect(history.messages.length(), content="1")
+  inspect(history.messages[0].role, content="user")
+
+  // Add assistant message
+  let assistant_msg = {
+    role: "assistant",
+    content: Some("Hi there!"),
+    tool_calls: None,
+    tool_call_id: None,
+    name: None,
+  }
+  history.add(assistant_msg)
+  inspect(history.messages.length(), content="2")
+  inspect(history.messages[1].role, content="assistant")
+}
+
+///|
+test "chat_history_with_tool_call" {
+  let history = ChatHistory::new()
+
+  // User asks to execute a command
+  let user_msg = {
+    role: "user",
+    content: Some("List files"),
+    tool_calls: None,
+    tool_call_id: None,
+    name: None,
+  }
+  history.add(user_msg)
+
+  // Assistant responds with tool call
+  let tool_call : ToolCall = {
+    id: "toolu_123",
+    type_: "function",
+    function: { name: "execute_command", arguments: "{\"command\":\"ls\"}" },
+  }
+  let assistant_msg = {
+    role: "assistant",
+    content: Some("Let me list the files"),
+    tool_calls: Some([tool_call]),
+    tool_call_id: None,
+    name: None,
+  }
+  history.add(assistant_msg)
+
+  // Tool result
+  let tool_result_msg = {
+    role: "user",
+    content: Some("file1.txt\nfile2.txt"),
+    tool_calls: None,
+    tool_call_id: Some("toolu_123"),
+    name: Some("execute_command"),
+  }
+  history.add(tool_result_msg)
+
+  // Verify the conversation flow
+  inspect(history.messages.length(), content="3")
+  inspect(history.messages[0].role, content="user")
+  inspect(history.messages[1].role, content="assistant")
+  match history.messages[1].tool_calls {
+    Some(calls) => {
+      inspect(calls.length(), content="1")
+      inspect(calls[0].id, content="toolu_123")
+      inspect(calls[0].function.name, content="execute_command")
+    }
+    None => @test.fail("Expected tool calls")
+  }
+  inspect(history.messages[2].role, content="user")
+  match history.messages[2].tool_call_id {
+    Some(id) => inspect(id, content="toolu_123")
+    None => @test.fail("Expected tool_call_id")
+  }
+}
+
+///|
+test "chat_history_multiple_tool_calls" {
+  let history = ChatHistory::new()
+
+  // User message
+  history.add({
+    role: "user",
+    content: Some("Read config and list files"),
+    tool_calls: None,
+    tool_call_id: None,
+    name: None,
+  })
+
+  // Assistant with multiple tool calls
+  let tool_calls : Array[ToolCall] = [
+    {
+      id: "toolu_001",
+      type_: "function",
+      function: { name: "read_file", arguments: "{\"path\":\"/config.json\"}" },
+    },
+    {
+      id: "toolu_002",
+      type_: "function",
+      function: { name: "execute_command", arguments: "{\"command\":\"ls\"}" },
+    },
+  ]
+  history.add({
+    role: "assistant",
+    content: Some("I'll read the config and list files"),
+    tool_calls: Some(tool_calls),
+    tool_call_id: None,
+    name: None,
+  })
+
+  // Tool result 1
+  history.add({
+    role: "user",
+    content: Some("{\"setting\": \"value\"}"),
+    tool_calls: None,
+    tool_call_id: Some("toolu_001"),
+    name: Some("read_file"),
+  })
+
+  // Tool result 2
+  history.add({
+    role: "user",
+    content: Some("file1.txt\nfile2.txt"),
+    tool_calls: None,
+    tool_call_id: Some("toolu_002"),
+    name: Some("execute_command"),
+  })
+
+  // Verify conversation structure
+  inspect(history.messages.length(), content="4")
+
+  // Check assistant message has 2 tool calls
+  match history.messages[1].tool_calls {
+    Some(calls) => inspect(calls.length(), content="2")
+    None => @test.fail("Expected 2 tool calls")
+  }
+
+  // Check tool results
+  match history.messages[2].tool_call_id {
+    Some(id) => inspect(id, content="toolu_001")
+    None => @test.fail("Expected tool_call_id")
+  }
+  match history.messages[3].tool_call_id {
+    Some(id) => inspect(id, content="toolu_002")
+    None => @test.fail("Expected tool_call_id")
+  }
+}
+
+///|
+test "test_context_with_chat_history" {
+  let ctx = TestContext::new([mock_text_response("OK")])
+
+  // Initially empty
+  inspect(ctx.chat_history.messages.length(), content="0")
+
+  // Add messages to chat history
+  ctx.chat_history.add({
+    role: "user",
+    content: Some("Test message"),
+    tool_calls: None,
+    tool_call_id: None,
+    name: None,
+  })
+
+  inspect(ctx.chat_history.messages.length(), content="1")
+}
+
+
 
