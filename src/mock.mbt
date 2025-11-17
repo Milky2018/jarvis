@@ -207,6 +207,15 @@ fn mock_write_file(path : String, content : String) -> (String, String, Json) {
 }
 
 ///|
+/// Test helper: Create a mock end_elaborate tool call
+fn mock_end_elaborate(summary : String) -> (String, String, Json) {
+  let id = "toolu_test_004"
+  let name = "end_elaborate"
+  let input : Json = { "summary": summary }
+  (id, name, input)
+}
+
+///|
 /// Integration test context that bundles all mocks together
 struct TestContext {
   llm_client : MockLLMClient
@@ -696,6 +705,64 @@ async test "integration: end_elaborate_tool_without_summary" {
   // Verify the tool still returns the marker with default message
   inspect(result.has_prefix("ELABORATE_COMPLETE:"), content="true")
   inspect(result.contains("Task completed"), content="true")
+}
+
+///|
+async test "integration: auto_continue_with_end_elaborate_flow" {
+  // This test simulates the auto-continue workflow by executing multiple tools
+  // in sequence, demonstrating the pattern that would occur in a real conversation:
+  // 1. Tool execution (execute_command) - simulates LLM's first action
+  // 2. Tool execution (read_file) - simulates LLM continuing work
+  // 3. Tool execution (end_elaborate) - simulates LLM signaling completion
+  //
+  // In a real conversation with MockLLMClient, the system would:
+  // - Receive LLM response with tool calls
+  // - Execute tools
+  // - Auto-add "Continue..." message
+  // - Loop until end_elaborate is called
+  //
+  // This test verifies the tools work correctly in sequence and that
+  // end_elaborate returns the proper completion marker.
+
+  let history = ChatHistory::new()
+
+  // Simulate turn 1: execute a command
+  let exec_tool = ExecuteCommandTool::default()
+  let exec_input : Json = { "command": "echo 'test'" }
+  let exec_result = exec_tool.execute(exec_input, history)
+
+  // Verify command executed
+  inspect(exec_result.contains("test"), content="true")
+
+  // Simulate turn 2: read a file (create test file first)
+  let setup_tool = ExecuteCommandTool::default()
+  let test_path = "/tmp/jarvis_elaborate_test.txt"
+  let _ = setup_tool.execute(
+    { "command": "echo 'file content' > \{test_path}" },
+    history,
+  )
+
+  let read_tool = ReadFileTool::default()
+  let read_input : Json = { "path": test_path }
+  let read_result = read_tool.execute(read_input, history)
+
+  // Verify file was read
+  inspect(read_result.contains("file content"), content="true")
+
+  // Simulate turn 3: LLM responds with just text (simulated by adding to history)
+  // In real flow, system would auto-add "Continue..." here
+
+  // Simulate turn 4: LLM calls end_elaborate
+  let end_tool = EndElaborateTool::default()
+  let end_input : Json = { "summary": "Executed command and read file successfully" }
+  let end_result = end_tool.execute(end_input, history)
+
+  // Verify end_elaborate returns the completion marker
+  inspect(end_result.has_prefix("ELABORATE_COMPLETE:"), content="true")
+  inspect(end_result.contains("Executed command and read file successfully"), content="true")
+
+  // Cleanup
+  let _ = setup_tool.execute({ "command": "rm -f \{test_path}" }, history)
 }
 
 
