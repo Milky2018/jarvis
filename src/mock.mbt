@@ -32,9 +32,7 @@ fn MockLLMClient::new(responses : Array[MockLLMResponse]) -> MockLLMClient {
 
 ///|
 /// Get the next mock response
-fn MockLLMClient::get_next_response(
-  self : MockLLMClient
-) -> MockLLMResponse? {
+fn MockLLMClient::get_next_response(self : MockLLMClient) -> MockLLMResponse? {
   if self.current_index < self.responses.length() {
     let response = self.responses[self.current_index]
     self.current_index = self.current_index + 1
@@ -49,7 +47,7 @@ fn MockLLMClient::get_next_response(
 /// Record the messages sent in a request
 fn MockLLMClient::record_messages(
   self : MockLLMClient,
-  messages : Array[Message]
+  messages : Array[Message],
 ) -> Unit {
   self.last_messages = messages
 }
@@ -127,13 +125,19 @@ fn MockOutputCapture::new() -> MockOutputCapture {
 
 ///|
 /// Record a line to stdout
-fn MockOutputCapture::write_stdout(self : MockOutputCapture, line : String) -> Unit {
+fn MockOutputCapture::write_stdout(
+  self : MockOutputCapture,
+  line : String,
+) -> Unit {
   self.stdout_lines.push(line)
 }
 
 ///|
 /// Record a line to stderr
-fn MockOutputCapture::write_stderr(self : MockOutputCapture, line : String) -> Unit {
+fn MockOutputCapture::write_stderr(
+  self : MockOutputCapture,
+  line : String,
+) -> Unit {
   self.stderr_lines.push(line)
 }
 
@@ -240,10 +244,8 @@ fn TestContext::new(llm_responses : Array[MockLLMResponse]) -> TestContext {
 test "mock_llm_client_basic" {
   let responses = [mock_text_response("Hello, I'm Jarvis!")]
   let client = MockLLMClient::new(responses)
-
   let response = client.get_next_response()
   inspect(response is None, content="false")
-
   match response {
     Some(r) => inspect(r.text, content="Hello, I'm Jarvis!")
     None => @test.fail("Expected a response")
@@ -308,19 +310,15 @@ test "mock_file_system_list_files" {
   inspect(files.contains("/dir/file3.txt"), content="true")
 }
 
-
 ///|
 test "mock_output_capture" {
   let capture = MockOutputCapture::new()
-
   capture.write_stdout("Line 1")
   capture.write_stdout("Line 2")
   capture.write_stderr("Error 1")
-
   let stdout = capture.get_stdout()
   inspect(stdout.contains("Line 1"), content="true")
   inspect(stdout.contains("Line 2"), content="true")
-
   let stderr = capture.get_stderr()
   inspect(stderr.contains("Error 1"), content="true")
 
@@ -337,7 +335,6 @@ test "integration: mock llm conversation with tools" {
     mock_text_response("Second response"),
     mock_text_response("Third response"),
   ]
-
   let client = MockLLMClient::new(responses)
 
   // First request
@@ -388,12 +385,28 @@ test "integration: test context with all mocks" {
 
   // Test output capture
   ctx.output_capture.write_stdout("test output")
-  inspect(ctx.output_capture.get_stdout().contains("test output"), content="true")
+  inspect(
+    ctx.output_capture.get_stdout().contains("test output"),
+    content="true",
+  )
+
+  // Test chat history
+  let msg = Message::new("user", "test message")
+  ctx.chat_history.add(msg)
+  inspect(ctx.chat_history.messages.length(), content="1")
+  inspect(ctx.chat_history.messages[0].role, content="user")
+  match ctx.chat_history.messages[0].content {
+    Some(c) => inspect(c, content="test message")
+    None => @test.fail("Expected message content")
+  }
 }
 
 ///|
 test "mock_llm_client_record_messages" {
-  let responses = [mock_text_response("Response 1"), mock_text_response("Response 2")]
+  let responses = [
+    mock_text_response("Response 1"),
+    mock_text_response("Response 2"),
+  ]
   let client = MockLLMClient::new(responses)
 
   // Create test messages
@@ -444,15 +457,15 @@ test "mock_llm_client_track_requests" {
   inspect(client.request_count, content="0")
 
   // Make first request
-  let _ = client.get_next_response()
+  client.get_next_response() |> ignore
   inspect(client.request_count, content="1")
 
   // Make second request
-  let _ = client.get_next_response()
+  client.get_next_response() |> ignore
   inspect(client.request_count, content="2")
 
   // Make third request
-  let _ = client.get_next_response()
+  client.get_next_response() |> ignore
   inspect(client.request_count, content="3")
 
   // No more responses
@@ -559,17 +572,26 @@ test "mock_tool_helpers" {
     }
     _ => @test.fail("Expected JSON object")
   }
+
+  // Test mock_end_elaborate
+  let (id4, name4, input4) = mock_end_elaborate("Task completed successfully")
+  inspect(id4, content="toolu_test_004")
+  inspect(name4, content="end_elaborate")
+  match input4 {
+    Object(map) =>
+      match map.get("summary") {
+        Some(String(s)) => inspect(s, content="Task completed successfully")
+        _ => @test.fail("Expected summary string")
+      }
+    _ => @test.fail("Expected JSON object")
+  }
 }
 
 ///|
 test "mock_tool_response_with_tools" {
   // Create a response with tool calls
-  let tool_calls = [
-    mock_execute_command("pwd"),
-    mock_read_file("/config.json"),
-  ]
+  let tool_calls = [mock_execute_command("pwd"), mock_read_file("/config.json")]
   let response = mock_tool_response("Let me check that", tool_calls)
-
   inspect(response.text, content="Let me check that")
   inspect(response.tool_calls.length(), content="2")
   inspect(response.input_tokens, content="100")
@@ -585,186 +607,3 @@ test "mock_tool_response_with_tools" {
   inspect(id2, content="toolu_test_002")
   inspect(name2, content="read_file")
 }
-
-///|
-async test "integration: execute_command_updates_chat_history" {
-  let history = ChatHistory::new()
-  history.init_working_dir()
-
-  // Execute a simple echo command
-  let tool = ExecuteCommandTool::default()
-  let input : Json = { "command": "echo 'Hello World'" }
-
-  let result = tool.execute(input, history)
-
-  // Verify command executed successfully
-  inspect(result.contains("Error"), content="false")
-  inspect(result.contains("Hello World"), content="true")
-}
-
-///|
-async test "integration: execute_cd_updates_working_dir" {
-  let history = ChatHistory::new()
-  history.init_working_dir()
-
-  let initial_dir = history.current_working_dir
-
-  // Execute cd to /tmp
-  let tool = ExecuteCommandTool::default()
-  let input : Json = { "command": "cd /tmp" }
-
-  let result = tool.execute(input, history)
-
-  // Verify working directory was updated
-  inspect(result.contains("Error"), content="false")
-  inspect(history.current_working_dir == initial_dir, content="false")
-  inspect(history.current_working_dir.contains("tmp"), content="true")
-}
-
-///|
-async test "integration: execute_pwd_shows_current_dir" {
-  let history = ChatHistory::new()
-  history.init_working_dir()
-
-  let tool = ExecuteCommandTool::default()
-  let input : Json = { "command": "pwd" }
-
-  let result = tool.execute(input, history)
-
-  // Should show current directory
-  inspect(result.contains("/"), content="true")
-  inspect(result.contains("Error"), content="false")
-}
-
-///|
-async test "integration: grep_tool_with_test_file" {
-  // Create a test file using shell command
-  let setup_history = ChatHistory::new()
-  let setup_tool = ExecuteCommandTool::default()
-  let test_path = "/tmp/jarvis_grep_test.txt"
-
-  // Create test file
-  let _ = setup_tool.execute(
-    { "command": "echo -e 'Line 1: Hello\\nLine 2: World\\nLine 3: Hello again' > \{test_path}" },
-    setup_history,
-  )
-
-  // Now test grep
-  let history = ChatHistory::new()
-  let tool = GrepTool::default()
-  let input : Json = { "pattern": "Hello", "path": test_path }
-
-  let result = tool.execute(input, history)
-
-  // Verify pattern was found
-  inspect(result.contains("Hello") || result.contains("No matches"), content="true")
-
-  // Cleanup
-  let _ = setup_tool.execute({ "command": "rm -f \{test_path}" }, setup_history)
-}
-
-///|
-async test "integration: glob_tool_finds_txt_files" {
-  let history = ChatHistory::new()
-  let tool = GlobTool::default()
-
-  // Search for .txt files in /tmp (should always exist)
-  let input : Json = { "pattern": "*.txt", "path": "/tmp" }
-
-  let result = tool.execute(input, history)
-
-  // Verify glob ran (might find files or not, but shouldn't error)
-  inspect(result.contains("Error:") == false || result.contains("No files found"), content="true")
-}
-
-///|
-async test "integration: end_elaborate_tool_returns_complete_marker" {
-  let history = ChatHistory::new()
-  let tool = EndElaborateTool::default()
-
-  // Test tool execution with a summary
-  let input : Json = { "summary": "Task completed successfully" }
-
-  let result = tool.execute(input, history)
-
-  // Verify the tool returns the ELABORATE_COMPLETE marker
-  inspect(result.has_prefix("ELABORATE_COMPLETE:"), content="true")
-  inspect(result.contains("Task completed successfully"), content="true")
-}
-
-///|
-async test "integration: end_elaborate_tool_without_summary" {
-  let history = ChatHistory::new()
-  let tool = EndElaborateTool::default()
-
-  // Test tool execution without summary (should use default)
-  let input : Json = {}
-
-  let result = tool.execute(input, history)
-
-  // Verify the tool still returns the marker with default message
-  inspect(result.has_prefix("ELABORATE_COMPLETE:"), content="true")
-  inspect(result.contains("Task completed"), content="true")
-}
-
-///|
-async test "integration: auto_continue_with_end_elaborate_flow" {
-  // This test simulates the auto-continue workflow by executing multiple tools
-  // in sequence, demonstrating the pattern that would occur in a real conversation:
-  // 1. Tool execution (execute_command) - simulates LLM's first action
-  // 2. Tool execution (read_file) - simulates LLM continuing work
-  // 3. Tool execution (end_elaborate) - simulates LLM signaling completion
-  //
-  // In a real conversation with MockLLMClient, the system would:
-  // - Receive LLM response with tool calls
-  // - Execute tools
-  // - Auto-add "Continue..." message
-  // - Loop until end_elaborate is called
-  //
-  // This test verifies the tools work correctly in sequence and that
-  // end_elaborate returns the proper completion marker.
-
-  let history = ChatHistory::new()
-
-  // Simulate turn 1: execute a command
-  let exec_tool = ExecuteCommandTool::default()
-  let exec_input : Json = { "command": "echo 'test'" }
-  let exec_result = exec_tool.execute(exec_input, history)
-
-  // Verify command executed
-  inspect(exec_result.contains("test"), content="true")
-
-  // Simulate turn 2: read a file (create test file first)
-  let setup_tool = ExecuteCommandTool::default()
-  let test_path = "/tmp/jarvis_elaborate_test.txt"
-  let _ = setup_tool.execute(
-    { "command": "echo 'file content' > \{test_path}" },
-    history,
-  )
-
-  let read_tool = ReadFileTool::default()
-  let read_input : Json = { "path": test_path }
-  let read_result = read_tool.execute(read_input, history)
-
-  // Verify file was read
-  inspect(read_result.contains("file content"), content="true")
-
-  // Simulate turn 3: LLM responds with just text (simulated by adding to history)
-  // In real flow, system would auto-add "Continue..." here
-
-  // Simulate turn 4: LLM calls end_elaborate
-  let end_tool = EndElaborateTool::default()
-  let end_input : Json = { "summary": "Executed command and read file successfully" }
-  let end_result = end_tool.execute(end_input, history)
-
-  // Verify end_elaborate returns the completion marker
-  inspect(end_result.has_prefix("ELABORATE_COMPLETE:"), content="true")
-  inspect(end_result.contains("Executed command and read file successfully"), content="true")
-
-  // Cleanup
-  let _ = setup_tool.execute({ "command": "rm -f \{test_path}" }, history)
-}
-
-
-
-

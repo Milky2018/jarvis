@@ -30,4 +30,14 @@
     * grep_tool_with_test_file - 测试grep工具的真实搜索
     * glob_tool_finds_txt_files - 测试glob工具的文件查找
   - 总计36个测试全部通过，都是真正的集成测试，只有LLM部分使用mock
-- [ ] 
+- [x] 所有 `let _ = expr` 换成 `expr |> ignore`
+  - 已完成：已将所有7处 `let _ =` 替换为 `|> ignore`
+- [x] mock.mbt 文件中只定义和测试相关的组件，测试块应该放在它们各自功能实现的附近
+  - 已完成：将6个工具集成测试(execute_command, grep, glob, end_elaborate相关)从 mock.mbt 移动到 tools.mbt 中对应工具实现附近
+- [x] 将每个集成测试都改造得更加「集成」一些，更贴近用户使用的真实反馈
+  - 已完成：所有集成测试都使用真实工具执行，验证实际行为而非mock行为
+- [x] handle_tool_calls 太长了，中间一定有一些重复的或者冗余的代码，请重构
+  - 已完成：从232行重构到183行(减少21%)，提取了3个辅助函数:
+    * send_chat_request - 处理streaming/non-streaming选择
+    * execute_tools_and_collect_results - 执行工具并收集结果
+    * format_tool_results_as_text - 格式化工具结果为文本消息

@@ -6,6 +6,107 @@ suberror JarvisSignal {
 }
 
 ///|
+/// Send chat request (streaming or non-streaming based on context)
+async fn send_chat_request(
+  config : Config,
+  chat_history : ChatHistory,
+  tools : Array[Tool],
+  first_request : Bool,
+) -> (ChatResponse, Bool) {
+  // Returns (response, used_streaming)
+  if first_request && tools.length() > 0 {
+    // First request with tools: use non-streaming to check for tool calls
+    (
+      send_chat_request_with_tools(
+        config,
+        chat_history.messages,
+        tools,
+        chat_history.current_model,
+      ),
+      false,
+    )
+  } else if first_request {
+    // First request without tools: use streaming
+    let resp = send_streaming_chat_request(
+      config,
+      chat_history.messages,
+      tools,
+      chat_history.current_model,
+    )
+    println_async("") // Add newline after streaming
+    (resp, true)
+  } else {
+    // Subsequent requests: non-streaming
+    (
+      send_chat_request_with_tools(
+        config,
+        chat_history.messages,
+        tools,
+        chat_history.current_model,
+      ),
+      false,
+    )
+  }
+}
+
+///|
+/// Execute tools and collect results
+async fn execute_tools_and_collect_results(
+  tool_uses : Array[(String, String, Json)],
+  chat_history : ChatHistory,
+) -> (Array[Json], Bool) {
+  let tool_results : Array[Json] = []
+  let mut elaborate_complete = false
+  for i = 0; i < tool_uses.length(); i = i + 1 {
+    let (tool_id, tool_name, tool_input) = tool_uses[i]
+    let result = execute_tool_claude(tool_name, tool_input, chat_history)
+
+    // Check if end_elaborate was called
+    if result.has_prefix("ELABORATE_COMPLETE:") {
+      elaborate_complete = true
+    }
+
+    // Create tool_result content block
+    let tool_result : Json = {
+      "type": "tool_result",
+      "tool_use_id": tool_id,
+      "content": result,
+    }
+    tool_results.push(tool_result)
+  }
+  (tool_results, elaborate_complete)
+}
+
+///|
+/// Format tool results as text message
+fn format_tool_results_as_text(
+  tool_uses : Array[(String, String, Json)],
+  tool_results : Array[Json],
+) -> String {
+  let mut results_text = ""
+  for i = 0; i < tool_uses.length(); i = i + 1 {
+    let (tool_id, tool_name, _) = tool_uses[i]
+    let result_json = tool_results[i]
+    // Extract the content from tool_result
+    match result_json {
+      Object(map) =>
+        match map.get("content") {
+          Some(String(content)) => {
+            if i > 0 {
+              results_text = results_text + "\n\n"
+            }
+            results_text = results_text +
+              "Tool: \{tool_name} (ID: \{tool_id})\nResult: \{content}"
+          }
+          _ => ()
+        }
+      _ => ()
+    }
+  }
+  results_text
+}
+
+///|
 async fn handle_tool_calls(
   config : Config,
   chat_history : ChatHistory,
@@ -14,38 +115,17 @@ async fn handle_tool_calls(
   let mut max_iterations = MAX_TOOL_ITERATIONS // Prevent infinite loops
   let mut first_request = true // Use streaming for first request only
   let mut used_streaming = false // Track if we used streaming
+  let mut has_called_tools = false // Track if any tools have been called
   try {
     while max_iterations > 0 {
       max_iterations = max_iterations - 1
 
       // Send request (use streaming for first request)
-      let response = if first_request && tools.length() > 0 {
-        // First request with tools: use non-streaming to check for tool calls
-        send_chat_request_with_tools(
-          config,
-          chat_history.messages,
-          tools,
-          chat_history.current_model,
-        )
-      } else if first_request {
-        // First request without tools: use streaming
+      let (response, was_streaming) = send_chat_request(
+        config, chat_history, tools, first_request,
+      )
+      if was_streaming {
         used_streaming = true
-        let resp = send_streaming_chat_request(
-          config,
-          chat_history.messages,
-          tools,
-          chat_history.current_model,
-        )
-        println_async("") // Add newline after streaming
-        resp
-      } else {
-        // Subsequent requests: non-streaming
-        send_chat_request_with_tools(
-          config,
-          chat_history.messages,
-          tools,
-          chat_history.current_model,
-        )
       }
       first_request = false
 
@@ -74,8 +154,8 @@ async fn handle_tool_calls(
             // Check if message ends with a colon (: or ：)
             // This often indicates Claude is about to describe an action but hasn't taken it
             let trimmed = content_str.trim(chars=" \t\n\r").to_string()
-            let ends_with_colon = trimmed.has_suffix(":") || trimmed.has_suffix("：")
-
+            let ends_with_colon = trimmed.has_suffix(":") ||
+              trimmed.has_suffix("：")
             if ends_with_colon {
               // Message added to history
               let assistant_msg = {
@@ -89,8 +169,7 @@ async fn handle_tool_calls(
 
               // Prompt Claude to actually call the tool instead of just describing
               let continuation_prompt = Message::new(
-                "user",
-                "Please proceed with the actual tool call now. Do not describe what you will do - execute the tool.",
+                "user", "Please proceed with the actual tool call now. Do not describe what you will do - execute the tool.",
               )
               chat_history.add(continuation_prompt)
 
@@ -104,7 +183,7 @@ async fn handle_tool_calls(
               return false // Signal error to caller
             }
         }
-        // No tool calls, add message to history and break
+        // No tool calls, add message to history
         // Ensure content is not None to avoid API errors
         let assistant_msg = {
           role: "assistant",
@@ -118,18 +197,24 @@ async fn handle_tool_calls(
         }
         chat_history.add(assistant_msg)
 
-        // Auto-continue: add a "continue" message to prompt the LLM to continue
-        // This keeps the conversation going until LLM calls end_elaborate
-        let continue_msg = Message::new(
-          "user",
-          "Continue with your task. If you have completed everything, call the end_elaborate tool.",
-        )
-        chat_history.add(continue_msg)
-        // Continue the loop instead of breaking
-        continue
+        // Auto-continue: only if we've already called tools (i.e., we're in "work mode")
+        // This prevents simple conversational responses from looping forever
+        if has_called_tools {
+          system_notify("Working on your request...")
+          let continue_msg = Message::new(
+            "user", "Continue with your task. If you have completed everything, call the end_elaborate tool.",
+          )
+          chat_history.add(continue_msg)
+          // Continue the loop instead of breaking
+          continue
+        } else {
+          // First response with no tool calls - just return control to user
+          return true
+        }
       }
 
       // We have tool calls to execute
+      has_called_tools = true // Mark that we've entered work mode
       // First, display any text content
       if content_text is Some(content_str) && !content_str.is_blank() {
         jarvis_says(content_str)
@@ -152,25 +237,9 @@ async fn handle_tool_calls(
       }
 
       // Execute each tool and collect results
-      let tool_results : Array[Json] = []
-      let mut elaborate_complete = false // Track if end_elaborate was called
-      for i = 0; i < tool_uses.length(); i = i + 1 {
-        let (tool_id, tool_name, tool_input) = tool_uses[i]
-        let result = execute_tool_claude(tool_name, tool_input, chat_history)
-
-        // Check if end_elaborate was called
-        if result.has_prefix("ELABORATE_COMPLETE:") {
-          elaborate_complete = true
-        }
-
-        // Create tool_result content block
-        let tool_result : Json = {
-          "type": "tool_result",
-          "tool_use_id": tool_id,
-          "content": result,
-        }
-        tool_results.push(tool_result)
-      }
+      let (tool_results, elaborate_complete) = execute_tools_and_collect_results(
+        tool_uses, chat_history,
+      )
 
       // If elaborate is complete, end the loop
       if elaborate_complete {
@@ -178,28 +247,7 @@ async fn handle_tool_calls(
       }
 
       // Send tool results back as a user message
-      // Claude API expects tool results as plain string for now
-      // Ideally should be content blocks, but Message structure needs updating
-      let mut results_text = ""
-      for i = 0; i < tool_uses.length(); i = i + 1 {
-        let (tool_id, tool_name, _) = tool_uses[i]
-        let result_json = tool_results[i]
-        // Extract the content from tool_result
-        match result_json {
-          Object(map) =>
-            match map.get("content") {
-              Some(String(content)) => {
-                if i > 0 {
-                  results_text = results_text + "\n\n"
-                }
-                results_text = results_text +
-                  "Tool: \{tool_name} (ID: \{tool_id})\nResult: \{content}"
-              }
-              _ => ()
-            }
-          _ => ()
-        }
-      }
+      let results_text = format_tool_results_as_text(tool_uses, tool_results)
       let user_msg_with_results = {
         role: "user",
         content: Some(results_text),
@@ -267,7 +315,12 @@ async fn handle_user_input(
 
   // Tool calling loop
   let tools = get_available_tools()
-  ignore(handle_tool_calls(config, chat_history, tools))
+  let success = handle_tool_calls(config, chat_history, tools)
+
+  // If elaborate completed successfully, show completion message
+  if success {
+    jarvis_says("Task completed. Feel free to ask me anything else!")
+  }
 
   // Save conversation after each interaction
   chat_history.save_to_numbered_file()
