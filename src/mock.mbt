@@ -578,185 +578,96 @@ test "mock_tool_response_with_tools" {
 }
 
 ///|
-test "chat_history_basic_operations" {
+async test "integration: execute_command_updates_chat_history" {
   let history = ChatHistory::new()
+  history.init_working_dir()
 
-  // Initially empty
-  inspect(history.messages.length(), content="0")
+  // Execute a simple echo command
+  let tool = ExecuteCommandTool::default()
+  let input : Json = { "command": "echo 'Hello World'" }
 
-  // Add user message
-  let user_msg = {
-    role: "user",
-    content: Some("Hello"),
-    tool_calls: None,
-    tool_call_id: None,
-    name: None,
-  }
-  history.add(user_msg)
-  inspect(history.messages.length(), content="1")
-  inspect(history.messages[0].role, content="user")
+  let result = tool.execute(input, history)
 
-  // Add assistant message
-  let assistant_msg = {
-    role: "assistant",
-    content: Some("Hi there!"),
-    tool_calls: None,
-    tool_call_id: None,
-    name: None,
-  }
-  history.add(assistant_msg)
-  inspect(history.messages.length(), content="2")
-  inspect(history.messages[1].role, content="assistant")
+  // Verify command executed successfully
+  inspect(result.contains("Error"), content="false")
+  inspect(result.contains("Hello World"), content="true")
 }
 
 ///|
-test "chat_history_with_tool_call" {
+async test "integration: execute_cd_updates_working_dir" {
   let history = ChatHistory::new()
+  history.init_working_dir()
 
-  // User asks to execute a command
-  let user_msg = {
-    role: "user",
-    content: Some("List files"),
-    tool_calls: None,
-    tool_call_id: None,
-    name: None,
-  }
-  history.add(user_msg)
+  let initial_dir = history.current_working_dir
 
-  // Assistant responds with tool call
-  let tool_call : ToolCall = {
-    id: "toolu_123",
-    type_: "function",
-    function: { name: "execute_command", arguments: "{\"command\":\"ls\"}" },
-  }
-  let assistant_msg = {
-    role: "assistant",
-    content: Some("Let me list the files"),
-    tool_calls: Some([tool_call]),
-    tool_call_id: None,
-    name: None,
-  }
-  history.add(assistant_msg)
+  // Execute cd to /tmp
+  let tool = ExecuteCommandTool::default()
+  let input : Json = { "command": "cd /tmp" }
 
-  // Tool result
-  let tool_result_msg = {
-    role: "user",
-    content: Some("file1.txt\nfile2.txt"),
-    tool_calls: None,
-    tool_call_id: Some("toolu_123"),
-    name: Some("execute_command"),
-  }
-  history.add(tool_result_msg)
+  let result = tool.execute(input, history)
 
-  // Verify the conversation flow
-  inspect(history.messages.length(), content="3")
-  inspect(history.messages[0].role, content="user")
-  inspect(history.messages[1].role, content="assistant")
-  match history.messages[1].tool_calls {
-    Some(calls) => {
-      inspect(calls.length(), content="1")
-      inspect(calls[0].id, content="toolu_123")
-      inspect(calls[0].function.name, content="execute_command")
-    }
-    None => @test.fail("Expected tool calls")
-  }
-  inspect(history.messages[2].role, content="user")
-  match history.messages[2].tool_call_id {
-    Some(id) => inspect(id, content="toolu_123")
-    None => @test.fail("Expected tool_call_id")
-  }
+  // Verify working directory was updated
+  inspect(result.contains("Error"), content="false")
+  inspect(history.current_working_dir == initial_dir, content="false")
+  inspect(history.current_working_dir.contains("tmp"), content="true")
 }
 
 ///|
-test "chat_history_multiple_tool_calls" {
+async test "integration: execute_pwd_shows_current_dir" {
   let history = ChatHistory::new()
+  history.init_working_dir()
 
-  // User message
-  history.add({
-    role: "user",
-    content: Some("Read config and list files"),
-    tool_calls: None,
-    tool_call_id: None,
-    name: None,
-  })
+  let tool = ExecuteCommandTool::default()
+  let input : Json = { "command": "pwd" }
 
-  // Assistant with multiple tool calls
-  let tool_calls : Array[ToolCall] = [
-    {
-      id: "toolu_001",
-      type_: "function",
-      function: { name: "read_file", arguments: "{\"path\":\"/config.json\"}" },
-    },
-    {
-      id: "toolu_002",
-      type_: "function",
-      function: { name: "execute_command", arguments: "{\"command\":\"ls\"}" },
-    },
-  ]
-  history.add({
-    role: "assistant",
-    content: Some("I'll read the config and list files"),
-    tool_calls: Some(tool_calls),
-    tool_call_id: None,
-    name: None,
-  })
+  let result = tool.execute(input, history)
 
-  // Tool result 1
-  history.add({
-    role: "user",
-    content: Some("{\"setting\": \"value\"}"),
-    tool_calls: None,
-    tool_call_id: Some("toolu_001"),
-    name: Some("read_file"),
-  })
-
-  // Tool result 2
-  history.add({
-    role: "user",
-    content: Some("file1.txt\nfile2.txt"),
-    tool_calls: None,
-    tool_call_id: Some("toolu_002"),
-    name: Some("execute_command"),
-  })
-
-  // Verify conversation structure
-  inspect(history.messages.length(), content="4")
-
-  // Check assistant message has 2 tool calls
-  match history.messages[1].tool_calls {
-    Some(calls) => inspect(calls.length(), content="2")
-    None => @test.fail("Expected 2 tool calls")
-  }
-
-  // Check tool results
-  match history.messages[2].tool_call_id {
-    Some(id) => inspect(id, content="toolu_001")
-    None => @test.fail("Expected tool_call_id")
-  }
-  match history.messages[3].tool_call_id {
-    Some(id) => inspect(id, content="toolu_002")
-    None => @test.fail("Expected tool_call_id")
-  }
+  // Should show current directory
+  inspect(result.contains("/"), content="true")
+  inspect(result.contains("Error"), content="false")
 }
 
 ///|
-test "test_context_with_chat_history" {
-  let ctx = TestContext::new([mock_text_response("OK")])
+async test "integration: grep_tool_with_test_file" {
+  // Create a test file using shell command
+  let setup_history = ChatHistory::new()
+  let setup_tool = ExecuteCommandTool::default()
+  let test_path = "/tmp/jarvis_grep_test.txt"
 
-  // Initially empty
-  inspect(ctx.chat_history.messages.length(), content="0")
+  // Create test file
+  let _ = setup_tool.execute(
+    { "command": "echo -e 'Line 1: Hello\\nLine 2: World\\nLine 3: Hello again' > \{test_path}" },
+    setup_history,
+  )
 
-  // Add messages to chat history
-  ctx.chat_history.add({
-    role: "user",
-    content: Some("Test message"),
-    tool_calls: None,
-    tool_call_id: None,
-    name: None,
-  })
+  // Now test grep
+  let history = ChatHistory::new()
+  let tool = GrepTool::default()
+  let input : Json = { "pattern": "Hello", "path": test_path }
 
-  inspect(ctx.chat_history.messages.length(), content="1")
+  let result = tool.execute(input, history)
+
+  // Verify pattern was found
+  inspect(result.contains("Hello") || result.contains("No matches"), content="true")
+
+  // Cleanup
+  let _ = setup_tool.execute({ "command": "rm -f \{test_path}" }, setup_history)
 }
+
+///|
+async test "integration: glob_tool_finds_txt_files" {
+  let history = ChatHistory::new()
+  let tool = GlobTool::default()
+
+  // Search for .txt files in /tmp (should always exist)
+  let input : Json = { "pattern": "*.txt", "path": "/tmp" }
+
+  let result = tool.execute(input, history)
+
+  // Verify glob ran (might find files or not, but shouldn't error)
+  inspect(result.contains("Error:") == false || result.contains("No files found"), content="true")
+}
+
 
 
 

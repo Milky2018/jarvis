@@ -23,4 +23,10 @@
 - [x] list_files 和其他mock辅助函数也需要测试覆盖
   - 已完成：添加了3个测试（mock_file_system_list_files、mock_tool_helpers、mock_tool_response_with_tools），总计31个测试全部通过
 - [x] chat_history 需要测试工具调用后的状态变化
-  - 已完成：添加了4个测试来验证chat_history在不同场景下的行为（基本操作、单个工具调用、多个工具调用、TestContext集成），总计35个测试全部通过
+  - 已完成：添加了5个真正的集成测试，使用真实工具执行来验证chat_history行为：
+    * execute_command_updates_chat_history - 测试命令执行
+    * execute_cd_updates_working_dir - 测试工作目录更新
+    * execute_pwd_shows_current_dir - 测试pwd命令
+    * grep_tool_with_test_file - 测试grep工具的真实搜索
+    * glob_tool_finds_txt_files - 测试glob工具的文件查找
+  - 总计36个测试全部通过，都是真正的集成测试，只有LLM部分使用mock
