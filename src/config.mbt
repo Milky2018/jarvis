@@ -99,6 +99,26 @@ async fn jarvis_cries(message : String) -> Unit {
 }
 
 ///|
+/// Tool execution log - shows which tool is being executed
+/// Uses gray color to distinguish from Jarvis responses
+async fn tool_log(message : String) -> Unit {
+  @stdio.stdout.write(COLOR_GRAY)
+  @stdio.stdout.write("[Tool] ")
+  @stdio.stdout.write(COLOR_RESET)
+  println_async(message)
+}
+
+///|
+/// System notification - shows system-level information
+/// Uses gray color and brackets to distinguish from Jarvis responses
+async fn system_notify(message : String) -> Unit {
+  @stdio.stdout.write(COLOR_GRAY)
+  @stdio.stdout.write("[System] ")
+  @stdio.stdout.write(COLOR_RESET)
+  println_async(message)
+}
+
+///|
 async fn println_async(s : String) -> Unit {
   @stdio.stdout.write("\{s}\n")
 }

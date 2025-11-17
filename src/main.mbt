@@ -269,7 +269,7 @@ async fn chat_loop(config : Config) -> Unit {
     Some((loaded_history, file_num)) => {
       loaded_history.current_file_number = file_num
       let num_str = format_conv_number(file_num)
-      jarvis_says("Loaded conversation from conv_\{num_str}.json")
+      system_notify("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
     None => {
@@ -284,7 +284,7 @@ async fn chat_loop(config : Config) -> Unit {
         history.current_model,
       )
       history.current_file_number = file_num
-      jarvis_says("Created new conversation: conv_001.json")
+      system_notify("Created new conversation: conv_001.json")
       history
     }
   }
@@ -348,7 +348,7 @@ async fn chat_loop(config : Config) -> Unit {
 async fn execute_prompt(config : Config, prompt : String) -> Unit {
   ensure_jarvis_dir()
   let chat_history = ChatHistory::new()
-  jarvis_says("Processing: \{prompt}")
+  system_notify("Processing: \{prompt}")
   println_async("")
   handle_user_input(prompt, chat_history, config)
 }

@@ -30,3 +30,4 @@
     * grep_tool_with_test_file - 测试grep工具的真实搜索
     * glob_tool_finds_txt_files - 测试glob工具的文件查找
   - 总计36个测试全部通过，都是真正的集成测试，只有LLM部分使用mock
+- [ ] 

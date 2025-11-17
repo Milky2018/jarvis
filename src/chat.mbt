@@ -108,9 +108,9 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
   let num_str = format_conv_number(next_number)
 
   // Print notifications
-  jarvis_says("Created new conversation file: conv_\{num_str}.json")
+  system_notify("Created new conversation file: conv_\{num_str}.json")
   if old_number > 0 {
-    jarvis_says("(Previous conversation archived in conv_\{old_num_str}.json)")
+    system_notify("(Previous conversation archived in conv_\{old_num_str}.json)")
   }
 }
 
@@ -173,7 +173,7 @@ async fn generate_summary_with_title(
   config : Config,
 ) -> (String, String) {
   // Generate title first
-  jarvis_says("Generating conversation title:")
+  system_notify("Generating conversation title:")
   let title = generate_conversation_title(chat_history, config)
 
   // Build conversation text
@@ -192,7 +192,7 @@ async fn generate_summary_with_title(
   }
 
   // Create prompt for summarization
-  jarvis_says("Generating summary:")
+  system_notify("Generating summary:")
   let summary_messages : Array[Message] = [
     {
       role: "user",

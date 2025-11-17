@@ -48,7 +48,7 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
     Object(map) =>
       match map.get("command") {
         Some(String(cmd)) => {
-          jarvis_says("\{COLOR_BOLD}Execute\{COLOR_RESET}(\{cmd})")
+          tool_log("\{COLOR_BOLD}Execute\{COLOR_RESET}(\{cmd})")
           execute_shell_command(cmd, chat_history)
         }
         Some(_) => tool_error("Error: 'command' must be a string")
@@ -161,7 +161,7 @@ impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match map.get("path") {
         Some(String(path)) => {
-          jarvis_says("\{COLOR_BOLD}Read\{COLOR_RESET}(\{path})")
+          tool_log("\{COLOR_BOLD}Read\{COLOR_RESET}(\{path})")
           read_file_tool(path, input)
         }
         Some(_) => tool_error("Error: 'path' must be a string")
@@ -209,7 +209,7 @@ impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("content")) {
         (Some(String(path)), Some(String(content))) => {
-          jarvis_says("\{COLOR_BOLD}Write\{COLOR_RESET}(\{path})")
+          tool_log("\{COLOR_BOLD}Write\{COLOR_RESET}(\{path})")
           write_file_tool(path, content)
         }
         (None, _) => tool_error("Error: Missing 'path' argument")
@@ -262,7 +262,7 @@ impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("old_string"), map.get("new_string")) {
         (Some(String(path)), Some(String(old)), Some(String(new))) => {
-          jarvis_says("\{COLOR_BOLD}Edit\{COLOR_RESET}(\{path})")
+          tool_log("\{COLOR_BOLD}Edit\{COLOR_RESET}(\{path})")
           edit_file_tool(path, old, new)
         }
         (None, _, _) => tool_error("Error: Missing 'path' argument")
@@ -316,7 +316,7 @@ impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          jarvis_says("\{COLOR_BOLD}Grep\{COLOR_RESET}(\{pattern})")
+          tool_log("\{COLOR_BOLD}Grep\{COLOR_RESET}(\{pattern})")
           grep_tool(pattern, path)
         }
         Some(_) => tool_error("Error: 'pattern' must be a string")
@@ -368,7 +368,7 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          jarvis_says("\{COLOR_BOLD}Glob\{COLOR_RESET}(\{pattern})")
+          tool_log("\{COLOR_BOLD}Glob\{COLOR_RESET}(\{pattern})")
           glob_tool(pattern, path)
         }
         Some(_) => tool_error("Error: 'pattern' must be a string")
@@ -416,7 +416,7 @@ impl ToolImpl for EndPlayModeTool with execute(_self, input, _chat_history) {
       }
     _ => "No reason provided"
   }
-  jarvis_says("\{COLOR_BOLD}End\{COLOR_RESET}(\{reason})")
+  tool_log("\{COLOR_BOLD}End\{COLOR_RESET}(\{reason})")
   raise PlayModeEnded
 }
 
@@ -468,7 +468,7 @@ impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
             }
             _ => 5
           }
-          jarvis_says("\{COLOR_BOLD}Browse\{COLOR_RESET}(\{query})")
+          tool_log("\{COLOR_BOLD}Browse\{COLOR_RESET}(\{query})")
           web_search_tool(query, num_results)
         }
         Some(_) => tool_error("Error: 'query' must be a string")
@@ -649,7 +649,7 @@ async fn write_file_tool(path : String, content : String) -> String {
     let (prefix, removed, added, suffix) = compute_line_diff(old_text, content)
     format_diff(prefix, removed, added, suffix)
   }
-  jarvis_says(display)
+  tool_log(display)
   "Successfully wrote \{content.length()} bytes to \{path}"
 }
 
@@ -722,7 +722,7 @@ async fn edit_file_tool(
       builder.write_string(COLOR_RESET)
       builder.write_string("\n")
     }
-    jarvis_says(builder.to_string())
+    tool_log(builder.to_string())
     "Successfully edited \{path}"
   } catch {
     e => "Error: \{e}"
