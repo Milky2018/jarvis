@@ -668,6 +668,36 @@ async test "integration: glob_tool_finds_txt_files" {
   inspect(result.contains("Error:") == false || result.contains("No files found"), content="true")
 }
 
+///|
+async test "integration: end_elaborate_tool_returns_complete_marker" {
+  let history = ChatHistory::new()
+  let tool = EndElaborateTool::default()
+
+  // Test tool execution with a summary
+  let input : Json = { "summary": "Task completed successfully" }
+
+  let result = tool.execute(input, history)
+
+  // Verify the tool returns the ELABORATE_COMPLETE marker
+  inspect(result.has_prefix("ELABORATE_COMPLETE:"), content="true")
+  inspect(result.contains("Task completed successfully"), content="true")
+}
+
+///|
+async test "integration: end_elaborate_tool_without_summary" {
+  let history = ChatHistory::new()
+  let tool = EndElaborateTool::default()
+
+  // Test tool execution without summary (should use default)
+  let input : Json = {}
+
+  let result = tool.execute(input, history)
+
+  // Verify the tool still returns the marker with default message
+  inspect(result.has_prefix("ELABORATE_COMPLETE:"), content="true")
+  inspect(result.contains("Task completed"), content="true")
+}
+
 
 
 
