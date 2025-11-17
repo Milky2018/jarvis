@@ -117,7 +117,16 @@ async fn handle_tool_calls(
           name: None,
         }
         chat_history.add(assistant_msg)
-        break
+
+        // Auto-continue: add a "continue" message to prompt the LLM to continue
+        // This keeps the conversation going until LLM calls end_elaborate
+        let continue_msg = Message::new(
+          "user",
+          "Continue with your task. If you have completed everything, call the end_elaborate tool.",
+        )
+        chat_history.add(continue_msg)
+        // Continue the loop instead of breaking
+        continue
       }
 
       // We have tool calls to execute
@@ -144,9 +153,15 @@ async fn handle_tool_calls(
 
       // Execute each tool and collect results
       let tool_results : Array[Json] = []
+      let mut elaborate_complete = false // Track if end_elaborate was called
       for i = 0; i < tool_uses.length(); i = i + 1 {
         let (tool_id, tool_name, tool_input) = tool_uses[i]
         let result = execute_tool_claude(tool_name, tool_input, chat_history)
+
+        // Check if end_elaborate was called
+        if result.has_prefix("ELABORATE_COMPLETE:") {
+          elaborate_complete = true
+        }
 
         // Create tool_result content block
         let tool_result : Json = {
@@ -155,6 +170,11 @@ async fn handle_tool_calls(
           "content": result,
         }
         tool_results.push(tool_result)
+      }
+
+      // If elaborate is complete, end the loop
+      if elaborate_complete {
+        return true
       }
 
       // Send tool results back as a user message

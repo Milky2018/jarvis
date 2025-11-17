@@ -379,6 +379,49 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
 }
 
 ///|
+/// End Elaborate Tool - Signal that elaboration is complete
+struct EndElaborateTool {} derive(Default)
+
+///|
+impl ToolImpl for EndElaborateTool with name(_self) {
+  "end_elaborate"
+}
+
+///|
+impl ToolImpl for EndElaborateTool with description(_self) {
+  "Call this tool when you have fully completed the user's request and have nothing more to add. This signals that the conversation should end. Only use this when you are completely done with the task and have provided all necessary information or completed all requested actions."
+}
+
+///|
+impl ToolImpl for EndElaborateTool with input_schema(_self) {
+  {
+    "type": "object",
+    "properties": {
+      "summary": {
+        "type": "string",
+        "description": "Brief summary of what was accomplished",
+      },
+    },
+    "required": ["summary"],
+  }
+}
+
+///|
+impl ToolImpl for EndElaborateTool with execute(_self, input, _chat_history) {
+  let summary = match input {
+    Object(map) =>
+      match map.get("summary") {
+        Some(String(s)) => s
+        _ => "Task completed"
+      }
+    _ => "Task completed"
+  }
+  tool_log("\{COLOR_BOLD}EndElaborate\{COLOR_RESET}(\{summary})")
+  // Return a special marker that the main loop will detect
+  "ELABORATE_COMPLETE: \{summary}"
+}
+
+///|
 /// End Play Mode Tool
 struct EndPlayModeTool {} derive(Default)
 
@@ -957,6 +1000,7 @@ fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
     GrepTool::default(),
     GlobTool::default(),
     WebSearchTool::default(),
+    EndElaborateTool::default(),
   ]
   if in_play_mode {
     tools.push(EndPlayModeTool::default())
