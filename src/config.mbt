@@ -49,41 +49,43 @@ struct ModelInfo {
 }
 
 ///|
-/// Default model IDs for convenience
-const MODEL_SONNET_4_5 : String = "claude-sonnet-4-5-20250929"
-
-///|
-const MODEL_HAIKU_4_5 : String = "claude-haiku-4-5-20251001"
-
-///|
-const MODEL_OPUS_4_1 : String = "claude-opus-4-1-20250805"
-
-///|
 /// Get all available models
 fn available_models() -> Array[ModelInfo] {
   [
     {
-      id: MODEL_SONNET_4_5,
+      id: "claude-sonnet-4-5-20250929",
       name: "Sonnet 4.5",
       description: "Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)",
       input_price: 3.0,
       output_price: 15.0,
     },
     {
-      id: MODEL_HAIKU_4_5,
+      id: "claude-haiku-4-5-20251001",
       name: "Haiku 4.5",
       description: "Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)",
       input_price: 0.8,
       output_price: 4.0,
     },
     {
-      id: MODEL_OPUS_4_1,
+      id: "claude-opus-4-1-20250805",
       name: "Opus 4.1",
       description: "Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)",
       input_price: 15.0,
       output_price: 75.0,
     },
   ]
+}
+
+///|
+/// Get default model (first in the list)
+fn default_model() -> String {
+  available_models()[0].id
+}
+
+///|
+/// Get default petite model (second in the list)
+fn default_petite_model() -> String {
+  available_models()[1].id
 }
 
 ///|

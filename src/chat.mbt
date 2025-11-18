@@ -15,8 +15,8 @@ fn ChatHistory::new() -> ChatHistory {
   {
     messages: [],
     max_context_tokens: MAX_CONTEXT_TOKENS,
-    current_model: MODEL_SONNET_4_5,
-    petite_model: MODEL_HAIKU_4_5,
+    current_model: default_model(),
+    petite_model: default_petite_model(),
     usage_stats: UsageStats::new(),
     current_file_number: 0, // Will be set when loading/creating conversation
   } // Leave some room for response
@@ -230,13 +230,13 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
       }
       let model = match map.get("model") {
         Some(String(s)) => s
-        _ => MODEL_SONNET_4_5
+        _ => default_model()
       }
       Some({
         messages,
         max_context_tokens: MAX_CONTEXT_TOKENS,
         current_model: model,
-        petite_model: MODEL_HAIKU_4_5,
+        petite_model: default_petite_model(),
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
       })
