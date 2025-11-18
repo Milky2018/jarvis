@@ -48,39 +48,52 @@ pub async fn get_with_proxy(url : String) -> (@http.Response, &@io.Data) {
   // Read proxy settings from environment
   let env_vars = @sys.get_env_vars()
 
-  // Determine which proxy to use based on URL protocol
-  let proxy_url = if url.has_prefix("https://") {
-    match env_vars.get("HTTPS_PROXY") {
-      Some(v) => v
-      None =>
-        match env_vars.get("https_proxy") {
-          Some(v) => v
-          None => ""
-        }
-    }
-  } else {
-    match env_vars.get("HTTP_PROXY") {
-      Some(v) => v
-      None =>
-        match env_vars.get("http_proxy") {
-          Some(v) => v
-          None => ""
-        }
-    }
+  // Read both HTTP and HTTPS proxy settings
+  let http_proxy = match env_vars.get("HTTP_PROXY") {
+    Some(v) => v
+    None =>
+      match env_vars.get("http_proxy") {
+        Some(v) => v
+        None => ""
+      }
   }
 
-  // Parse proxy URL and create proxy configuration if available
-  let proxy = if !proxy_url.is_empty() {
-    match parse_proxy_url(proxy_url) {
-      Some((host, port)) => {
-        // Determine protocol from URL
-        let protocol = if url.has_prefix("https://") {
-          Some(@http.Proxy::https(host, port~))
-        } else {
-          Some(@http.Proxy::http(host, port~))
-        }
-        protocol
+  let https_proxy = match env_vars.get("HTTPS_PROXY") {
+    Some(v) => v
+    None =>
+      match env_vars.get("https_proxy") {
+        Some(v) => v
+        None => ""
       }
+  }
+
+  // Determine proxy configuration based on environment variables
+  let proxy = if !http_proxy.is_empty() && !https_proxy.is_empty() {
+    // Both proxies configured - use custom
+    match (parse_proxy_url(http_proxy), parse_proxy_url(https_proxy)) {
+      (Some((http_host, http_port)), Some((https_host, https_port))) =>
+        Some(
+          @http.Proxy::custom(
+            http_host,
+            http_port~,
+            https_host,
+            https_port~,
+          ),
+        )
+      (Some((host, port)), None) => Some(@http.Proxy::http(host, port~))
+      (None, Some((host, port))) => Some(@http.Proxy::https(host, port~))
+      _ => None
+    }
+  } else if !http_proxy.is_empty() {
+    // Only HTTP proxy configured
+    match parse_proxy_url(http_proxy) {
+      Some((host, port)) => Some(@http.Proxy::http(host, port~))
+      None => None
+    }
+  } else if !https_proxy.is_empty() {
+    // Only HTTPS proxy configured
+    match parse_proxy_url(https_proxy) {
+      Some((host, port)) => Some(@http.Proxy::https(host, port~))
       None => None
     }
   } else {
