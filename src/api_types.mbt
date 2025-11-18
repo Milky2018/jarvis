@@ -1,5 +1,18 @@
 ///|
 /// API Request/Response
+/// Metadata for Claude API request
+struct RequestMetadata {
+  user_id : String
+} derive(ToJson)
+
+///|
+/// System content block for Claude API
+struct SystemContentBlock {
+  type_ : String
+  text : String
+} derive(ToJson(fields(type_(rename="type"))))
+
+///|
 /// Request body for Claude API
 struct ChatRequest {
   model : String
@@ -7,7 +20,8 @@ struct ChatRequest {
   max_tokens : Int
   stream : Bool
   tools : Array[Tool]?
-  system : String?
+  system : Array[SystemContentBlock]?
+  metadata : RequestMetadata?
 } derive(ToJson)
 
 ///|
@@ -16,26 +30,23 @@ fn ChatRequest::with_tools(
   model : String,
   tools : Array[Tool],
 ) -> ChatRequest {
-  // Extract system messages
-  let mut system_content = ""
+  // Build system content blocks
+  let system_blocks : Array[SystemContentBlock] = [
+    { type_: "text", text: SYSTEM_PROMPT },
+  ]
   let non_system_messages : Array[Message] = []
   for msg in messages {
     if msg.role == "system" {
-      if msg.content is Some(content) {
-        if !system_content.is_empty() {
-          system_content = system_content + "\n\n"
+      if msg.content is Some(text) {
+        if !text.is_empty() {
+          system_blocks.push({ type_: "text", text })
         }
-        system_content = system_content + content
       }
     } else {
       non_system_messages.push(msg)
     }
   }
-  let system_param = if system_content.is_empty() {
-    None
-  } else {
-    Some(system_content)
-  }
+  let system_param = Some(system_blocks)
   {
     messages: non_system_messages,
     model,
@@ -43,6 +54,7 @@ fn ChatRequest::with_tools(
     stream: false,
     tools: Some(tools), // Claude API supports tools with input_schema format
     system: system_param,
+    metadata: Some({ user_id: "jarvis-user" }),
   }
 }
 

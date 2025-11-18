@@ -419,8 +419,6 @@ async fn chat_loop(config : Config) -> Unit {
 async fn execute_prompt(config : Config, prompt : String) -> Unit {
   ensure_jarvis_dir()
   let chat_history = ChatHistory::new()
-  let initial_msg = Message::new("system", SYSTEM_PROMPT)
-  chat_history.add(initial_msg)
 
   // Enable raw mode for Ctrl+C detection
   set_raw_mode(@stdio.stdin.fd())
@@ -467,10 +465,8 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
       loaded_history
     }
     None => {
-      // Create new conversation with initial system message
-      let initial_msg = Message::new("system", SYSTEM_PROMPT)
+      // Create new conversation
       let history = ChatHistory::new()
-      history.add(initial_msg)
 
       // Create the first conversation file
       let file_num = create_new_conversation_file(

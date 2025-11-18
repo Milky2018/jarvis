@@ -59,6 +59,9 @@ async fn send_chat_request_with_tools(
   // Create HTTP client
   let client = @http.Client::connect(host, headers={
     "Authorization": "Bearer \{config.auth_token()}",
+    "x-api-key": config.auth_token(),
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
   }) catch {
     e =>
       raise HttpError(
@@ -70,6 +73,14 @@ async fn send_chat_request_with_tools(
   // Send POST request
   let response = client.post(path, json_body, extra_headers={
     "Content-Type": "application/json",
+    "X-Stainless-Retry-Count": "0",
+    "X-Stainless-Timeout": "600",
+    "X-Stainless-Lang": "js",
+    "X-Stainless-Package-Version": "0.60.0",
+    "X-Stainless-OS": "MacOS",
+    "X-Stainless-Arch": "arm64",
+    "X-Stainless-Runtime": "node",
+    "X-Stainless-Runtime-Version": "v24.8.0",
   }) catch {
     e =>
       raise HttpError(
@@ -130,40 +141,38 @@ async fn send_streaming_chat_request(
   let (host, path) = parse_url(url)
 
   // Build request JSON with streaming enabled
-  // Extract system messages
-  let mut system_content = ""
+  // Build system content blocks array
+  let system_blocks : Array[Json] = [
+    { "type": "text", "text": SYSTEM_PROMPT },
+  ]
   let non_system_messages : Array[Message] = []
   for msg in messages {
-    if msg.role == "system" && msg.content is Some(content) {
-      if !system_content.is_empty() {
-        system_content = system_content + "\n\n"
+    if msg.role == "system" {
+      if msg.content is Some(text) {
+        if !text.is_empty() {
+          system_blocks.push({ "type": "text", "text": text })
+        }
       }
-      system_content = system_content + content
     } else {
       non_system_messages.push(msg)
     }
   }
-  let request_with_stream : Json = if system_content.is_empty() {
-    {
-      "model": model,
-      "messages": non_system_messages.to_json(),
-      "max_tokens": MAX_RESPONSE_TOKENS,
-      "stream": true,
-    }
-  } else {
-    {
-      "model": model,
-      "messages": non_system_messages.to_json(),
-      "max_tokens": MAX_RESPONSE_TOKENS,
-      "stream": true,
-      "system": system_content,
-    }
+  let request_with_stream : Json = {
+    "model": model,
+    "messages": non_system_messages.to_json(),
+    "max_tokens": MAX_RESPONSE_TOKENS,
+    "stream": true,
+    "system": system_blocks.to_json(),
+    "metadata": { "user_id": "jarvis-user" },
   }
   let json_body = request_with_stream.stringify()
 
   // Create HTTP client
   let client = @http.Client::connect(host, headers={
     "Authorization": "Bearer \{config.auth_token()}",
+    "x-api-key": config.auth_token(),
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
   }) catch {
     e =>
       raise HttpError(
@@ -175,6 +184,14 @@ async fn send_streaming_chat_request(
   // Send POST request
   let response = client.post(path, json_body, extra_headers={
     "Content-Type": "application/json",
+    "X-Stainless-Retry-Count": "0",
+    "X-Stainless-Timeout": "600",
+    "X-Stainless-Lang": "js",
+    "X-Stainless-Package-Version": "0.60.0",
+    "X-Stainless-OS": "MacOS",
+    "X-Stainless-Arch": "arm64",
+    "X-Stainless-Runtime": "node",
+    "X-Stainless-Runtime-Version": "v24.8.0",
   }) catch {
     e =>
       raise HttpError(
