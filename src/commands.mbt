@@ -214,9 +214,7 @@ impl Command for ClearCommand with description(_self) {
 ///|
 impl Command for ClearCommand with execute(_self, _parts, chat_history, _config) {
   // Clear all messages
-  while chat_history.messages.length() > 0 {
-    ignore(chat_history.messages.pop())
-  }
+  chat_history.messages.clear()
   // Add fresh system prompt
   let initial_msg = Message::new("system", SYSTEM_PROMPT)
   chat_history.messages.push(initial_msg)
