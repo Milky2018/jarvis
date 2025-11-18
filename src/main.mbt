@@ -428,23 +428,21 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
   set_raw_mode(@stdio.stdin.fd())
 
   // Run with Ctrl+C handling
-  try {
-    @async.with_task_group(fn(group) {
-      // Spawn background task to monitor Ctrl+C
-      group.spawn_bg(fn() {
-        for {
-          let keypress = parse_keypress()
-          if keypress is Some(CtrlC) {
-            raise InterruptByUser
-          }
+  @async.with_task_group(fn(group) {
+    // Spawn background task to monitor Ctrl+C
+    group.spawn_bg(fn() {
+      for {
+        let keypress = parse_keypress()
+        if keypress is Some(CtrlC) {
+          raise InterruptByUser
         }
-      })
-
-      // Execute the prompt
-      handle_user_input(prompt, chat_history, config)
-      raise ActionFinished
+      }
     })
-  } catch {
+
+    // Execute the prompt
+    handle_user_input(prompt, chat_history, config)
+    raise ActionFinished
+  }) catch {
     InterruptByUser => {
       jarvis_says("Interrupted by user")
       println_async("")
@@ -486,7 +484,6 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
       history
     }
   }
-
   system_notify("Consulting: \{prompt}")
   println_async("")
 
@@ -494,23 +491,21 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
   set_raw_mode(@stdio.stdin.fd())
 
   // Run with Ctrl+C handling
-  try {
-    @async.with_task_group(fn(group) {
-      // Spawn background task to monitor Ctrl+C
-      group.spawn_bg(fn() {
-        for {
-          let keypress = parse_keypress()
-          if keypress is Some(CtrlC) {
-            raise InterruptByUser
-          }
+  @async.with_task_group(fn(group) {
+    // Spawn background task to monitor Ctrl+C
+    group.spawn_bg(fn() {
+      for {
+        let keypress = parse_keypress()
+        if keypress is Some(CtrlC) {
+          raise InterruptByUser
         }
-      })
-
-      // Execute the prompt
-      handle_user_input(prompt, chat_history, config)
-      raise ActionFinished
+      }
     })
-  } catch {
+
+    // Execute the prompt
+    handle_user_input(prompt, chat_history, config)
+    raise ActionFinished
+  }) catch {
     InterruptByUser => {
       jarvis_says("Interrupted by user")
       println_async("")
@@ -583,14 +578,15 @@ async fn main {
   } else {
     None
   }
-
   try {
     let config = load_config()
 
     // Check which mode to use
     if execute_mode && consult_mode {
       @stdio.stderr.write("Error: Cannot use both -e and -c flags together\n")
-      @stdio.stderr.write("Usage: jarvis -e \"<prompt>\" OR jarvis -c \"<prompt>\"\n")
+      @stdio.stderr.write(
+        "Usage: jarvis -e \"<prompt>\" OR jarvis -c \"<prompt>\"\n",
+      )
     } else {
       match prompt {
         Some(p) =>
@@ -600,7 +596,9 @@ async fn main {
             consult_prompt(config, p)
           } else {
             @stdio.stderr.write("Error: Prompt provided but no mode flag\n")
-            @stdio.stderr.write("Usage: jarvis -e \"<prompt>\" OR jarvis -c \"<prompt>\"\n")
+            @stdio.stderr.write(
+              "Usage: jarvis -e \"<prompt>\" OR jarvis -c \"<prompt>\"\n",
+            )
           }
         None =>
           if execute_mode {

@@ -8,18 +8,6 @@ struct ChatHistory {
   mut petite_model : String // Petite model for summaries and titles
   usage_stats : UsageStats // Track API usage
   mut current_file_number : Int // Current conversation file number
-  mut current_working_dir : String // Current working directory for shell commands
-}
-
-///|
-/// Get current working directory
-async fn get_current_dir() -> String {
-  let (exit_code, output) = @process.collect_output_merged("pwd", [])
-  if exit_code == 0 {
-    output.text().trim(chars=" \n\t\r").to_string()
-  } else {
-    "." // Fallback to current directory
-  }
 }
 
 ///|
@@ -31,16 +19,7 @@ fn ChatHistory::new() -> ChatHistory {
     petite_model: "claude-haiku-4-5-20251001",
     usage_stats: UsageStats::new(),
     current_file_number: 0, // Will be set when loading/creating conversation
-    current_working_dir: "", // Will be initialized on first use
   } // Leave some room for response
-}
-
-///|
-/// Initialize working directory if not set
-async fn ChatHistory::init_working_dir(self : ChatHistory) -> Unit {
-  if self.current_working_dir.is_empty() {
-    self.current_working_dir = get_current_dir()
-  }
 }
 
 ///|
@@ -260,7 +239,6 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         petite_model: "claude-haiku-4-5-20251001",
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
-        current_working_dir: "", // Will be initialized on first use
       })
     }
     _ => None

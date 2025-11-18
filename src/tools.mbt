@@ -62,51 +62,15 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
 /// Helper function for executing shell commands
 async fn execute_shell_command(
   command : String,
-  chat_history : ChatHistory,
+  _chat_history : ChatHistory,
 ) -> String {
   try {
-    // Get current working directory
-    let cwd = if chat_history.current_working_dir.is_empty() {
-      "."
-    } else {
-      chat_history.current_working_dir
-    }
-
-    // Print current working directory for debugging
-    println_async("Current working directory: \{cwd}")
-
-    // Execute command in the current working directory
-    // Escape single quotes in cwd by replacing ' with '\''
-    let escaped_cwd = cwd.replace(old="'", new="'\\''")
-    let full_command = "cd '\{escaped_cwd}' && \{command}"
+    // Execute command directly without cd prefix
     let (exit_code, output) = @process.collect_output_merged("sh", [
-      "-c", full_command,
+      "-c", command,
     ])
     let output_text = output.text()
 
-    // Check if command is a cd command and update working directory
-    let trimmed_cmd = command.trim(chars=" \t\n\r").to_string()
-    if trimmed_cmd.has_prefix("cd ") || trimmed_cmd == "cd" {
-      if exit_code == 0 {
-        // Get the new directory by running pwd after cd
-        // We need to expand the command in a subshell to handle environment variables
-        // The command is already executed once above, so we just run it again with pwd
-        let escaped_cwd = cwd.replace(old="'", new="'\\''")
-        let pwd_cmd = "cd '\{escaped_cwd}' && \{command} && pwd"
-        let (pwd_exit, pwd_output) = @process.collect_output_merged("sh", [
-          "-c", pwd_cmd,
-        ])
-        if pwd_exit == 0 {
-          let new_dir = pwd_output.text().trim(chars=" \n\t\r").to_string()
-          chat_history.current_working_dir = new_dir
-          println_async("Updated working directory to: \{new_dir}")
-        } else {
-          jarvis_cries(
-            "Warning: cd command succeeded but pwd failed (exit code: \{pwd_exit})",
-          )
-        }
-      }
-    }
     if exit_code == 0 {
       if output_text.is_empty() {
         "Command executed successfully (no output)"
@@ -124,7 +88,6 @@ async fn execute_shell_command(
 ///|
 async test "integration: execute_command_updates_chat_history" {
   let history = ChatHistory::new()
-  history.init_working_dir()
 
   // Execute a simple echo command
   let tool = ExecuteCommandTool::default()
@@ -137,26 +100,8 @@ async test "integration: execute_command_updates_chat_history" {
 }
 
 ///|
-async test "integration: execute_cd_updates_working_dir" {
-  let history = ChatHistory::new()
-  history.init_working_dir()
-  let initial_dir = history.current_working_dir
-
-  // Execute cd to /tmp
-  let tool = ExecuteCommandTool::default()
-  let input : Json = { "command": "cd /tmp" }
-  let result = tool.execute(input, history)
-
-  // Verify working directory was updated
-  inspect(result.contains("Error"), content="false")
-  inspect(history.current_working_dir == initial_dir, content="false")
-  inspect(history.current_working_dir.contains("tmp"), content="true")
-}
-
-///|
 async test "integration: execute_pwd_shows_current_dir" {
   let history = ChatHistory::new()
-  history.init_working_dir()
   let tool = ExecuteCommandTool::default()
   let input : Json = { "command": "pwd" }
   let result = tool.execute(input, history)
@@ -715,9 +660,6 @@ async fn execute_tool_claude(
   input : Json,
   chat_history : ChatHistory,
 ) -> String {
-  // Initialize working directory if needed
-  chat_history.init_working_dir()
-
   // Get all available tools (including end_play_mode if needed)
   let all_tools = get_all_tool_impls(in_play_mode=true)
 
@@ -1048,7 +990,9 @@ fn parse_google_results(
       if url_parts.length() > 0 {
         let first_part = url_parts[0]
         if first_part.has_prefix("/url?q=") {
-          first_part[7:].to_string() catch { _ => url_str }
+          first_part[7:].to_string() catch {
+            _ => url_str
+          }
         } else {
           url_str
         }
@@ -1076,8 +1020,8 @@ fn parse_google_results(
     } else {
       snippet
     }
-
-    if !title_text.is_empty() && !clean_url.is_empty() &&
+    if !title_text.is_empty() &&
+      !clean_url.is_empty() &&
       clean_url.has_prefix("http") {
       // Clean HTML entities and tags
       let clean_title = clean_html(title_text)

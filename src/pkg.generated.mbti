@@ -2,7 +2,7 @@
 package "Milky2018/jarvis"
 
 import(
-  "moonbitlang/async/http"
+  "Milky2018/jarvis/http"
   "moonbitlang/async/io"
   "moonbitlang/core/json"
 )
