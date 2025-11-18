@@ -78,11 +78,9 @@ fn UsageStats::add_request(
   self.total_output_tokens = self.total_output_tokens + output_tokens
 
   // Calculate cost based on model (prices per 1M tokens in USD)
-  let (input_price, output_price) = match model {
-    "claude-sonnet-4-5-20250929" => (3.0, 15.0) // $3/$15 per 1M tokens
-    "claude-haiku-4-5-20251001" => (0.8, 4.0) // $0.8/$4 per 1M tokens
-    "claude-opus-4-1-20250805" => (15.0, 75.0) // $15/$75 per 1M tokens
-    _ => (3.0, 15.0) // Default to Sonnet pricing
+  let (input_price, output_price) = match get_model_info(model) {
+    Some(info) => (info.input_price, info.output_price)
+    None => (3.0, 15.0) // Default to Sonnet pricing if model not found
   }
   let cost = input_tokens.to_double() / 1000000.0 * input_price +
     output_tokens.to_double() / 1000000.0 * output_price

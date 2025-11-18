@@ -117,37 +117,21 @@ impl Command for ModelsCommand with execute(
 ) {
   let current = chat_history.current_model
   let petite = chat_history.petite_model
-  let sonnet_marker = if current == "claude-sonnet-4-5-20250929" {
-    " (current)"
-  } else if petite == "claude-sonnet-4-5-20250929" {
-    " (petite)"
-  } else {
-    ""
+
+  let mut output = "Available models:\n"
+  for model in available_models() {
+    let marker = if current == model.id {
+      " (current)"
+    } else if petite == model.id {
+      " (petite)"
+    } else {
+      ""
+    }
+    output = output + "  " + model.id + "   - " + model.description + marker + "\n"
   }
-  let haiku_marker = if current == "claude-haiku-4-5-20251001" {
-    " (current)"
-  } else if petite == "claude-haiku-4-5-20251001" {
-    " (petite)"
-  } else {
-    ""
-  }
-  let opus_marker = if current == "claude-opus-4-1-20250805" {
-    " (current)"
-  } else if petite == "claude-opus-4-1-20250805" {
-    " (petite)"
-  } else {
-    ""
-  }
-  jarvis_says(
-    (
-      $| Available models:
-      $|   claude-sonnet-4-5-20250929   - Claude Sonnet 4.5 (default, $3/$15 per 1M tokens)\{sonnet_marker}
-      $|   claude-haiku-4-5-20251001    - Claude Haiku 4.5 (fastest, $0.8/$4 per 1M tokens)\{haiku_marker}
-      $|   claude-opus-4-1-20250805     - Claude Opus 4.1 (most capable, $15/$75 per 1M tokens)\{opus_marker}
-      $|
-      $| Use ':model <name>' to switch models
-    ),
-  )
+  output = output + "\nUse ':model <name>' to switch models"
+
+  jarvis_says(output)
   true
 }
 
@@ -252,12 +236,10 @@ impl Command for CostCommand with description(_self) {
 impl Command for CostCommand with execute(_self, _parts, chat_history, _config) {
   let stats = chat_history.usage_stats
   let mut cost_breakdown = ""
-  stats.cost_by_model.each(fn(model, cost) {
-    let short_name = match model {
-      "claude-sonnet-4-5-20250929" => "Sonnet 4.5"
-      "claude-haiku-4-5-20251001" => "Haiku 4.5"
-      "claude-opus-4-1-20250805" => "Opus 4.1"
-      _ => model
+  stats.cost_by_model.each(fn(model_id, cost) {
+    let short_name = match get_model_info(model_id) {
+      Some(info) => info.name
+      None => model_id
     }
     cost_breakdown = cost_breakdown +
       "  " +
