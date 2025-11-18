@@ -1,9 +1,16 @@
 ///|
+/// Content block for message content
+struct ContentBlockItem {
+  type_ : String
+  text : String
+} derive(ToJson(fields(type_(rename="type"))), FromJson(fields(type_(rename="type"))))
+
+///|
 /// Message types
 /// Represents a chat message
 struct Message {
   role : String
-  content : String?
+  content : Array[ContentBlockItem]?
   tool_calls : Array[ToolCall]?
   tool_call_id : String?
   name : String?
@@ -13,10 +20,36 @@ struct Message {
 fn Message::new(role : String, content : String) -> Message {
   {
     role,
-    content: Some(content),
+    content: Some([{ type_: "text", text: content }]),
     tool_calls: None,
     tool_call_id: None,
     name: None,
+  }
+}
+
+///|
+/// Create content blocks array from string
+pub fn content_from_string(text : String) -> Array[ContentBlockItem] {
+  [{ type_: "text", text }]
+}
+
+///|
+/// Extract text content from message (concatenate all text blocks)
+pub fn Message::get_text(self : Message) -> String {
+  match self.content {
+    Some(blocks) => {
+      let mut result = ""
+      for block in blocks {
+        if block.type_ == "text" {
+          if !result.is_empty() {
+            result = result + "\n"
+          }
+          result = result + block.text
+        }
+      }
+      result
+    }
+    None => ""
   }
 }
 

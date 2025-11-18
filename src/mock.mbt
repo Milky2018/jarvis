@@ -395,10 +395,8 @@ test "integration: test context with all mocks" {
   ctx.chat_history.add(msg)
   inspect(ctx.chat_history.messages.length(), content="1")
   inspect(ctx.chat_history.messages[0].role, content="user")
-  match ctx.chat_history.messages[0].content {
-    Some(c) => inspect(c, content="test message")
-    None => @test.fail("Expected message content")
-  }
+  let text = ctx.chat_history.messages[0].get_text()
+  inspect(text, content="test message")
 }
 
 ///|
@@ -411,20 +409,8 @@ test "mock_llm_client_record_messages" {
 
   // Create test messages
   let messages : Array[Message] = [
-    {
-      role: "user",
-      content: Some("Hello"),
-      tool_calls: None,
-      tool_call_id: None,
-      name: None,
-    },
-    {
-      role: "assistant",
-      content: Some("Hi there!"),
-      tool_calls: None,
-      tool_call_id: None,
-      name: None,
-    },
+    Message::new("user", "Hello"),
+    Message::new("assistant", "Hi there!"),
   ]
 
   // Record the messages
@@ -433,15 +419,11 @@ test "mock_llm_client_record_messages" {
   // Verify the messages were recorded
   inspect(client.last_messages.length(), content="2")
   inspect(client.last_messages[0].role, content="user")
-  match client.last_messages[0].content {
-    Some(c) => inspect(c, content="Hello")
-    None => @test.fail("Expected content")
-  }
+  let text0 = client.last_messages[0].get_text()
+  inspect(text0, content="Hello")
   inspect(client.last_messages[1].role, content="assistant")
-  match client.last_messages[1].content {
-    Some(c) => inspect(c, content="Hi there!")
-    None => @test.fail("Expected content")
-  }
+  let text1 = client.last_messages[1].get_text()
+  inspect(text1, content="Hi there!")
 }
 
 ///|
@@ -482,49 +464,23 @@ test "mock_llm_client_message_history" {
   let client = MockLLMClient::new(responses)
 
   // Record first conversation
-  let messages1 : Array[Message] = [
-    {
-      role: "user",
-      content: Some("First message"),
-      tool_calls: None,
-      tool_call_id: None,
-      name: None,
-    },
-  ]
+  let messages1 : Array[Message] = [Message::new("user", "First message")]
   client.record_messages(messages1)
   inspect(client.last_messages.length(), content="1")
-  match client.last_messages[0].content {
-    Some(c) => inspect(c, content="First message")
-    None => @test.fail("Expected content")
-  }
+  let text1 = client.last_messages[0].get_text()
+  inspect(text1, content="First message")
 
   // Record second conversation (should replace)
   let messages2 : Array[Message] = [
-    {
-      role: "user",
-      content: Some("Second message"),
-      tool_calls: None,
-      tool_call_id: None,
-      name: None,
-    },
-    {
-      role: "assistant",
-      content: Some("Reply"),
-      tool_calls: None,
-      tool_call_id: None,
-      name: None,
-    },
+    Message::new("user", "Second message"),
+    Message::new("assistant", "Reply"),
   ]
   client.record_messages(messages2)
   inspect(client.last_messages.length(), content="2")
-  match client.last_messages[0].content {
-    Some(c) => inspect(c, content="Second message")
-    None => @test.fail("Expected content")
-  }
-  match client.last_messages[1].content {
-    Some(c) => inspect(c, content="Reply")
-    None => @test.fail("Expected content")
-  }
+  let text2_0 = client.last_messages[0].get_text()
+  inspect(text2_0, content="Second message")
+  let text2_1 = client.last_messages[1].get_text()
+  inspect(text2_1, content="Reply")
 }
 
 ///|

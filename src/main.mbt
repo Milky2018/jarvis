@@ -158,13 +158,7 @@ async fn handle_tool_calls(
               trimmed.has_suffix("：")
             if ends_with_colon {
               // Message added to history
-              let assistant_msg = {
-                role: "assistant",
-                content: Some(content_str),
-                tool_calls: None,
-                tool_call_id: None,
-                name: None,
-              }
+              let assistant_msg = Message::new("assistant", content_str)
               chat_history.add(assistant_msg)
 
               // Prompt Claude to actually call the tool instead of just describing
@@ -185,16 +179,11 @@ async fn handle_tool_calls(
         }
         // No tool calls, add message to history
         // Ensure content is not None to avoid API errors
-        let assistant_msg = {
-          role: "assistant",
-          content: match content_text {
-            Some(c) => Some(c)
-            None => Some("") // Use empty string instead of None
-          },
-          tool_calls: None,
-          tool_call_id: None,
-          name: None,
+        let content_str = match content_text {
+          Some(c) => c
+          None => ""
         }
+        let assistant_msg = Message::new("assistant", content_str)
         chat_history.add(assistant_msg)
 
         // Auto-continue: only if we've already called tools (i.e., we're in "work mode")
@@ -225,13 +214,7 @@ async fn handle_tool_calls(
       // Claude API requires content field to be non-null
       if content_text is Some(content) {
         if !content.is_empty() {
-          let assistant_msg = {
-            role: "assistant",
-            content: Some(content),
-            tool_calls: None,
-            tool_call_id: None,
-            name: None,
-          }
+          let assistant_msg = Message::new("assistant", content)
           chat_history.add(assistant_msg)
         }
       }
@@ -248,13 +231,7 @@ async fn handle_tool_calls(
 
       // Send tool results back as a user message
       let results_text = format_tool_results_as_text(tool_uses, tool_results)
-      let user_msg_with_results = {
-        role: "user",
-        content: Some(results_text),
-        tool_calls: None,
-        tool_call_id: None,
-        name: None,
-      }
+      let user_msg_with_results = Message::new("user", results_text)
       chat_history.add(user_msg_with_results)
 
       // Continue loop to get final response after tool execution
@@ -378,13 +355,10 @@ async fn chat_loop(config : Config) -> Unit {
           let user_inputs : Array[String] = []
           for msg in chat_history.messages {
             if msg.role == "user" {
-              match msg.content {
-                Some(content) =>
-                  // Skip tool result messages
-                  if !content.has_prefix("Tool:") {
-                    user_inputs.push(content)
-                  }
-                None => ()
+              let content = msg.get_text()
+              // Skip tool result messages
+              if !content.is_empty() && !content.has_prefix("Tool:") {
+                user_inputs.push(content)
               }
             }
           }

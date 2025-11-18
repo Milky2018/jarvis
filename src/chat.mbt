@@ -110,21 +110,23 @@ async fn generate_conversation_title(
   }
   for i = 0; i < limit; i = i + 1 {
     let msg = chat_history.messages[i]
-    guard msg.content is Some(c) else { continue }
-    let short = if c.length() > 100 { c[:100].to_string() + "..." } else { c }
+    let text = msg.get_text()
+    if text.is_empty() {
+      continue
+    }
+    let short = if text.length() > 100 {
+      (text[:100] catch { _ => text }).to_string() + "..."
+    } else {
+      text
+    }
     preview = preview + short + "\n"
   }
   let title_messages : Array[Message] = [
-    {
-      role: "user",
-      content: Some(
-        "Generate a short title (maximum 20 characters) for the following conversation. Return only the title itself, nothing else.\n\nConversation:\n" +
+    Message::new(
+      "user",
+      "Generate a short title (maximum 20 characters) for the following conversation. Return only the title itself, nothing else.\n\nConversation:\n" +
         preview,
-      ),
-      tool_calls: None,
-      tool_call_id: None,
-      name: None,
-    },
+    ),
   ]
   let response = send_chat_request_with_tools(
     config,
@@ -165,9 +167,13 @@ async fn generate_summary_with_title(
       "assistant" => "Jarvis"
       _ => msg.role
     }
-    let content = match msg.content {
-      Some(c) => if c.length() > 500 { c[:500].to_string() + "..." } else { c }
-      None => "[No content]"
+    let text = msg.get_text()
+    let content = if text.is_empty() {
+      "[No content]"
+    } else if text.length() > 500 {
+      (text[:500] catch { _ => text }).to_string() + "..."
+    } else {
+      text
     }
     conversation_text = conversation_text + "**\{role_text}**: \{content}\n\n"
   }
@@ -175,16 +181,11 @@ async fn generate_summary_with_title(
   // Create prompt for summarization
   system_notify("Generating summary:")
   let summary_messages : Array[Message] = [
-    {
-      role: "user",
-      content: Some(
-        "Summarize the following conversation in Markdown format. Include:\n1. Conversation topic\n2. Key points (use bullet points)\n3. Important decisions or conclusions\n4. Information to remember\n\nConversation:\n\n" +
+    Message::new(
+      "user",
+      "Summarize the following conversation in Markdown format. Include:\n1. Conversation topic\n2. Key points (use bullet points)\n3. Important decisions or conclusions\n4. Information to remember\n\nConversation:\n\n" +
         conversation_text,
-      ),
-      tool_calls: None,
-      tool_call_id: None,
-      name: None,
-    },
+    ),
   ]
 
   // Call API to generate summary
@@ -297,7 +298,10 @@ async fn summarize_messages(
   let summary_prompt = {
     let mut text = "Please provide a comprehensive summary of the following conversation history. Focus on key points, context, decisions made, and important details. You have up to \{MAX_SUMMARY_TOKENS} tokens for your summary.\n\n"
     for msg in messages {
-      guard msg.content is Some(content) else { continue }
+      let content = msg.get_text()
+      if content.is_empty() {
+        continue
+      }
       text = text + msg.role + ": " + content + "\n\n"
     }
     text + "Provide a detailed summary (maximum \{MAX_SUMMARY_TOKENS} tokens)."

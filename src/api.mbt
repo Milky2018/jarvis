@@ -148,10 +148,9 @@ async fn send_streaming_chat_request(
   let non_system_messages : Array[Message] = []
   for msg in messages {
     if msg.role == "system" {
-      if msg.content is Some(text) {
-        if !text.is_empty() {
-          system_blocks.push({ "type": "text", "text": text })
-        }
+      let text = msg.get_text()
+      if !text.is_empty() {
+        system_blocks.push({ "type": "text", "text": text })
       }
     } else {
       non_system_messages.push(msg)

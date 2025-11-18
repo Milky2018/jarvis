@@ -37,10 +37,9 @@ fn ChatRequest::with_tools(
   let non_system_messages : Array[Message] = []
   for msg in messages {
     if msg.role == "system" {
-      if msg.content is Some(text) {
-        if !text.is_empty() {
-          system_blocks.push({ type_: "text", text })
-        }
+      let text = msg.get_text()
+      if !text.is_empty() {
+        system_blocks.push({ type_: "text", text })
       }
     } else {
       non_system_messages.push(msg)
