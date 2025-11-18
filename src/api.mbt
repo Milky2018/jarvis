@@ -62,6 +62,13 @@ async fn send_chat_request_with_tools(
     "x-api-key": config.auth_token(),
     "anthropic-version": "2023-06-01",
     "anthropic-dangerous-direct-browser-access": "true",
+    "Accept": "application/json",
+    "x-app": "cli",
+    "User-Agent": "jarvis/1.0.0",
+    "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+    "accept-language": "*",
+    "sec-fetch-mode": "cors",
+    "accept-encoding": "gzip, deflate",
   }) catch {
     e =>
       raise HttpError(
@@ -172,6 +179,13 @@ async fn send_streaming_chat_request(
     "x-api-key": config.auth_token(),
     "anthropic-version": "2023-06-01",
     "anthropic-dangerous-direct-browser-access": "true",
+    "Accept": "application/json",
+    "x-app": "cli",
+    "User-Agent": "jarvis/1.0.0",
+    "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+    "accept-language": "*",
+    "sec-fetch-mode": "cors",
+    "accept-encoding": "gzip, deflate",
   }) catch {
     e =>
       raise HttpError(
@@ -191,6 +205,7 @@ async fn send_streaming_chat_request(
     "X-Stainless-Arch": "arm64",
     "X-Stainless-Runtime": "node",
     "X-Stainless-Runtime-Version": "v24.8.0",
+    "x-stainless-helper-method": "stream",
   }) catch {
     e =>
       raise HttpError(
