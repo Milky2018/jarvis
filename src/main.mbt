@@ -200,7 +200,7 @@ async fn handle_tool_calls(
         // Auto-continue: only if we've already called tools (i.e., we're in "work mode")
         // This prevents simple conversational responses from looping forever
         if has_called_tools {
-          system_notify("Working on your request...")
+          // system_notify("Working on your request...")
           let continue_msg = Message::new(
             "user", "Continue with your task. If you have completed everything, call the end_elaborate tool.",
           )
@@ -347,9 +347,7 @@ async fn chat_loop(config : Config) -> Unit {
     }
     None => {
       // Create new conversation with initial system message
-      let initial_msg = Message::new("system", SYSTEM_PROMPT)
       let history = ChatHistory::new()
-      history.add(initial_msg)
 
       // Create the first conversation file
       let file_num = create_new_conversation_file(
@@ -425,7 +423,104 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
   chat_history.add(initial_msg)
   system_notify("Processing: \{prompt}")
   println_async("")
-  handle_user_input(prompt, chat_history, config)
+
+  // Enable raw mode for Ctrl+C detection
+  set_raw_mode(@stdio.stdin.fd())
+
+  // Run with Ctrl+C handling
+  try {
+    @async.with_task_group(fn(group) {
+      // Spawn background task to monitor Ctrl+C
+      group.spawn_bg(fn() {
+        for {
+          let keypress = parse_keypress()
+          if keypress is Some(CtrlC) {
+            raise InterruptByUser
+          }
+        }
+      })
+
+      // Execute the prompt
+      handle_user_input(prompt, chat_history, config)
+      raise ActionFinished
+    })
+  } catch {
+    InterruptByUser => {
+      jarvis_says("Interrupted by user")
+      println_async("")
+    }
+    ActionFinished => ()
+    e => {
+      jarvis_says("Error: \{e}")
+      println_async("")
+    }
+  }
+}
+
+///|
+/// Consult mode: Execute a single prompt with persistent conversation history
+async fn consult_prompt(config : Config, prompt : String) -> Unit {
+  ensure_jarvis_dir()
+
+  // Load existing conversation or create new one (same as chat_loop)
+  let chat_history = match load_latest_conversation() {
+    Some((loaded_history, file_num)) => {
+      loaded_history.current_file_number = file_num
+      let num_str = format_conv_number(file_num)
+      system_notify("Loaded conversation from conv_\{num_str}.json")
+      loaded_history
+    }
+    None => {
+      // Create new conversation with initial system message
+      let initial_msg = Message::new("system", SYSTEM_PROMPT)
+      let history = ChatHistory::new()
+      history.add(initial_msg)
+
+      // Create the first conversation file
+      let file_num = create_new_conversation_file(
+        history.messages,
+        history.current_model,
+      )
+      history.current_file_number = file_num
+      system_notify("Created new conversation: conv_001.json")
+      history
+    }
+  }
+
+  system_notify("Consulting: \{prompt}")
+  println_async("")
+
+  // Enable raw mode for Ctrl+C detection
+  set_raw_mode(@stdio.stdin.fd())
+
+  // Run with Ctrl+C handling
+  try {
+    @async.with_task_group(fn(group) {
+      // Spawn background task to monitor Ctrl+C
+      group.spawn_bg(fn() {
+        for {
+          let keypress = parse_keypress()
+          if keypress is Some(CtrlC) {
+            raise InterruptByUser
+          }
+        }
+      })
+
+      // Execute the prompt
+      handle_user_input(prompt, chat_history, config)
+      raise ActionFinished
+    })
+  } catch {
+    InterruptByUser => {
+      jarvis_says("Interrupted by user")
+      println_async("")
+    }
+    ActionFinished => ()
+    e => {
+      jarvis_says("Error: \{e}")
+      println_async("")
+    }
+  }
 }
 
 ///|
@@ -437,11 +532,15 @@ async fn main {
     args={
       "execute": @clap.Arg::flag(
         short='e',
-        help="Execute a single prompt and exit",
+        help="Execute a single prompt and exit (no history)",
+      ),
+      "consult": @clap.Arg::flag(
+        short='c',
+        help="Consult mode: execute with persistent conversation history",
       ),
       "prompt": @clap.Arg::positional(
         nargs=@clap.Any,
-        help="Prompt to execute (requires -e flag)",
+        help="Prompt to execute (requires -e or -c flag)",
       ),
     },
   )
@@ -465,9 +564,13 @@ async fn main {
     return
   }
 
-  // Check if execute mode
+  // Check modes
   let execute_mode = value.flags.get("execute").unwrap_or(false)
-  let prompt = if execute_mode && value.positional_args.length() > 0 {
+  let consult_mode = value.flags.get("consult").unwrap_or(false)
+
+  // Get prompt if provided
+  let prompt = if (execute_mode || consult_mode) &&
+    value.positional_args.length() > 0 {
     // Join all positional args as the prompt
     let mut p = ""
     for i = 0; i < value.positional_args.length(); i = i + 1 {
@@ -480,19 +583,36 @@ async fn main {
   } else {
     None
   }
+
   try {
     let config = load_config()
 
-    // Check if -e flag is used
-    match prompt {
-      Some(p) => execute_prompt(config, p)
-      None =>
-        if execute_mode {
-          @stdio.stderr.write("Error: -e flag requires a prompt argument\n")
-          @stdio.stderr.write("Usage: jarvis -e \"<prompt>\"\n")
-        } else {
-          chat_loop(config)
-        }
+    // Check which mode to use
+    if execute_mode && consult_mode {
+      @stdio.stderr.write("Error: Cannot use both -e and -c flags together\n")
+      @stdio.stderr.write("Usage: jarvis -e \"<prompt>\" OR jarvis -c \"<prompt>\"\n")
+    } else {
+      match prompt {
+        Some(p) =>
+          if execute_mode {
+            execute_prompt(config, p)
+          } else if consult_mode {
+            consult_prompt(config, p)
+          } else {
+            @stdio.stderr.write("Error: Prompt provided but no mode flag\n")
+            @stdio.stderr.write("Usage: jarvis -e \"<prompt>\" OR jarvis -c \"<prompt>\"\n")
+          }
+        None =>
+          if execute_mode {
+            @stdio.stderr.write("Error: -e flag requires a prompt argument\n")
+            @stdio.stderr.write("Usage: jarvis -e \"<prompt>\"\n")
+          } else if consult_mode {
+            @stdio.stderr.write("Error: -c flag requires a prompt argument\n")
+            @stdio.stderr.write("Usage: jarvis -c \"<prompt>\"\n")
+          } else {
+            chat_loop(config)
+          }
+      }
     }
   } catch {
     EnvVarNotSet(msg) =>
