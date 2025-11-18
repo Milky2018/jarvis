@@ -2,3 +2,8 @@
 target/
 .mooncakes/
 .moonagent/
+
+# Debug tools (for personal use)
+proxy_server.py
+requirements.txt
+proxy_requests.log
