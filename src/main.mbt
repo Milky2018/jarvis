@@ -421,6 +421,8 @@ async fn chat_loop(config : Config) -> Unit {
 async fn execute_prompt(config : Config, prompt : String) -> Unit {
   ensure_jarvis_dir()
   let chat_history = ChatHistory::new()
+  let initial_msg = Message::new("system", SYSTEM_PROMPT)
+  chat_history.add(initial_msg)
   system_notify("Processing: \{prompt}")
   println_async("")
   handle_user_input(prompt, chat_history, config)
