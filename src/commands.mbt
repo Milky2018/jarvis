@@ -121,13 +121,13 @@ impl Command for ModelsCommand with execute(
   let mut output = "Available models:\n"
   for model in available_models() {
     let marker = if current == model.id {
-      " (current)"
+      "[current] "
     } else if petite == model.id {
-      " (petite)"
+      "[petite]  "
     } else {
-      ""
+      "          "
     }
-    output = output + "  " + model.id + "   - " + model.description + marker + "\n"
+    output = output + "  " + marker + model.id + " - " + model.description + "\n"
   }
   output = output + "\nUse ':model <name>' to switch models"
 
