@@ -192,11 +192,61 @@ pub async fn Client::put(
 
 ///|
 /// Perform a `POST` request to the server, see `Client::request` for more details.
+/// By default, automatically follows redirects (301, 302, 307, 308).
+/// Set `redirect` to `false` to disable automatic redirect following.
+/// Set `max_redirects` to control the maximum number of redirects (default: 10).
 pub async fn Client::post(
   self : Client,
   path : String,
   body : &@io.Data,
   extra_headers? : Map[String, String] = {},
+  redirect? : Bool = true,
+  max_redirects? : Int = 10,
 ) -> Response {
-  self..request(Post, path, extra_headers~)..write(body).end_request()
+  // If redirect is disabled, use simple post
+  if not(redirect) {
+    return self..request(Post, path, extra_headers~)..write(body).end_request()
+  }
+
+  // Automatic redirect handling
+  let mut redirects_count = 0
+  let mut current_path = path
+
+  while redirects_count < max_redirects {
+    let response = self..request(Post, current_path, extra_headers~)..write(body)
+      .end_request()
+
+    // Check if response is a redirect
+    if response.code == 301 || response.code == 302 || response.code == 307 ||
+      response.code == 308 {
+      // Get Location header (try both lowercase and uppercase)
+      match response.headers.get("location") {
+        Some(new_path) => {
+          redirects_count = redirects_count + 1
+          current_path = new_path
+          continue
+        }
+        None =>
+          match response.headers.get("Location") {
+            Some(new_path) => {
+              redirects_count = redirects_count + 1
+              current_path = new_path
+              continue
+            }
+            None => {
+              // Location header missing, just return the redirect response
+              // The caller can handle it
+              return response
+            }
+          }
+      }
+    }
+
+    // Not a redirect, return the response
+    return response
+  }
+
+  // Max redirects exceeded, return the last response
+  // The caller can check response.code to see it's still a redirect
+  self..request(Post, current_path, extra_headers~)..write(body).end_request()
 }
