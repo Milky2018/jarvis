@@ -33,7 +33,7 @@ async fn send_chat_request(
       tools,
       chat_history.current_model,
     )
-    println_async("") // Add newline after streaming
+    newline_async() // Add newline after streaming
     (resp, true)
   } else {
     // Subsequent requests: non-streaming
@@ -359,10 +359,10 @@ async fn chat_loop(config : Config) -> Unit {
       history
     }
   }
-  println_async("")
+  newline_async()
   jarvis_says("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
   println_async("(Type 'exit' or 'quit' to end the conversation)")
-  println_async("")
+  newline_async()
 
   // Main loop: Ctrl+C handling to interrupt operations
   for {
@@ -401,13 +401,13 @@ async fn chat_loop(config : Config) -> Unit {
       ExitRequested => break
       InterruptByUser => {
         jarvis_says("Interrupted by user")
-        println_async("")
+        newline_async()
         continue
       }
       ActionFinished => continue
       e => {
-        println_async("")
-        jarvis_says("Fatal error: \{e}")
+        newline_async()
+        jarvis_cries("Fatal error: \{e}")
         break
       }
     }
@@ -421,8 +421,6 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
   let chat_history = ChatHistory::new()
   let initial_msg = Message::new("system", SYSTEM_PROMPT)
   chat_history.add(initial_msg)
-  system_notify("Processing: \{prompt}")
-  println_async("")
 
   // Enable raw mode for Ctrl+C detection
   set_raw_mode(@stdio.stdin.fd())
@@ -445,12 +443,12 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
   }) catch {
     InterruptByUser => {
       jarvis_says("Interrupted by user")
-      println_async("")
+      newline_async()
     }
     ActionFinished => ()
     e => {
       jarvis_says("Error: \{e}")
-      println_async("")
+      newline_async()
     }
   }
 }
@@ -485,7 +483,7 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
     }
   }
   system_notify("Consulting: \{prompt}")
-  println_async("")
+  newline_async()
 
   // Enable raw mode for Ctrl+C detection
   set_raw_mode(@stdio.stdin.fd())
@@ -508,12 +506,12 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
   }) catch {
     InterruptByUser => {
       jarvis_says("Interrupted by user")
-      println_async("")
+      newline_async()
     }
     ActionFinished => ()
     e => {
       jarvis_says("Error: \{e}")
-      println_async("")
+      newline_async()
     }
   }
 }

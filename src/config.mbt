@@ -136,6 +136,12 @@ async fn println_async(s : String) -> Unit {
 }
 
 ///|
+/// Print a newline
+async fn newline_async() -> Unit {
+  @stdio.stdout.write("\n")
+}
+
+///|
 /// Print horizontal separator line
 async fn print_separator() -> Unit {
   let size = window_size()

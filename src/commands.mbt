@@ -426,7 +426,7 @@ impl Command for PlayCommand with execute(_self, parts, chat_history, config) {
     DEFAULT_PLAY_BUDGET
   }
   jarvis_says("Entering play mode with budget: $\{budget}")
-  println_async("")
+  newline_async()
 
   // Start autonomous play session
   start_play_mode(config, chat_history, budget)
@@ -585,7 +585,7 @@ async fn start_play_mode(
   // Add initial user message to trigger Jarvis's first response
   chat_history.add(Message::new("user", "Begin your exploration."))
   jarvis_says("Play mode initialized. Jarvis is now autonomous!")
-  println_async("")
+  newline_async()
 
   // First iteration - let Jarvis start autonomously
   let mut iterations = 0
@@ -605,7 +605,7 @@ async fn start_play_mode(
 
     // Show remaining budget
     jarvis_says("Budget remaining: $\{remaining} (iteration \{iterations})")
-    println_async("")
+    newline_async()
 
     // Get response and handle tool calls
     try {

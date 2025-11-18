@@ -9,7 +9,7 @@ async fn interact(
 
   // Wait for input from readline task
   let user_input = input_queue.get()
-  println_async("") // Print newline after user input
+  newline_async() // Print newline after user input
   print_separator()
 
   // Check for exit commands
@@ -20,11 +20,11 @@ async fn interact(
 
   // Handle special commands
   if handle_command(user_input, chat_history, config) {
-    println_async("")
+    newline_async()
     return
   }
 
   // Handle normal user input
   handle_user_input(user_input, chat_history, config)
-  println_async("")
+  newline_async()
 }
