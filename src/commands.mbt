@@ -336,12 +336,10 @@ impl Command for SummarizeCommand with execute(
 
   // Save markdown summary using @fs API
   let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
-  try {
-    @fs.write_file(md_filename, summary, create=0o644)
-    jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
-  } catch {
+  @fs.write_file(md_filename, summary, create=0o644) catch {
     e => jarvis_cries("Failed to save summary file: \{e}")
   }
+  jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
 
   // Compress the conversation history by replacing old messages with summary
   // Force compression regardless of token count since user explicitly requested summarization

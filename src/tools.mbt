@@ -64,24 +64,17 @@ async fn execute_shell_command(
   command : String,
   _chat_history : ChatHistory,
 ) -> String {
-  try {
-    // Execute command directly without cd prefix
-    let (exit_code, output) = @process.collect_output_merged("sh", [
-      "-c", command,
-    ])
-    let output_text = output.text()
-
-    if exit_code == 0 {
-      if output_text.is_empty() {
-        "Command executed successfully (no output)"
-      } else {
-        output_text
-      }
+  // Execute command directly without cd prefix
+  let (exit_code, output) = @process.collect_output_merged("sh", ["-c", command])
+  let output_text = output.text()
+  if exit_code == 0 {
+    if output_text.is_empty() {
+      "Command executed successfully (no output)"
     } else {
-      "Command failed with exit code \{exit_code}\nOutput:\n\{output_text}"
+      output_text
     }
-  } catch {
-    e => "Error executing command: \{e}"
+  } else {
+    "Command failed with exit code \{exit_code}\nOutput:\n\{output_text}"
   }
 }
 
@@ -457,7 +450,6 @@ impl ToolImpl for EndElaborateTool with execute(_self, input, _chat_history) {
       }
     _ => "Task completed"
   }
-  tool_log("\{COLOR_BOLD}EndElaborate\{COLOR_RESET}(\{summary})")
   // Return a special marker that the main loop will detect
   "ELABORATE_COMPLETE: \{summary}"
 }
@@ -828,115 +820,108 @@ async fn edit_file_tool(
   old_string : String,
   new_string : String,
 ) -> String {
-  try {
-    // Read current content
-    let content_data = @fs.read_file(path) catch {
-      e => return tool_error("Error reading file: \{e}")
-    }
-    let content = content_data.text()
-
-    // Check if old_string exists
-    if !content.contains(old_string) {
-      return tool_error("Error: old_string not found in file")
-    }
-
-    // Count occurrences by splitting
-    let parts_view = content.split(old_string)
-    let parts : Array[String] = []
-    for part in parts_view {
-      parts.push(part.to_string())
-    }
-    let count = parts.length() - 1
-    if count > 1 {
-      return tool_error(
-        "Error: old_string appears \{count} times in file. Please make it more specific or use write_file to replace entire content.",
-      )
-    }
-
-    // Perform replacement
-    let new_content = content.replace(old=old_string, new=new_string)
-
-    // Write back
-    @fs.write_file(path, new_content, create=0o644) catch {
-      e => return tool_error("Error writing file: \{e}")
-    }
-
-    // Generate colored diff output and display to user
-    let builder = StringBuilder::new()
-
-    // Show old content (red foreground)
-    let old_lines_view = old_string.split("\n")
-    let old_lines : Array[String] = []
-    for line in old_lines_view {
-      old_lines.push(line.to_string())
-    }
-    for i = 0; i < old_lines.length(); i = i + 1 {
-      builder.write_string(COLOR_RED)
-      builder.write_string("- ")
-      builder.write_string(old_lines[i])
-      builder.write_string(COLOR_RESET)
-      builder.write_string("\n")
-    }
-    // Show new content (green foreground)
-    let new_lines_view = new_string.split("\n")
-    let new_lines : Array[String] = []
-    for line in new_lines_view {
-      new_lines.push(line.to_string())
-    }
-    for i = 0; i < new_lines.length(); i = i + 1 {
-      builder.write_string(COLOR_GREEN)
-      builder.write_string("+ ")
-      builder.write_string(new_lines[i])
-      builder.write_string(COLOR_RESET)
-      builder.write_string("\n")
-    }
-    tool_log(builder.to_string())
-    "Successfully edited \{path}"
-  } catch {
-    e => "Error: \{e}"
+  // Read current content
+  let content_data = @fs.read_file(path) catch {
+    e => return tool_error("Error reading file: \{e}")
   }
+  let content = content_data.text()
+
+  // Check if old_string exists
+  if !content.contains(old_string) {
+    return tool_error("Error: old_string not found in file")
+  }
+
+  // Count occurrences by splitting
+  let parts_view = content.split(old_string)
+  let parts : Array[String] = []
+  for part in parts_view {
+    parts.push(part.to_string())
+  }
+  let count = parts.length() - 1
+  if count > 1 {
+    return tool_error(
+      "Error: old_string appears \{count} times in file. Please make it more specific or use write_file to replace entire content.",
+    )
+  }
+
+  // Perform replacement
+  let new_content = content.replace(old=old_string, new=new_string)
+
+  // Write back
+  @fs.write_file(path, new_content, create=0o644) catch {
+    e => return tool_error("Error writing file: \{e}")
+  }
+
+  // Generate colored diff output and display to user
+  let builder = StringBuilder::new()
+
+  // Show old content (red foreground)
+  let old_lines_view = old_string.split("\n")
+  let old_lines : Array[String] = []
+  for line in old_lines_view {
+    old_lines.push(line.to_string())
+  }
+  for i = 0; i < old_lines.length(); i = i + 1 {
+    builder.write_string(COLOR_RED)
+    builder.write_string("- ")
+    builder.write_string(old_lines[i])
+    builder.write_string(COLOR_RESET)
+    builder.write_string("\n")
+  }
+  // Show new content (green foreground)
+  let new_lines_view = new_string.split("\n")
+  let new_lines : Array[String] = []
+  for line in new_lines_view {
+    new_lines.push(line.to_string())
+  }
+  for i = 0; i < new_lines.length(); i = i + 1 {
+    builder.write_string(COLOR_GREEN)
+    builder.write_string("+ ")
+    builder.write_string(new_lines[i])
+    builder.write_string(COLOR_RESET)
+    builder.write_string("\n")
+  }
+  tool_log(builder.to_string())
+  "Successfully edited \{path}"
 }
 
 ///|
 /// Web search tool implementation using Google
 async fn web_search_tool(query : String, num_results : Int) -> String {
-  try {
-    // URL encode the query
-    let encoded_query = url_encode(query)
 
-    // Use Google search with num parameter
-    let url = "https://www.google.com/search?q=\{encoded_query}&num=\{num_results}"
+  // URL encode the query
+  let encoded_query = url_encode(query)
 
-    // Make HTTP request
-    let (response, body) = get_with_proxy(url) catch {
-      e => return tool_error("Error: Failed to connect to search engine: \{e}")
-    }
-    if response.code != 200 {
-      return tool_error(
-        "Error: Search engine returned status code \{response.code}",
-      )
-    }
-    let html = body.text()
+  // Use Google search with num parameter
+  let url = "https://www.google.com/search?q=\{encoded_query}&num=\{num_results}"
 
-    // Parse search results from HTML (simple parsing)
-    let results = parse_google_results(html, num_results)
-    if results.is_empty() {
-      "No search results found for query: \{query}"
-    } else {
-      let mut output = "Search results for '\{query}':\n\n"
-      for i = 0; i < results.length(); i = i + 1 {
-        let (title, url_str, snippet) = results[i]
-        output = output + "\{i + 1}. \{title}\n"
-        output = output + "   URL: \{url_str}\n"
-        if !snippet.is_empty() {
-          output = output + "   \{snippet}\n"
-        }
-        output = output + "\n"
+  // Make HTTP request
+  let (response, body) = get_with_proxy(url) catch {
+    e => return tool_error("Error: Failed to connect to search engine: \{e}")
+  }
+  if response.code != 200 {
+    return tool_error(
+      "Error: Search engine returned status code \{response.code}",
+    )
+  }
+  let html = body.text()
+
+  // Parse search results from HTML (simple parsing)
+  let results = parse_google_results(html, num_results)
+  if results.is_empty() {
+    "No search results found for query: \{query}"
+  } else {
+    let mut output = "Search results for '\{query}':\n\n"
+    for i = 0; i < results.length(); i = i + 1 {
+      let (title, url_str, snippet) = results[i]
+      output = output + "\{i + 1}. \{title}\n"
+      output = output + "   URL: \{url_str}\n"
+      if !snippet.is_empty() {
+        output = output + "   \{snippet}\n"
       }
-      output
+      output = output + "\n"
     }
-  } catch {
-    e => "Error: \{e}"
+    output
   }
 }
 
@@ -1097,51 +1082,43 @@ fn clean_html(text : String) -> String {
 ///|
 /// Grep tool implementation (search file contents)
 async fn grep_tool(pattern : String, path : String) -> String {
-  try {
-    // Use ripgrep if available, otherwise use grep
-    let (exit_code, output) = @process.collect_output_merged("sh", [
-      "-c",
-      "if command -v rg >/dev/null 2>&1; then rg --line-number --no-heading '\{pattern}' '\{path}' 2>&1; else grep -rn '\{pattern}' '\{path}' 2>&1; fi",
-    ])
-    let result = output.text()
-    if exit_code == 0 {
-      if result.is_empty() {
-        "No matches found for pattern: \{pattern}"
-      } else {
-        result
-      }
-    } else if exit_code == 1 {
-      // Exit code 1 means no matches found for ripgrep/grep
+  // Use ripgrep if available, otherwise use grep
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c",
+    "if command -v rg >/dev/null 2>&1; then rg --line-number --no-heading '\{pattern}' '\{path}' 2>&1; else grep -rn '\{pattern}' '\{path}' 2>&1; fi",
+  ])
+  let result = output.text()
+  if exit_code == 0 {
+    if result.is_empty() {
       "No matches found for pattern: \{pattern}"
     } else {
-      "Error searching: \{result}"
+      result
     }
-  } catch {
-    e => "Error: \{e}"
+  } else if exit_code == 1 {
+    // Exit code 1 means no matches found for ripgrep/grep
+    "No matches found for pattern: \{pattern}"
+  } else {
+    "Error searching: \{result}"
   }
 }
 
 ///|
 /// Glob tool implementation (find files by pattern)
 async fn glob_tool(pattern : String, path : String) -> String {
-  try {
-    // Use find with -name pattern
-    let (exit_code, output) = @process.collect_output_merged("sh", [
-      "-c",
-      "cd '\{path}' 2>/dev/null && find . -name '\{pattern}' -type f 2>/dev/null | head -100",
-    ])
-    let result = output.text()
-    if exit_code == 0 {
-      if result.is_empty() {
-        "No files found matching pattern: \{pattern}"
-      } else {
-        result
-      }
+  // Use find with -name pattern
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c",
+    "cd '\{path}' 2>/dev/null && find . -name '\{pattern}' -type f 2>/dev/null | head -100",
+  ])
+  let result = output.text()
+  if exit_code == 0 {
+    if result.is_empty() {
+      "No files found matching pattern: \{pattern}"
     } else {
-      "Error finding files: \{result}"
+      result
     }
-  } catch {
-    e => "Error: \{e}"
+  } else {
+    "Error finding files: \{result}"
   }
 }
 
