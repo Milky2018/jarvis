@@ -106,7 +106,7 @@ const MAX_CONTEXT_TOKENS : Int = 200000
 
 ///|
 /// Maximum tokens for model response
-const MAX_RESPONSE_TOKENS : Int = 4096
+const MAX_RESPONSE_TOKENS : Int = 32000
 
 ///|
 /// Tool calling configuration

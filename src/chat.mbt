@@ -3,7 +3,7 @@
 /// Manages conversation history
 struct ChatHistory {
   messages : Array[Message]
-  max_context_tokens : Int // Maximum tokens for context (e.g., 4096)
+  max_context_tokens : Int // Maximum tokens for context (e.g., 32000)
   mut current_model : String // Current model to use
   mut petite_model : String // Petite model for summaries and titles
   usage_stats : UsageStats // Track API usage
