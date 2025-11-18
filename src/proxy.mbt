@@ -46,18 +46,14 @@ fn parse_proxy_url(proxy_url : String) -> (String, Int)? {
 /// Uses proxy if configured via environment variables, otherwise uses direct connection
 pub async fn get_with_proxy(url : String) -> (@http.Response, &@io.Data) {
   let env_vars = @sys.get_env_vars()
-
-  // Read and parse proxy settings
-  let http_proxy = parse_proxy_url(
-    env_vars
-      .get("HTTP_PROXY")
-      .unwrap_or_else(() => env_vars.get("http_proxy").unwrap_or_default()),
-  )
-  let https_proxy = parse_proxy_url(
-    env_vars
-      .get("HTTPS_PROXY")
-      .unwrap_or_else(() => env_vars.get("https_proxy").unwrap_or_default()),
-  )
+  let http_proxy = (match env_vars.get("HTTP_PROXY") {
+    Some(v) => Some(v)
+    None => env_vars.get("http_proxy")
+  }).bind(parse_proxy_url)
+  let https_proxy = (match env_vars.get("HTTPS_PROXY") {
+    Some(v) => Some(v)
+    None => env_vars.get("https_proxy")
+  }).bind(parse_proxy_url)
 
   // Build proxy configuration
   let proxy = match (http_proxy, https_proxy) {
@@ -67,7 +63,6 @@ pub async fn get_with_proxy(url : String) -> (@http.Response, &@io.Data) {
     (None, Some((h, p))) => Some(@http.Proxy::https(h, port=p))
     (None, None) => None
   }
-
   match proxy {
     Some(p) => @http.get(url, proxy=p)
     None => @http.get(url)

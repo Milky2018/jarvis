@@ -956,14 +956,14 @@ async fn edit_file_tool(
 }
 
 ///|
-/// Web search tool implementation using DuckDuckGo
+/// Web search tool implementation using Google
 async fn web_search_tool(query : String, num_results : Int) -> String {
   try {
     // URL encode the query
     let encoded_query = url_encode(query)
 
-    // Use DuckDuckGo HTML search
-    let url = "https://html.duckduckgo.com/html/?q=\{encoded_query}"
+    // Use Google search with num parameter
+    let url = "https://www.google.com/search?q=\{encoded_query}&num=\{num_results}"
 
     // Make HTTP request
     let (response, body) = get_with_proxy(url) catch {
@@ -977,7 +977,7 @@ async fn web_search_tool(query : String, num_results : Int) -> String {
     let html = body.text()
 
     // Parse search results from HTML (simple parsing)
-    let results = parse_duckduckgo_results(html, num_results)
+    let results = parse_google_results(html, num_results)
     if results.is_empty() {
       "No search results found for query: \{query}"
     } else {
@@ -999,20 +999,16 @@ async fn web_search_tool(query : String, num_results : Int) -> String {
 }
 
 ///|
-/// Parse DuckDuckGo HTML results (simple extraction)
-fn parse_duckduckgo_results(
+/// Parse Google HTML results (simple extraction)
+fn parse_google_results(
   html : String,
   max_results : Int,
 ) -> Array[(String, String, String)] {
   let results : Array[(String, String, String)] = []
 
-  // Try multiple patterns for robustness
-  // Pattern 1: <div class="result" (standard)
-  // Pattern 2: <div class='result' (alternative quotes)
-  // Pattern 3: Links-based extraction as fallback
-
-  // First try: Look for result divs
-  let parts_view = html.split("<div class=\"result")
+  // Google uses <div class="g"> for each search result
+  // Try to find result containers
+  let parts_view = html.split("<div class=\"g\"")
   let parts : Array[String] = []
   for part in parts_view {
     parts.push(part.to_string())
@@ -1022,36 +1018,71 @@ fn parse_duckduckgo_results(
   for i = 1; i < parts.length() && results.length() < max_results; i = i + 1 {
     let part = parts[i]
 
-    // Try multiple extraction patterns for title and URL
-    let mut title = extract_between(part, "result__a\">", "</a>")
-    if title.is_empty() {
-      title = extract_between(part, "result__a\" href=\"", "\">")
-      if !title.is_empty() {
-        // Extract just the text after the href
-        title = extract_between(part, "\">", "</a>")
+    // Extract title from <h3> tag
+    let title = extract_between(part, "<h3", "</h3>")
+    // Remove the opening tag and attributes
+    let title_text = if title.contains(">") {
+      let title_parts_view = title.split(">")
+      let title_parts : Array[String] = []
+      for p in title_parts_view {
+        title_parts.push(p.to_string())
       }
-    }
-    let mut url_str = extract_between(part, "result__url\" href=\"", "\"")
-    if url_str.is_empty() {
-      // Try alternative: uddg= parameter (DuckDuckGo redirect)
-      url_str = extract_between(part, "uddg=", "\"")
-      if !url_str.is_empty() {
-        // URL decode the uddg parameter (basic decoding)
-        url_str = url_str.replace(old="%3A", new=":")
-        url_str = url_str.replace(old="%2F", new="/")
-        url_str = url_str.replace(old="%3F", new="?")
-        url_str = url_str.replace(old="%3D", new="=")
-        url_str = url_str.replace(old="%26", new="&")
+      if title_parts.length() > 1 {
+        title_parts[1]
+      } else {
+        title
       }
+    } else {
+      title
     }
 
-    // Extract snippet
-    let snippet = extract_between(part, "result__snippet\">", "</a>")
-    if !title.is_empty() && !url_str.is_empty() {
+    // Extract URL from href attribute
+    let url_str = extract_between(part, "href=\"", "\"")
+    // Google search results often have /url?q= prefix
+    let clean_url = if url_str.has_prefix("/url?q=") {
+      let url_parts_view = url_str.split("&")
+      let url_parts : Array[String] = []
+      for p in url_parts_view {
+        url_parts.push(p.to_string())
+      }
+      if url_parts.length() > 0 {
+        let first_part = url_parts[0]
+        if first_part.has_prefix("/url?q=") {
+          first_part[7:].to_string() catch { _ => url_str }
+        } else {
+          url_str
+        }
+      } else {
+        url_str
+      }
+    } else {
+      url_str
+    }
+
+    // Extract snippet from result description
+    let snippet = extract_between(part, "<div class=\"VwiC3b", "</div>")
+    // Remove the opening tag and attributes
+    let snippet_text = if snippet.contains(">") {
+      let snippet_parts_view = snippet.split(">")
+      let snippet_parts : Array[String] = []
+      for p in snippet_parts_view {
+        snippet_parts.push(p.to_string())
+      }
+      if snippet_parts.length() > 1 {
+        snippet_parts[1]
+      } else {
+        snippet
+      }
+    } else {
+      snippet
+    }
+
+    if !title_text.is_empty() && !clean_url.is_empty() &&
+      clean_url.has_prefix("http") {
       // Clean HTML entities and tags
-      let clean_title = clean_html(title)
-      let clean_snippet = clean_html(snippet)
-      results.push((clean_title, url_str, clean_snippet))
+      let clean_title = clean_html(title_text)
+      let clean_snippet = clean_html(snippet_text)
+      results.push((clean_title, clean_url, clean_snippet))
     }
   }
   results
