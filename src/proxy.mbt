@@ -69,17 +69,29 @@ pub async fn get_with_proxy(url : String) -> (@http.Response, &@io.Data) {
     }
   }
 
-  // For now, always use direct connection since MoonBit's @http doesn't support proxy
-  // TODO: Implement proxy support using @socket.Tcp when needed
-  if !proxy_url.is_empty() {
-    // Log that proxy is configured but not used
-    println_async(
-      "Note: Proxy configured (\{proxy_url}) but not yet supported by HTTP library",
-    )
+  // Parse proxy URL and create proxy configuration if available
+  let proxy = if !proxy_url.is_empty() {
+    match parse_proxy_url(proxy_url) {
+      Some((host, port)) => {
+        // Determine protocol from URL
+        let protocol = if url.has_prefix("https://") {
+          Some(@http.Proxy::https(host, port~))
+        } else {
+          Some(@http.Proxy::http(host, port~))
+        }
+        protocol
+      }
+      None => None
+    }
+  } else {
+    None
   }
 
-  // Use direct connection
-  @http.get(url)
+  // Use @http.get with proxy support
+  match proxy {
+    Some(p) => @http.get(url, proxy=p)
+    None => @http.get(url)
+  }
 }
 
 ///|
