@@ -46,6 +46,11 @@ Jarvis uses **tool calling** as the primary action mechanism:
 
 **Available Tools:**
 - `execute_command`: Run shell commands
+- `read_file`: Read file contents with pagination
+- `write_file`: Create or overwrite files
+- `grep`: Search for patterns in files
+- `glob`: Find files matching patterns
+- `end_elaborate`: Signal task completion
 - `end_play_mode`: Exit autonomous mode (play mode only)
 
 ### 3.2 Context Management
@@ -82,14 +87,23 @@ Jarvis uses **tool calling** as the primary action mechanism:
 
 4. **Playground Isolation**: `~/.jarvis/playground` for experiments
 
-### 3.4 Async Architecture
+### 3.4 Auto-Continue Workflow
+
+**Philosophy:** Let Jarvis work autonomously until completion
+
+**Behavior:**
+- Simple responses: Returns control immediately
+- Tool-based tasks: Continues until `end_elaborate` is called
+- Prevents infinite loops on conversational responses
+
+### 3.5 Async Architecture
 
 All I/O is asynchronous for responsiveness:
 - Non-blocking network requests
 - Queue-based readline communication
 - Responsive to interrupts (Ctrl+C)
 
-### 3.5 Error Handling
+### 3.6 Error Handling
 
 **Principle:** Errors inform, don't crash
 
@@ -157,9 +171,9 @@ Standard terminal conventions:
 
 ### Add New Tools
 
-1. Define schema in `get_available_tools()`
-2. Add execution in `execute_tool_claude()`
-3. Optional: conditional availability
+1. Create tool struct implementing `ToolImpl` trait
+2. Add to `get_available_tools()`
+3. Test with integration tests
 
 ### Add New Commands
 
@@ -185,8 +199,17 @@ Standard terminal conventions:
 3. Claude API format only
 4. No undo for commands
 
+## 9. Testing Strategy
+
+**Philosophy:** Test real behavior, not mocks
+
+- Integration tests use actual tools and execution
+- Mock only the LLM layer for predictability
+- Tests colocated with implementation
+- 39 tests covering core functionality
+
 ---
 
-**Version**: v0.1.0 | **Updated**: 2025-11-14
+**Version**: v0.1.0 | **Updated**: 2025-11-18
 
 *For implementation details, see source code. For usage, see README.md.*
