@@ -16,6 +16,8 @@ Jarvis is an intelligent AI assistant built with MoonBit, enabling natural langu
 - ✅ Execute mode (`-e` flag) for single commands
 - ✅ Play mode for autonomous exploration
 - ✅ Multi-model support (Claude Sonnet/Haiku/Opus)
+- ✅ Auto-continue workflow until task completion
+- ✅ Comprehensive test coverage with integration tests
 
 ## Quick Start
 
