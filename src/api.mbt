@@ -1,6 +1,13 @@
 ///|
-/// Parse URL into host and path components
+/// Parse URL into host and path components.
+/// Returns (host, path) where path is empty string if no path is provided in URL.
+/// Examples:
+///   "https://api.example.com/v1/messages" -> ("api.example.com", "/v1/messages")
+///   "https://api.example.com" -> ("api.example.com", "")
+///   "https://api.example.com/" -> ("api.example.com", "")
+///   "api.example.com/api" -> ("api.example.com", "/api")
 fn parse_url(url : String) -> (String, String) raise JarvisError {
+  // Remove protocol prefix if present
   let host_and_path : StringView = if url.has_prefix("https://") {
     url[8:] catch {
       IndexOutOfBounds(_) | InvalidIndex(_) =>
@@ -18,26 +25,98 @@ fn parse_url(url : String) -> (String, String) raise JarvisError {
   } else {
     url[:]
   }
+
+  // Split by "/" to separate host and path
   let parts_view = host_and_path.split("/")
   let parts_array : Array[String] = []
   for part in parts_view {
     parts_array.push(part.to_string())
   }
+
+  // First part is always the host
   let host = parts_array[0]
+
+  // Reconstruct path from remaining parts
   let path = if parts_array.length() > 1 {
     let mut p = ""
     for i = 1; i < parts_array.length(); i = i + 1 {
       p = p + "/" + parts_array[i]
     }
-    if p.is_empty() {
-      "/v1/messages"
+    // If path is just "/" (from trailing slash), return empty
+    if p == "/" {
+      ""
     } else {
       p
     }
   } else {
-    "/v1/messages"
+    // No path provided
+    ""
   }
+
   (host, path)
+}
+
+///|
+test "parse_url_with_https_and_path" {
+  let (host, path) = parse_url("https://api.anthropic.com/v1/messages")
+  inspect(host, content="api.anthropic.com")
+  inspect(path, content="/v1/messages")
+}
+
+///|
+test "parse_url_with_http_and_path" {
+  let (host, path) = parse_url("http://localhost:8080/v1/messages")
+  inspect(host, content="localhost:8080")
+  inspect(path, content="/v1/messages")
+}
+
+///|
+test "parse_url_without_protocol" {
+  let (host, path) = parse_url("api.anthropic.com/v1/chat")
+  inspect(host, content="api.anthropic.com")
+  inspect(path, content="/v1/chat")
+}
+
+///|
+test "parse_url_host_only_https" {
+  let (host, path) = parse_url("https://api.anthropic.com")
+  inspect(host, content="api.anthropic.com")
+  inspect(path, content="")
+}
+
+///|
+test "parse_url_host_only_no_protocol" {
+  let (host, path) = parse_url("api.anthropic.com")
+  inspect(host, content="api.anthropic.com")
+  inspect(path, content="")
+}
+
+///|
+test "parse_url_with_trailing_slash" {
+  let (host, path) = parse_url("https://api.anthropic.com/")
+  inspect(host, content="api.anthropic.com")
+  inspect(path, content="")
+}
+
+///|
+test "parse_url_with_existing_path" {
+  let (host, path) = parse_url("https://api.anthropic.com/api")
+  inspect(host, content="api.anthropic.com")
+  inspect(path, content="/api")
+}
+
+///|
+test "parse_url_with_multiple_path_segments" {
+  let (host, path) = parse_url("https://api.example.com/v2/chat/completions")
+  inspect(host, content="api.example.com")
+  inspect(path, content="/v2/chat/completions")
+}
+
+///|
+test "parse_url_localhost_with_port" {
+  let (host, path) = parse_url("http://localhost:3000/api/messages")
+  inspect(host, content="localhost:3000")
+  inspect(path, content="/api/messages")
 }
 
 ///|
@@ -50,7 +129,8 @@ async fn send_chat_request_with_tools(
 ) -> ChatResponse raise JarvisError {
   // Parse URL to extract host and path
   let url = config.base_url()
-  let (host, path) = parse_url(url)
+  let (host, base_path) = parse_url(url)
+  let path = base_path + "/v1/messages"
 
   // Build request JSON with tools
   let request = ChatRequest::with_tools(messages, model, tools)
@@ -145,13 +225,12 @@ async fn send_streaming_chat_request(
 ) -> ChatResponse raise JarvisError {
   // Parse URL
   let url = config.base_url()
-  let (host, path) = parse_url(url)
+  let (host, base_path) = parse_url(url)
+  let path = base_path + "/v1/messages"
 
   // Build request JSON with streaming enabled
   // Build system content blocks array
-  let system_blocks : Array[Json] = [
-    { "type": "text", "text": SYSTEM_PROMPT },
-  ]
+  let system_blocks : Array[Json] = [{ "type": "text", "text": SYSTEM_PROMPT }]
   let non_system_messages : Array[Message] = []
   for msg in messages {
     if msg.role == "system" {
