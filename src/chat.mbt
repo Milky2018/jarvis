@@ -268,10 +268,8 @@ async fn ChatHistory::manage_history(
     new_messages.push(self.messages[i])
   }
 
-  // Replace messages (we need to clear and repopulate since we can't reassign)
-  while self.messages.length() > 0 {
-    ignore(self.messages.pop())
-  }
+  // Replace messages
+  self.messages.clear()
   for msg in new_messages {
     self.messages.push(msg)
   }

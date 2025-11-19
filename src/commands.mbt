@@ -340,9 +340,7 @@ impl Command for SummarizeCommand with execute(
   }
 
   // Replace messages
-  while chat_history.messages.length() > 0 {
-    ignore(chat_history.messages.pop())
-  }
+  chat_history.messages.clear()
   for msg in new_messages {
     chat_history.messages.push(msg)
   }
