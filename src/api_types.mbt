@@ -12,6 +12,7 @@ struct ResponseUsage {
       output_tokens(rename="output_tokens"),
     ),
   ),
+  ToJson,
 )
 
 ///|
@@ -23,7 +24,10 @@ struct ChatResponse {
   model : String
   stop_reason : String?
   usage : ResponseUsage?
-} derive(FromJson(fields(type_(rename="type"))))
+} derive (
+  FromJson(fields(type_(rename="type"))),
+  ToJson(fields(type_(rename="type"))),
+)
 
 ///|
 struct ContentBlock {
@@ -32,7 +36,10 @@ struct ContentBlock {
   id : String?
   name : String?
   input : Json?
-} derive(FromJson(fields(type_(rename="type"))))
+} derive (
+  FromJson(fields(type_(rename="type"))),
+  ToJson(fields(type_(rename="type"))),
+)
 
 ///|
 /// Extract text content from Claude response

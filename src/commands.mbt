@@ -306,10 +306,11 @@ impl Command for SummarizeCommand with execute(
   let messages_count = chat_history.messages.length()
   let recent_keep = SUMMARIZE_KEEP_RECENT
   if messages_count <= recent_keep + 1 {
-    jarvis_says("Not enough messages to compress (need at least \{recent_keep + 2} messages)")
+    jarvis_says(
+      "Not enough messages to compress (need at least \{recent_keep + 2} messages)",
+    )
     return true
   }
-
   jarvis_says("Compressing conversation history...")
 
   // Separate messages: first + middle + recent
@@ -344,8 +345,9 @@ impl Command for SummarizeCommand with execute(
   for msg in new_messages {
     chat_history.messages.push(msg)
   }
-
-  jarvis_says("Conversation history compressed (\{middle_messages.length()} messages → 1 summary)")
+  jarvis_says(
+    "Conversation history compressed (\{middle_messages.length()} messages → 1 summary)",
+  )
 
   // Create new file and print notifications
   chat_history.create_new_file_after_summary()
@@ -387,7 +389,6 @@ impl Command for PlayCommand with execute(_self, parts, chat_history, config) {
     DEFAULT_PLAY_BUDGET
   }
   jarvis_says("Entering play mode with budget: $\{budget}")
-  newline_async()
 
   // Start autonomous play session
   start_play_mode(config, chat_history, budget)

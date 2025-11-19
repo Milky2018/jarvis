@@ -16,10 +16,8 @@ type JarvisSignal
 // Types and methods
 type ChatHistory
 
-type ChatRequest
-impl ToJson for ChatRequest
-
 type ChatResponse
+impl ToJson for ChatResponse
 impl @json.FromJson for ChatResponse
 
 type ClearCommand
@@ -31,11 +29,14 @@ type Config
 impl Show for Config
 
 type ContentBlock
+impl ToJson for ContentBlock
 impl @json.FromJson for ContentBlock
 
 type ContentBlockItem
 impl ToJson for ContentBlockItem
 impl @json.FromJson for ContentBlockItem
+
+type ContentBlockStart
 
 type CostCommand
 impl Default for CostCommand
@@ -103,19 +104,16 @@ impl Default for ReadFileTool
 
 type ReadlineInterface
 
-type RequestMetadata
-impl ToJson for RequestMetadata
-
 type ResponseUsage
+impl ToJson for ResponseUsage
 impl @json.FromJson for ResponseUsage
+
+type SSELineResult
 
 type Size
 
 type SummarizeCommand
 impl Default for SummarizeCommand
-
-type SystemContentBlock
-impl ToJson for SystemContentBlock
 
 type TestContext
 
@@ -126,6 +124,9 @@ impl ToJson for ToolCall
 impl @json.FromJson for ToolCall
 
 type UsageStats
+
+type WebFetchTool
+impl Default for WebFetchTool
 
 type WebSearchTool
 impl Default for WebSearchTool

@@ -198,7 +198,10 @@ async fn summarize_messages(
   let summary_messages : Array[Message] = [Message::new("user", summary_prompt)]
   // Use non-streaming without tools for summary (we only need text output, no need to show progress)
   let response = send_chat_request_non_streaming(
-    config, summary_messages, [], model,
+    config,
+    summary_messages,
+    [],
+    model,
   )
   match response.get_text_content() {
     Some(text) =>

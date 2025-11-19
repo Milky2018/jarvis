@@ -1026,29 +1026,12 @@ async fn web_fetch_tool(
   prompt : String?,
   chat_history : ChatHistory,
 ) -> String {
-  // Parse URL to get host and path
-  let (host, path) = parse_url(url) catch {
-    e => return tool_error("Invalid URL: \{e}")
-  }
-
-  // Use GET request to fetch content
-  let client = @http.Client::connect(host, headers={
-    "User-Agent": "jarvis/1.0.0",
-    "Accept": "text/html,application/json,text/plain,*/*",
-  }) catch {
-    e => return tool_error("Failed to connect to \{host}: \{e}")
-  }
-  defer client.close()
-  let response = client.get(path) catch {
+  // Use GET request with proxy support
+  let (response, content_data) = get_with_proxy(url) catch {
     e => return tool_error("Failed to fetch \{url}: \{e}")
   }
   if response.code != 200 {
     return tool_error("HTTP \{response.code} when fetching \{url}")
-  }
-
-  // Read response body
-  let content_data = client.read_all() catch {
-    e => return tool_error("Failed to read response: \{e}")
   }
   let content = content_data.text()
 

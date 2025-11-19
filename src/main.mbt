@@ -6,23 +6,22 @@ suberror JarvisSignal {
 }
 
 ///|
-/// Send chat request (always non-streaming when tools are available)
+/// Send chat request (streaming for text output, but always with tools)
 async fn send_chat_request(
   config : Config,
   chat_history : ChatHistory,
   tools : Array[Tool],
-  first_request : Bool,
 ) -> (ChatResponse, Bool) {
-  ignore(first_request)
-  // Always use non-streaming when tools are available
-  // This ensures LLM can call tools instead of outputting XML-formatted text
-  let resp = send_chat_request_non_streaming(
+  // Use streaming for real-time output, with tools available
+  // This allows both tool calls and text output
+  let resp = send_streaming_chat_request(
     config,
     chat_history.messages,
     tools,
     chat_history.current_model,
   )
-  (resp, false)
+  newline_async() // Add newline after streaming
+  (resp, true)
 }
 
 ///|
@@ -95,7 +94,6 @@ async fn handle_tool_calls(
   tools : Array[Tool],
 ) -> Unit {
   let mut max_iterations = MAX_TOOL_ITERATIONS // Prevent infinite loops
-  let mut first_request = true // Use streaming for first request only
   let mut used_streaming = false // Track if we used streaming
   let mut has_called_tools = false // Track if any tools have been called
   try {
@@ -104,12 +102,11 @@ async fn handle_tool_calls(
 
       // Send request (use streaming for first request)
       let (response, was_streaming) = send_chat_request(
-        config, chat_history, tools, first_request,
+        config, chat_history, tools,
       )
       if was_streaming {
         used_streaming = true
       }
-      first_request = false
 
       // Record usage statistics
       if response.usage is Some(u) {
@@ -193,9 +190,11 @@ async fn handle_tool_calls(
 
       // We have tool calls to execute
       has_called_tools = true // Mark that we've entered work mode
-      // First, display any text content
-      if content_text is Some(content_str) && !content_str.is_blank() {
-        jarvis_says(content_str)
+      // Display text content only if not using streaming (streaming already printed it)
+      if !used_streaming {
+        if content_text is Some(content_str) && !content_str.is_blank() {
+          jarvis_says(content_str)
+        }
       }
 
       // Build assistant message with the full response for history
@@ -330,7 +329,7 @@ async fn chat_loop(config : Config) -> Unit {
             if msg.role == "user" {
               let content = msg.get_text()
               // Skip tool result messages
-              if !content.is_empty() && !content.has_prefix("Tool:") {
+              if !content.is_empty() {
                 user_inputs.push(content)
               }
             }

@@ -147,8 +147,8 @@ async fn send_chat_request_non_streaming(
   system_debug("Request body preview: \{preview}...")
   system_debug("====================================")
 
-  // Send POST request
-  let (response, body_data) = @http.post("https://\{host}\{path}", json_body, headers={
+  // Send POST request with proxy support
+  let (response, body_data) = post_with_proxy("https://\{host}\{path}", json_body, headers={
     "Authorization": "Bearer \{config.auth_token()}",
     "x-api-key": config.auth_token(),
     "anthropic-version": "2023-06-01",
@@ -194,7 +194,6 @@ async fn send_chat_request_non_streaming(
 
   // Log response for debugging
   log_model_response(json_obj.stringify())
-
   let chat_response : ChatResponse = @json.from_json(json_obj) catch {
     @json.JsonDecodeError(e) => {
       let json_str = json_obj.stringify()
@@ -337,18 +336,35 @@ fn get_post_headers() -> Map[String, String] {
 ///|
 /// Create HTTP client with authentication headers
 async fn create_http_client(host : String, config : Config) -> @http.Client {
-  @http.Client::connect(host, headers={
-    "Authorization": "Bearer \{config.auth_token()}",
-    "x-api-key": config.auth_token(),
-    "anthropic-version": "2023-06-01",
-    "anthropic-dangerous-direct-browser-access": "true",
-    "Accept": "application/json",
-    "x-app": "cli",
-    "User-Agent": "jarvis/1.0.0",
-    "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-    "accept-language": "*",
-    "sec-fetch-mode": "cors",
-  })
+  let proxy = get_proxy_config()
+  match proxy {
+    Some(p) =>
+      @http.Client::connect(host, headers={
+        "Authorization": "Bearer \{config.auth_token()}",
+        "x-api-key": config.auth_token(),
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "Accept": "application/json",
+        "x-app": "cli",
+        "User-Agent": "jarvis/1.0.0",
+        "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+      }, proxy=p)
+    None =>
+      @http.Client::connect(host, headers={
+        "Authorization": "Bearer \{config.auth_token()}",
+        "x-api-key": config.auth_token(),
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "Accept": "application/json",
+        "x-app": "cli",
+        "User-Agent": "jarvis/1.0.0",
+        "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+      })
+  }
 }
 
 ///|
@@ -442,6 +458,16 @@ fn extract_lines_from_chunk(
 struct SSELineResult {
   text_delta : String?
   finish_reason : String?
+  block_start : ContentBlockStart?
+  input_json_delta : String?
+}
+
+///|
+/// Content block start event
+struct ContentBlockStart {
+  type_ : String // "text" or "tool_use"
+  id : String? // tool_use id
+  name : String? // tool_use name
 }
 
 ///|
@@ -450,87 +476,121 @@ async fn process_sse_line(
   line : String,
   has_printed_prefix : Ref[Bool],
 ) -> SSELineResult {
+  let empty_result = {
+    text_delta: None,
+    finish_reason: None,
+    block_start: None,
+    input_json_delta: None,
+  }
+
   // Skip SSE event metadata lines
   if line.has_prefix("event:") {
-    return { text_delta: None, finish_reason: None }
+    return empty_result
   }
   if !line.has_prefix("data: ") {
-    return { text_delta: None, finish_reason: None }
+    return empty_result
   }
   let json_str_view = line[6:] catch {
       _ => {
         system_error("Failed to extract JSON from SSE line: \{line}")
-        return { text_delta: None, finish_reason: None }
+        return empty_result
       }
     }
   let json_str = json_str_view.to_string()
   let trimmed = json_str.trim(chars=" \t\r\n").to_string()
   if trimmed == "[DONE]" {
-    return { text_delta: None, finish_reason: None }
+    return empty_result
   }
   let chunk_json = @json.parse(json_str) catch {
     _ => {
       system_error("Failed to parse streaming JSON chunk: \{json_str}")
-      return { text_delta: None, finish_reason: None }
+      return empty_result
     }
   }
 
   // Parse Claude native streaming format
   guard chunk_json is Object(map) else {
     system_error("Streaming chunk is not a JSON object")
-    return { text_delta: None, finish_reason: None }
+    return empty_result
   }
 
   // Check event type
   match map.get("type") {
+    Some(String("content_block_start")) =>
+      // New content block starting
+      if map.get("content_block") is Some(Object(block_map)) {
+        let type_ = match block_map.get("type") {
+          Some(String(t)) => t
+          _ => ""
+        }
+        let id = match block_map.get("id") {
+          Some(String(i)) => Some(i)
+          _ => None
+        }
+        let name = match block_map.get("name") {
+          Some(String(n)) => Some(n)
+          _ => None
+        }
+        return {
+          text_delta: None,
+          finish_reason: None,
+          block_start: Some({ type_, id, name }),
+          input_json_delta: None,
+        }
+      }
     Some(String("content_block_delta")) =>
-      // Extract text from delta
+      // Content block delta
       if map.get("delta") is Some(Object(delta_map)) {
-        if delta_map.get("type") is Some(String("text_delta")) {
-          if delta_map.get("text") is Some(String(text)) {
-            // Print "Jarvis: " prefix on first text output
-            if !has_printed_prefix.val {
-              print_jarvis_prefix()
-              has_printed_prefix.val = true
+        match delta_map.get("type") {
+          Some(String("text_delta")) =>
+            if delta_map.get("text") is Some(String(text)) {
+              // Print "Jarvis: " prefix on first text output
+              if !has_printed_prefix.val {
+                print_jarvis_prefix()
+                has_printed_prefix.val = true
+              }
+              // Output immediately (ignore write errors)
+              @stdio.stdout.write(text) catch {
+                _ => ()
+              }
+              return {
+                text_delta: Some(text),
+                finish_reason: None,
+                block_start: None,
+                input_json_delta: None,
+              }
             }
-            // Output immediately (ignore write errors)
-            @stdio.stdout.write(text) catch {
-              _ => ()
+          Some(String("input_json_delta")) =>
+            if delta_map.get("partial_json") is Some(String(json)) {
+              return {
+                text_delta: None,
+                finish_reason: None,
+                block_start: None,
+                input_json_delta: Some(json),
+              }
             }
-            return { text_delta: Some(text), finish_reason: None }
-          }
+          _ => ()
         }
       }
     Some(String("message_delta")) =>
       // Extract finish reason from message_delta
       if map.get("delta") is Some(Object(delta_map)) {
         if delta_map.get("stop_reason") is Some(String(reason)) {
-          return { text_delta: None, finish_reason: Some(reason) }
+          return {
+            text_delta: None,
+            finish_reason: Some(reason),
+            block_start: None,
+            input_json_delta: None,
+          }
         }
       }
     _ => ()
   }
-  { text_delta: None, finish_reason: None }
-}
-
-///|
-/// Build ChatResponse from accumulated content
-fn build_chat_response(
-  content : String,
-  finish_reason : String,
-  model : String,
-) -> ChatResponse {
-  let content_blocks : Array[ContentBlock] = [
-    { type_: "text", text: Some(content), id: None, name: None, input: None },
-  ]
   {
-    id: "",
-    type_: "message",
-    role: "assistant",
-    content: content_blocks,
-    model,
-    stop_reason: Some(finish_reason),
-    usage: None,
+    text_delta: None,
+    finish_reason: None,
+    block_start: None,
+    input_json_delta: None,
   }
 }
 
@@ -585,7 +645,9 @@ async fn send_streaming_chat_request(
   }
 
   // Read streaming response (SSE format)
-  let content_builder = StringBuilder::new()
+  let content_blocks : Array[ContentBlock] = []
+  let mut current_text_builder : StringBuilder? = None
+  let mut current_tool_use : (String, String, StringBuilder)? = None // (id, name, json_builder)
   let mut finish_reason = ""
   let mut total_chunks = 0
   let has_printed_prefix : Ref[Bool] = { val: false }
@@ -620,41 +682,108 @@ async fn send_streaming_chat_request(
     // Process each complete line
     for line in lines {
       let result = process_sse_line(line, has_printed_prefix)
+
+      // Handle block start
+      match result.block_start {
+        Some(block_start) =>
+          if block_start.type_ == "text" {
+            current_text_builder = Some(StringBuilder::new())
+          } else if block_start.type_ == "tool_use" {
+            match (block_start.id, block_start.name) {
+              (Some(id), Some(name)) =>
+                current_tool_use = Some((id, name, StringBuilder::new()))
+              _ => ()
+            }
+          }
+        None => ()
+      }
+
+      // Handle text delta
       match result.text_delta {
         Some(text) => {
-          content_builder.write_string(text)
+          match current_text_builder {
+            Some(builder) => builder.write_string(text)
+            None => {
+              let builder = StringBuilder::new()
+              builder.write_string(text)
+              current_text_builder = Some(builder)
+            }
+          }
           total_chunks = total_chunks + 1
         }
         None => ()
       }
+
+      // Handle input_json delta
+      match result.input_json_delta {
+        Some(json) =>
+          match current_tool_use {
+            Some((_id, _name, builder)) => builder.write_string(json)
+            None => ()
+          }
+        None => ()
+      }
+
+      // Handle finish reason
       match result.finish_reason {
-        Some(reason) => finish_reason = reason
+        Some(reason) => {
+          finish_reason = reason
+          // Finalize current blocks
+          match current_text_builder {
+            Some(builder) => {
+              content_blocks.push({
+                type_: "text",
+                text: Some(builder.to_string()),
+                id: None,
+                name: None,
+                input: None,
+              })
+              current_text_builder = None
+            }
+            None => ()
+          }
+          match current_tool_use {
+            Some((id, name, builder)) => {
+              let json_str = builder.to_string()
+              let input_json = @json.parse(json_str) catch { _ => {} }
+              content_blocks.push({
+                type_: "tool_use",
+                text: None,
+                id: Some(id),
+                name: Some(name),
+                input: Some(input_json),
+              })
+              current_tool_use = None
+            }
+            None => ()
+          }
+        }
         None => ()
       }
     }
   }
 
   // Debug: streaming summary
-  let full_content = content_builder.to_string()
   system_debug("=== STREAMING END ===")
   system_debug(
-    "Total bytes: \{total_bytes_read}, chunks: \{total_chunks}, content: \{full_content.length()} chars",
+    "Total bytes: \{total_bytes_read}, chunks: \{total_chunks}, blocks: \{content_blocks.length()}",
   )
   system_debug("Finish reason: \{finish_reason}")
   system_debug("====================")
 
   // Construct ChatResponse from accumulated data
-  let response = build_chat_response(full_content, finish_reason, model)
-
-  // Log response for debugging (manually construct JSON)
-  let log_json : Json = {
-    "type": "message",
-    "role": "assistant",
-    "model": model,
-    "content": [{ "type": "text", "text": full_content }],
-    "stop_reason": finish_reason,
+  let response : ChatResponse = {
+    id: "",
+    type_: "message",
+    role: "assistant",
+    content: content_blocks,
+    model,
+    stop_reason: Some(finish_reason),
+    usage: None,
   }
-  log_model_response(log_json.stringify())
 
+  // Log response for debugging
+  let log_json = response.to_json()
+  log_model_response(log_json.stringify())
   response
 }
