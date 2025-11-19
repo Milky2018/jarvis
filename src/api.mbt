@@ -181,7 +181,7 @@ async fn send_chat_request_non_streaming(
 
   if response.code != 200 {
     let error_text = body_data.text() catch { _ => "[Failed to read error body]" }
-    abort(
+    raise HttpError(
       "HTTP request failed with status: \{response.code}\n" +
       "Response body: \{error_text}",
     )
@@ -191,13 +191,13 @@ async fn send_chat_request_non_streaming(
   let json_obj = body_data.json() catch {
     e => {
       let text = body_data.text() catch { _ => "[binary data]" }
-      abort("Failed to parse JSON: \{e}\nResponse body: \{text}")
+      raise HttpError("Failed to parse JSON: \{e}\nResponse body: \{text}")
     }
   }
   let chat_response : ChatResponse = @json.from_json(json_obj) catch {
     @json.JsonDecodeError(e) => {
       let json_str = json_obj.stringify()
-      abort("Failed to decode response: \{e}\nJSON object: \{json_str}")
+      raise HttpError("Failed to decode response: \{e}\nJSON object: \{json_str}")
     }
   }
   chat_response
@@ -365,7 +365,7 @@ async fn send_post_with_redirects(
           }
       }
       if location.is_empty() {
-        abort(
+        raise HttpError(
           "HTTP redirect response (\{current_response.code}) missing Location header",
         )
       }
@@ -386,7 +386,7 @@ async fn send_post_with_redirects(
     }
   }
   if redirects_count >= max_redirects {
-    abort("Too many redirects (exceeded \{max_redirects})")
+    raise HttpError("Too many redirects (exceeded \{max_redirects})")
   }
   current_response
 }
