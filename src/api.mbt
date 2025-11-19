@@ -148,39 +148,36 @@ async fn send_chat_request_non_streaming(
   system_debug("====================================")
 
   // Send POST request
-  let (response, body_data) = @http.post(
-    "https://\{host}\{path}",
-    json_body,
-    headers={
-      "Authorization": "Bearer \{config.auth_token()}",
-      "x-api-key": config.auth_token(),
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "Accept": "application/json",
-      "x-app": "cli",
-      "User-Agent": "jarvis/1.0.0",
-      "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-      "accept-language": "*",
-      "sec-fetch-mode": "cors",
-      "Content-Type": "application/json",
-      "X-Stainless-Retry-Count": "0",
-      "X-Stainless-Timeout": "600",
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": "0.60.0",
-      "X-Stainless-OS": "MacOS",
-      "X-Stainless-Arch": "arm64",
-      "X-Stainless-Runtime": "node",
-      "X-Stainless-Runtime-Version": "v24.8.0",
-    },
-  )
+  let (response, body_data) = @http.post("https://\{host}\{path}", json_body, headers={
+    "Authorization": "Bearer \{config.auth_token()}",
+    "x-api-key": config.auth_token(),
+    "anthropic-version": "2023-06-01",
+    "anthropic-dangerous-direct-browser-access": "true",
+    "Accept": "application/json",
+    "x-app": "cli",
+    "User-Agent": "jarvis/1.0.0",
+    "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+    "accept-language": "*",
+    "sec-fetch-mode": "cors",
+    "Content-Type": "application/json",
+    "X-Stainless-Retry-Count": "0",
+    "X-Stainless-Timeout": "600",
+    "X-Stainless-Lang": "js",
+    "X-Stainless-Package-Version": "0.60.0",
+    "X-Stainless-OS": "MacOS",
+    "X-Stainless-Arch": "arm64",
+    "X-Stainless-Runtime": "node",
+    "X-Stainless-Runtime-Version": "v24.8.0",
+  })
 
   // Debug: print response status
   system_debug("=== HTTP RESPONSE (NON-STREAMING) ===")
   system_debug("Status: \{response.code}")
   system_debug("=====================================")
-
   if response.code != 200 {
-    let error_text = body_data.text() catch { _ => "[Failed to read error body]" }
+    let error_text = body_data.text() catch {
+      _ => "[Failed to read error body]"
+    }
     raise HttpError(
       "HTTP request failed with status: \{response.code}\n" +
       "Response body: \{error_text}",
@@ -194,13 +191,38 @@ async fn send_chat_request_non_streaming(
       raise HttpError("Failed to parse JSON: \{e}\nResponse body: \{text}")
     }
   }
+
+  // Log response for debugging
+  log_model_response(json_obj.stringify())
+
   let chat_response : ChatResponse = @json.from_json(json_obj) catch {
     @json.JsonDecodeError(e) => {
       let json_str = json_obj.stringify()
-      raise HttpError("Failed to decode response: \{e}\nJSON object: \{json_str}")
+      raise HttpError(
+        "Failed to decode response: \{e}\nJSON object: \{json_str}",
+      )
     }
   }
   chat_response
+}
+
+///|
+/// Log model response to file for debugging
+async fn log_model_response(json_str : String) -> Unit {
+  let env_vars = @sys.get_env_vars()
+  let home = match env_vars.get("HOME") {
+    Some(h) => h
+    None => return // Skip if HOME not set
+  }
+  let log_path = "\{home}/.jarvis/model_responses.log"
+
+  // Format log entry with separator
+  let log_entry = "\n========== Response ==========\n\{json_str}\n"
+
+  // Append to log file
+  @fs.write_file(log_path, log_entry, create=0o644, append=true) catch {
+    _ => () // Ignore errors
+  }
 }
 
 ///|
@@ -314,11 +336,7 @@ fn get_post_headers() -> Map[String, String] {
 
 ///|
 /// Create HTTP client with authentication headers
-async fn create_http_client(
-  host : String,
-  config : Config,
-  url : String,
-) -> @http.Client raise JarvisError {
+async fn create_http_client(host : String, config : Config) -> @http.Client {
   @http.Client::connect(host, headers={
     "Authorization": "Bearer \{config.auth_token()}",
     "x-api-key": config.auth_token(),
@@ -330,12 +348,7 @@ async fn create_http_client(
     "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
     "accept-language": "*",
     "sec-fetch-mode": "cors",
-  }) catch {
-    e =>
-      raise HttpError(
-        "Failed to connect to host '\{host}': \{e}\nFull URL: \{url}",
-      )
-  }
+  })
 }
 
 ///|
@@ -393,13 +406,17 @@ async fn send_post_with_redirects(
 
 ///|
 /// Extract complete lines from accumulated data
-fn extract_lines_from_chunk(accumulated_data : String) -> (Array[String], String) {
+fn extract_lines_from_chunk(
+  accumulated_data : String,
+) -> (Array[String], String) {
   let lines : Array[String] = []
   let mut last_newline_pos = 0
   for i in 0..<accumulated_data.length() {
     match accumulated_data.get_char(i) {
       Some('\n') => {
-        let line_view = accumulated_data[last_newline_pos:i] catch { _ => continue }
+        let line_view = accumulated_data[last_newline_pos:i] catch {
+            _ => continue
+          }
         let line = line_view.to_string().trim(chars=" \t\r\n").to_string()
         if line.length() > 0 {
           lines.push(line)
@@ -437,7 +454,6 @@ async fn process_sse_line(line : String) -> SSELineResult {
   if !line.has_prefix("data: ") {
     return { text_delta: None, finish_reason: None }
   }
-
   let json_str_view = line[6:] catch {
       _ => {
         system_error("Failed to extract JSON from SSE line: \{line}")
@@ -449,7 +465,6 @@ async fn process_sse_line(line : String) -> SSELineResult {
   if trimmed == "[DONE]" {
     return { text_delta: None, finish_reason: None }
   }
-
   let chunk_json = @json.parse(json_str) catch {
     _ => {
       system_error("Failed to parse streaming JSON chunk: \{json_str}")
@@ -498,13 +513,7 @@ fn build_chat_response(
   model : String,
 ) -> ChatResponse {
   let content_blocks : Array[ContentBlock] = [
-    {
-      type_: "text",
-      text: Some(content),
-      id: None,
-      name: None,
-      input: None,
-    },
+    { type_: "text", text: Some(content), id: None, name: None, input: None },
   ]
   {
     id: "",
@@ -541,7 +550,7 @@ async fn send_streaming_chat_request(
   system_debug("===================")
 
   // Create HTTP client
-  let client = create_http_client(host, config, url)
+  let client = create_http_client(host, config)
   defer client.close()
 
   // Send POST request with redirect handling
@@ -629,5 +638,17 @@ async fn send_streaming_chat_request(
   system_debug("====================")
 
   // Construct ChatResponse from accumulated data
-  build_chat_response(full_content, finish_reason, model)
+  let response = build_chat_response(full_content, finish_reason, model)
+
+  // Log response for debugging (manually construct JSON)
+  let log_json : Json = {
+    "type": "message",
+    "role": "assistant",
+    "model": model,
+    "content": [{ "type": "text", "text": full_content }],
+    "stop_reason": finish_reason,
+  }
+  log_model_response(log_json.stringify())
+
+  response
 }

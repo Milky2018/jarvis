@@ -599,14 +599,7 @@ async fn start_play_mode(
 
       // Use the shared handle_tool_calls function with play mode tools
       let tools = get_available_tools(in_play_mode=true)
-      let success = handle_tool_calls(config, chat_history, tools)
-
-      // If handle_tool_calls returned false, it means there was an error (like empty response)
-      // Break out of the loop to avoid infinite iterations
-      if !success {
-        jarvis_says("Encountered error in play mode, ending session.")
-        break
-      }
+      handle_tool_calls(config, chat_history, tools)
 
       // In play mode, if Jarvis responded without using tools, we need to add a user message
       // to prompt continuation. Otherwise, the next iteration will fail because the last

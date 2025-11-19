@@ -103,7 +103,7 @@ async fn handle_tool_calls(
   config : Config,
   chat_history : ChatHistory,
   tools : Array[Tool],
-) -> Bool {
+) -> Unit {
   let mut max_iterations = MAX_TOOL_ITERATIONS // Prevent infinite loops
   let mut first_request = true // Use streaming for first request only
   let mut used_streaming = false // Track if we used streaming
@@ -166,7 +166,7 @@ async fn handle_tool_calls(
           None =>
             if !used_streaming {
               system_error("No content in response")
-              return false // Signal error to caller
+              return
             }
         }
         // No tool calls, add message to history
@@ -177,6 +177,11 @@ async fn handle_tool_calls(
         }
         let assistant_msg = Message::new("assistant", content_str)
         chat_history.add(assistant_msg)
+
+        // If we used streaming, this is the final response - return control to user
+        if used_streaming {
+          return
+        }
 
         // Auto-continue: only if we've already called tools (i.e., we're in "work mode")
         // This prevents simple conversational responses from looping forever
@@ -190,7 +195,7 @@ async fn handle_tool_calls(
           continue
         } else {
           // First response with no tool calls - just return control to user
-          return true
+          return
         }
       }
 
@@ -218,7 +223,7 @@ async fn handle_tool_calls(
 
       // If elaborate is complete, end the loop
       if elaborate_complete {
-        return true
+        return
       }
 
       // Send tool results back as a user message
@@ -230,22 +235,11 @@ async fn handle_tool_calls(
     }
     if max_iterations == 0 {
       system_error("Maximum tool calling iterations reached")
-      return false
     }
-    true // Success
   } catch {
-    EnvVarNotSet(msg) => {
-      system_error("Environment variable not set: \{msg}")
-      false
-    }
-    HttpError(msg) => {
-      system_error("HTTP error: \{msg}")
-      false
-    }
-    StringViewError(msg) => {
-      system_error("String view error: \{msg}")
-      false
-    }
+    EnvVarNotSet(msg) => system_error("Environment variable not set: \{msg}")
+    HttpError(msg) => system_error("HTTP error: \{msg}")
+    StringViewError(msg) => system_error("String view error: \{msg}")
     e => raise e
   }
 }
@@ -280,12 +274,7 @@ async fn handle_user_input(
 
   // Tool calling loop
   let tools = get_available_tools()
-  let success = handle_tool_calls(config, chat_history, tools)
-
-  // If elaborate completed successfully, show completion message
-  if success {
-    jarvis_says("Task completed. Feel free to ask me anything else!")
-  }
+  handle_tool_calls(config, chat_history, tools)
 
   // Save conversation after each interaction
   chat_history.save_to_numbered_file()
