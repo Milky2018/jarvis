@@ -59,7 +59,7 @@ fn format_tool_results_as_text(
   tool_uses : Array[(String, String, Json)],
   tool_results : Array[Json],
 ) -> String {
-  let mut results_text = ""
+  let builder = StringBuilder::new()
   for i = 0; i < tool_uses.length(); i = i + 1 {
     let (tool_id, tool_name, _) = tool_uses[i]
     let result_json = tool_results[i]
@@ -69,17 +69,21 @@ fn format_tool_results_as_text(
         match map.get("content") {
           Some(String(content)) => {
             if i > 0 {
-              results_text = results_text + "\n\n"
+              builder.write_string("\n\n")
             }
-            results_text = results_text +
-              "Tool: \{tool_name} (ID: \{tool_id})\nResult: \{content}"
+            builder.write_string("Tool: ")
+            builder.write_string(tool_name)
+            builder.write_string(" (ID: ")
+            builder.write_string(tool_id)
+            builder.write_string(")\nResult: ")
+            builder.write_string(content)
           }
           _ => ()
         }
       _ => ()
     }
   }
-  results_text
+  builder.to_string()
 }
 
 ///|
@@ -514,14 +518,14 @@ async fn main {
   let prompt = if (execute_mode || consult_mode) &&
     value.positional_args.length() > 0 {
     // Join all positional args as the prompt
-    let mut p = ""
+    let builder = StringBuilder::new()
     for i = 0; i < value.positional_args.length(); i = i + 1 {
       if i > 0 {
-        p = p + " "
+        builder.write_string(" ")
       }
-      p = p + value.positional_args[i]
+      builder.write_string(value.positional_args[i])
     }
-    Some(p)
+    Some(builder.to_string())
   } else {
     None
   }

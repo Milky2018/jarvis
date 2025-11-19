@@ -100,7 +100,7 @@ async fn generate_conversation_title(
   config : Config,
 ) -> String {
   // Build conversation preview (first few messages)
-  let mut preview = ""
+  let builder = StringBuilder::new()
   let limit = if chat_history.messages.length() > 6 {
     6
   } else {
@@ -117,8 +117,10 @@ async fn generate_conversation_title(
     } else {
       text
     }
-    preview = preview + short + "\n"
+    builder.write_string(short)
+    builder.write_string("\n")
   }
+  let preview = builder.to_string()
   let title_messages : Array[Message] = [
     Message::new(
       "user",
@@ -158,7 +160,7 @@ async fn generate_summary_with_title(
   let title = generate_conversation_title(chat_history, config)
 
   // Build conversation text
-  let mut conversation_text = ""
+  let builder = StringBuilder::new()
   for msg in chat_history.messages {
     let role_text = match msg.role {
       "user" => "User"
@@ -173,8 +175,13 @@ async fn generate_summary_with_title(
     } else {
       text
     }
-    conversation_text = conversation_text + "**\{role_text}**: \{content}\n\n"
+    builder.write_string("**")
+    builder.write_string(role_text)
+    builder.write_string("**: ")
+    builder.write_string(content)
+    builder.write_string("\n\n")
   }
+  let conversation_text = builder.to_string()
 
   // Create prompt for summarization
   system_info("Generating summary:")
@@ -294,15 +301,24 @@ async fn summarize_messages(
   // Calculate approximate token limit for the summary (40k tokens ≈ 160k characters)
   let max_summary_chars = MAX_SUMMARY_TOKENS * 4
   let summary_prompt = {
-    let mut text = "Please provide a comprehensive summary of the following conversation history. Focus on key points, context, decisions made, and important details. You have up to \{MAX_SUMMARY_TOKENS} tokens for your summary.\n\n"
+    let builder = StringBuilder::new()
+    builder.write_string(
+      "Please provide a comprehensive summary of the following conversation history. Focus on key points, context, decisions made, and important details. You have up to \{MAX_SUMMARY_TOKENS} tokens for your summary.\n\n",
+    )
     for msg in messages {
       let content = msg.get_text()
       if content.is_empty() {
         continue
       }
-      text = text + msg.role + ": " + content + "\n\n"
+      builder.write_string(msg.role)
+      builder.write_string(": ")
+      builder.write_string(content)
+      builder.write_string("\n\n")
     }
-    text + "Provide a detailed summary (maximum \{MAX_SUMMARY_TOKENS} tokens)."
+    builder.write_string(
+      "Provide a detailed summary (maximum \{MAX_SUMMARY_TOKENS} tokens).",
+    )
+    builder.to_string()
   }
   let summary_messages : Array[Message] = [Message::new("user", summary_prompt)]
   let tools = get_available_tools()

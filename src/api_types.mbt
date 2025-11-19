@@ -41,12 +41,13 @@ fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
     return None
   }
   // Concatenate all text blocks
-  let mut result = ""
+  let builder = StringBuilder::new()
   for block in self.content {
     if block.type_ == "text" && block.text is Some(t) {
-      result = result + t
+      builder.write_string(t)
     }
   }
+  let result = builder.to_string()
   if result.is_empty() {
     None
   } else {

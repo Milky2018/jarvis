@@ -117,7 +117,8 @@ impl Command for ModelsCommand with execute(
 ) {
   let current = chat_history.current_model
   let petite = chat_history.petite_model
-  let mut output = "Available models:\n"
+  let builder = StringBuilder::new()
+  builder.write_string("Available models:\n")
   for model in available_models() {
     let marker = if current == model.id {
       "[current] "
@@ -126,16 +127,15 @@ impl Command for ModelsCommand with execute(
     } else {
       "          "
     }
-    output = output +
-      "  " +
-      marker +
-      model.id +
-      " - " +
-      model.description +
-      "\n"
+    builder.write_string("  ")
+    builder.write_string(marker)
+    builder.write_string(model.id)
+    builder.write_string(" - ")
+    builder.write_string(model.description)
+    builder.write_string("\n")
   }
-  output = output + "\nUse ':model <name>' to switch models"
-  jarvis_says(output)
+  builder.write_string("\nUse ':model <name>' to switch models")
+  jarvis_says(builder.to_string())
   true
 }
 

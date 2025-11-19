@@ -233,12 +233,12 @@ async fn newline_async() -> Unit {
 async fn print_separator() -> Unit {
   let size = window_size()
   ignore(size.row)
-  let mut line = ""
+  let builder = StringBuilder::new()
   for i = 0; i < size.col; i = i + 1 {
-    line = line + "─"
+    builder.write_string("─")
   }
   @stdio.stdout.write(COLOR_GRAY)
-  println_async(line)
+  println_async(builder.to_string())
   @stdio.stdout.write(COLOR_RESET)
 }
 

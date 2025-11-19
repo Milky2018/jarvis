@@ -35,16 +35,18 @@ fn Message::new(role : String, content : String) -> Message {
 fn Message::get_text(self : Message) -> String {
   match self.content {
     Some(blocks) => {
-      let mut result = ""
+      let builder = StringBuilder::new()
+      let mut first = true
       for block in blocks {
         if block.type_ == "text" {
-          if !result.is_empty() {
-            result = result + "\n"
+          if !first {
+            builder.write_string("\n")
           }
-          result = result + block.text
+          builder.write_string(block.text)
+          first = false
         }
       }
-      result
+      builder.to_string()
     }
     None => ""
   }

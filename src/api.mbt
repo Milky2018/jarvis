@@ -38,10 +38,12 @@ fn parse_url(url : String) -> (String, String) raise JarvisError {
 
   // Reconstruct path from remaining parts
   let path = if parts_array.length() > 1 {
-    let mut p = ""
+    let builder = StringBuilder::new()
     for i = 1; i < parts_array.length(); i = i + 1 {
-      p = p + "/" + parts_array[i]
+      builder.write_string("/")
+      builder.write_string(parts_array[i])
     }
+    let p = builder.to_string()
     // If path is just "/" (from trailing slash), return empty
     if p == "/" {
       ""
@@ -295,7 +297,7 @@ async fn send_streaming_chat_request(
 
   // Read streaming response (SSE format)
   // Use true streaming: read chunks as they arrive
-  let mut full_content = ""
+  let content_builder = StringBuilder::new()
   let mut finish_reason = ""
 
   // Print "Jarvis: " prefix before streaming starts
@@ -391,7 +393,7 @@ async fn send_streaming_chat_request(
             if map.get("delta") is Some(Object(delta_map)) {
               if delta_map.get("type") is Some(String("text_delta")) {
                 if delta_map.get("text") is Some(String(text)) {
-                  full_content = full_content + text
+                  content_builder.write_string(text)
                   total_chunks_received = total_chunks_received + 1
                   // Output immediately after parsing (ignore write errors)
                   @stdio.stdout.write(text) catch {
@@ -414,6 +416,7 @@ async fn send_streaming_chat_request(
   }
 
   // Debug: streaming summary
+  let full_content = content_builder.to_string()
   system_debug("=== STREAMING END ===")
   system_debug(
     "Total bytes: \{total_bytes_read}, chunks: \{total_chunks_received}, content: \{full_content.length()} chars",
