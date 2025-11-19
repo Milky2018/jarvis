@@ -8,6 +8,8 @@ import(
 )
 
 // Values
+fn content_from_string(String) -> Array[ContentBlockItem]
+
 async fn get_with_proxy(String) -> (@http.Response, &@io.Data)
 
 // Errors
@@ -35,6 +37,10 @@ impl Show for Config
 
 type ContentBlock
 impl @json.FromJson for ContentBlock
+
+type ContentBlockItem
+impl ToJson for ContentBlockItem
+impl @json.FromJson for ContentBlockItem
 
 type CostCommand
 impl Default for CostCommand
@@ -72,6 +78,7 @@ type KeyPress
 type LineEditor
 
 type Message
+fn Message::get_text(Self) -> String
 impl ToJson for Message
 impl @json.FromJson for Message
 
@@ -85,6 +92,8 @@ type MockOutputCapture
 
 type ModelCommand
 impl Default for ModelCommand
+
+type ModelInfo
 
 type ModelsCommand
 impl Default for ModelsCommand
@@ -100,6 +109,9 @@ impl Default for ReadFileTool
 
 type ReadlineInterface
 
+type RequestMetadata
+impl ToJson for RequestMetadata
+
 type ResponseUsage
 impl @json.FromJson for ResponseUsage
 
@@ -107,6 +119,9 @@ type Size
 
 type SummarizeCommand
 impl Default for SummarizeCommand
+
+type SystemContentBlock
+impl ToJson for SystemContentBlock
 
 type TestContext
 
