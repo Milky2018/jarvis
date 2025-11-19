@@ -446,7 +446,10 @@ struct SSELineResult {
 
 ///|
 /// Process a single SSE line and extract content/finish_reason
-async fn process_sse_line(line : String) -> SSELineResult {
+async fn process_sse_line(
+  line : String,
+  has_printed_prefix : Ref[Bool],
+) -> SSELineResult {
   // Skip SSE event metadata lines
   if line.has_prefix("event:") {
     return { text_delta: None, finish_reason: None }
@@ -485,6 +488,11 @@ async fn process_sse_line(line : String) -> SSELineResult {
       if map.get("delta") is Some(Object(delta_map)) {
         if delta_map.get("type") is Some(String("text_delta")) {
           if delta_map.get("text") is Some(String(text)) {
+            // Print "Jarvis: " prefix on first text output
+            if !has_printed_prefix.val {
+              print_jarvis_prefix()
+              has_printed_prefix.val = true
+            }
             // Output immediately (ignore write errors)
             @stdio.stdout.write(text) catch {
               _ => ()
@@ -580,9 +588,7 @@ async fn send_streaming_chat_request(
   let content_builder = StringBuilder::new()
   let mut finish_reason = ""
   let mut total_chunks = 0
-
-  // Print "Jarvis: " prefix before streaming starts
-  print_jarvis_prefix()
+  let has_printed_prefix : Ref[Bool] = { val: false }
 
   // Buffer for reading chunks
   let buffer = FixedArray::make(1024, b'\x00')
@@ -613,7 +619,7 @@ async fn send_streaming_chat_request(
 
     // Process each complete line
     for line in lines {
-      let result = process_sse_line(line)
+      let result = process_sse_line(line, has_printed_prefix)
       match result.text_delta {
         Some(text) => {
           content_builder.write_string(text)

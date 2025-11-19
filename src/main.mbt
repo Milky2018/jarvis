@@ -175,13 +175,20 @@ async fn handle_tool_calls(
           Some(c) => c
           None => ""
         }
-        let assistant_msg = Message::new("assistant", content_str)
-        chat_history.add(assistant_msg)
 
         // If we used streaming, this is the final response - return control to user
         if used_streaming {
+          // Only add to history if content is non-empty
+          if !content_str.is_empty() {
+            let assistant_msg = Message::new("assistant", content_str)
+            chat_history.add(assistant_msg)
+          }
           return
         }
+
+        // For non-streaming, always add to history (even if empty, for error tracking)
+        let assistant_msg = Message::new("assistant", content_str)
+        chat_history.add(assistant_msg)
 
         // Auto-continue: only if we've already called tools (i.e., we're in "work mode")
         // This prevents simple conversational responses from looping forever
