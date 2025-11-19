@@ -297,7 +297,9 @@ async fn send_streaming_chat_request(
   // Use true streaming: read chunks as they arrive
   let mut full_content = ""
   let mut finish_reason = ""
-  let mut has_printed_prefix = false
+
+  // Print "Jarvis: " prefix before streaming starts
+  print_jarvis_prefix()
 
   // Buffer for reading chunks
   let buffer = FixedArray::make(1024, b'\x00')
@@ -389,11 +391,6 @@ async fn send_streaming_chat_request(
             if map.get("delta") is Some(Object(delta_map)) {
               if delta_map.get("type") is Some(String("text_delta")) {
                 if delta_map.get("text") is Some(String(text)) {
-                  // Print "Jarvis: " prefix on first chunk
-                  if !has_printed_prefix {
-                    print_jarvis_prefix()
-                    has_printed_prefix = true
-                  }
                   full_content = full_content + text
                   total_chunks_received = total_chunks_received + 1
                   // Output immediately after parsing (ignore write errors)
