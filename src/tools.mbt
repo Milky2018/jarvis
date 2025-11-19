@@ -51,10 +51,10 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
           tool_log("Execute", cmd)
           execute_shell_command(cmd, chat_history)
         }
-        Some(_) => tool_error("Error: 'command' must be a string")
-        None => tool_error("Error: Missing 'command' argument")
+        Some(_) => tool_error("'command' must be a string")
+        None => tool_error("Missing 'command' argument")
       }
-    _ => tool_error("Error: Input must be a JSON object")
+    _ => tool_error("Input must be a JSON object")
   }
 }
 
@@ -149,10 +149,10 @@ impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
           tool_log("Read", path)
           read_file_tool(path, input)
         }
-        Some(_) => tool_error("Error: 'path' must be a string")
-        None => tool_error("Error: Missing 'path' argument")
+        Some(_) => tool_error("'path' must be a string")
+        None => tool_error("Missing 'path' argument")
       }
-    _ => tool_error("Error: Input must be a JSON object")
+    _ => tool_error("Input must be a JSON object")
   }
 }
 
@@ -197,11 +197,11 @@ impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
           tool_log("Write", path)
           write_file_tool(path, content)
         }
-        (None, _) => tool_error("Error: Missing 'path' argument")
-        (_, None) => tool_error("Error: Missing 'content' argument")
-        _ => tool_error("Error: 'path' and 'content' must be strings")
+        (None, _) => tool_error("Missing 'path' argument")
+        (_, None) => tool_error("Missing 'content' argument")
+        _ => tool_error("'path' and 'content' must be strings")
       }
-    _ => tool_error("Error: Input must be a JSON object")
+    _ => tool_error("Input must be a JSON object")
   }
 }
 
@@ -250,12 +250,12 @@ impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
           tool_log("Edit", path)
           edit_file_tool(path, old, new)
         }
-        (None, _, _) => tool_error("Error: Missing 'path' argument")
-        (_, None, _) => tool_error("Error: Missing 'old_string' argument")
-        (_, _, None) => tool_error("Error: Missing 'new_string' argument")
-        _ => tool_error("Error: Arguments must be strings")
+        (None, _, _) => tool_error("Missing 'path' argument")
+        (_, None, _) => tool_error("Missing 'old_string' argument")
+        (_, _, None) => tool_error("Missing 'new_string' argument")
+        _ => tool_error("Arguments must be strings")
       }
-    _ => tool_error("Error: Input must be a JSON object")
+    _ => tool_error("Input must be a JSON object")
   }
 }
 
@@ -304,10 +304,10 @@ impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
           tool_log("Grep", pattern)
           grep_tool(pattern, path)
         }
-        Some(_) => tool_error("Error: 'pattern' must be a string")
-        None => tool_error("Error: Missing 'pattern' argument")
+        Some(_) => tool_error("'pattern' must be a string")
+        None => tool_error("Missing 'pattern' argument")
       }
-    _ => tool_error("Error: Input must be a JSON object")
+    _ => tool_error("Input must be a JSON object")
   }
 }
 
@@ -389,10 +389,10 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
           tool_log("Glob", pattern)
           glob_tool(pattern, path)
         }
-        Some(_) => tool_error("Error: 'pattern' must be a string")
-        None => tool_error("Error: Missing 'pattern' argument")
+        Some(_) => tool_error("'pattern' must be a string")
+        None => tool_error("Missing 'pattern' argument")
       }
-    _ => tool_error("Error: Input must be a JSON object")
+    _ => tool_error("Input must be a JSON object")
   }
 }
 
@@ -870,7 +870,7 @@ async fn edit_file_tool(
 
   // Check if old_string exists
   if !content.contains(old_string) {
-    return tool_error("Error: old_string not found in file")
+    return tool_error("old_string not found in file")
   }
 
   // Count occurrences by splitting

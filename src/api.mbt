@@ -571,9 +571,9 @@ async fn process_sse_line(
                 print_jarvis_prefix()
                 has_printed_prefix.val = true
               }
-              // Output immediately (ignore write errors)
+              // Output immediately
               @stdio.stdout.write(text) catch {
-                _ => ()
+                e => system_error("Failed to write to stdout: \{e}")
               }
               return {
                 text_delta: Some(text),
@@ -634,6 +634,84 @@ async fn process_sse_line(
     input_json_delta: None,
     input_tokens: None,
     output_tokens: None,
+  }
+}
+
+///|
+/// Count tokens for current conversation context
+async fn count_context_tokens(
+  config : Config,
+  messages : Array[Message],
+  model : String,
+) -> Int {
+  // Parse URL
+  let url = config.base_url()
+  let (host, base_path) = parse_url(url)
+  let path = base_path + "/v1/messages/count_tokens"
+
+  // Build system content blocks array (same as in build_request_body)
+  let system_blocks : Array[Json] = [{ "type": "text", "text": SYSTEM_PROMPT }]
+  let non_system_messages : Array[Message] = []
+  for msg in messages {
+    if msg.role == "system" {
+      let text = msg.get_text()
+      if !text.is_empty() {
+        system_blocks.push({ "type": "text", "text": text })
+      }
+    } else {
+      non_system_messages.push(msg)
+    }
+  }
+
+  // Build request body
+  let request_body : Json = {
+    "model": model,
+    "system": system_blocks.to_json(),
+    "messages": non_system_messages.to_json(),
+  }
+  let json_body = request_body.stringify()
+
+  // Send POST request with proxy support
+  let (response, body_data) = post_with_proxy("https://\{host}\{path}", json_body, headers={
+    "Authorization": "Bearer \{config.auth_token()}",
+    "x-api-key": config.auth_token(),
+    "anthropic-version": "2023-06-01",
+    "Content-Type": "application/json",
+  }) catch {
+    e => {
+      system_error("Failed to count tokens: \{e}")
+      return 0 // Return 0 on failure, will fallback to estimate
+    }
+  }
+
+  if response.code != 200 {
+    let error_text = body_data.text() catch { _ => "[Failed to read error body]" }
+    system_error("Count tokens API returned status \{response.code}: \{error_text}")
+    return 0
+  }
+
+  // Parse JSON response
+  let json_obj = body_data.json() catch {
+    e => {
+      system_error("Failed to parse count_tokens response: \{e}")
+      return 0
+    }
+  }
+
+  // Extract input_tokens from response
+  match json_obj {
+    Object(map) =>
+      match map.get("input_tokens") {
+        Some(Number(n, ..)) => n.to_int()
+        _ => {
+          system_error("Count tokens response missing input_tokens field")
+          0
+        }
+      }
+    _ => {
+      system_error("Count tokens response is not a JSON object")
+      0
+    }
   }
 }
 
@@ -800,7 +878,12 @@ async fn send_streaming_chat_request(
           match current_tool_use {
             Some((id, name, builder)) => {
               let json_str = builder.to_string()
-              let input_json = @json.parse(json_str) catch { _ => {} }
+              let input_json = @json.parse(json_str) catch {
+                e => {
+                  system_error("Failed to parse tool_use input JSON: \{e}\nJSON: \{json_str}")
+                  {}
+                }
+              }
               content_blocks.push({
                 type_: "tool_use",
                 text: None,

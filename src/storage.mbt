@@ -67,7 +67,7 @@ async fn create_new_conversation_file(
   }
   let json_str = json_obj.stringify()
   @fs.write_file(path, json_str, create=0o644) catch {
-    _ => ()
+    e => system_error("Failed to create conversation file: \{e}")
   }
   next_number
 }
