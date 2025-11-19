@@ -292,7 +292,7 @@ async fn summarize_messages(
   config : Config,
   messages : Array[Message],
   model : String,
-) -> String raise JarvisError {
+) -> String raise {
   // Calculate approximate token limit for the summary (40k tokens ≈ 160k characters)
   let max_summary_chars = MAX_SUMMARY_TOKENS * 4
   let summary_prompt = {
@@ -330,7 +330,7 @@ async fn summarize_messages(
 async fn ChatHistory::manage_history(
   self : ChatHistory,
   config : Config,
-) -> Bool raise JarvisError {
+) -> Bool raise {
   let total_tokens = estimate_total_tokens(self.messages)
   let max_tokens = self.max_context_tokens
 

@@ -125,7 +125,7 @@ async fn send_chat_request_with_tools(
   messages : Array[Message],
   tools : Array[Tool],
   model : String,
-) -> ChatResponse raise JarvisError {
+) -> ChatResponse raise {
   // Parse URL to extract host and path
   let url = config.base_url()
   let (host, base_path) = parse_url(url)
@@ -171,6 +171,30 @@ async fn send_chat_request_with_tools(
       raise HttpError(
         "Failed to send POST request to '\{host}\{path}': \{e}\nRequest body: \{json_body}",
       )
+  }
+
+  // Handle redirect responses
+  if response.code == 301 ||
+    response.code == 302 ||
+    response.code == 307 ||
+    response.code == 308 {
+    let location = match response.headers.get("location") {
+      Some(loc) => loc
+      None =>
+        match response.headers.get("Location") {
+          Some(loc) => loc
+          None => ""
+        }
+    }
+    system_info(
+      "HTTP redirect detected: \{response.code} -> \{location}\nOriginal URL: https://\{host}\{path}",
+    )
+    client.skip_response_body() catch {
+      _ => ()
+    }
+    raise HttpError(
+      "HTTP redirect not supported in API client (code: \{response.code}, location: \{location})",
+    )
   }
   if response.code != 200 {
     let error_body = client.read_all().text() catch {
@@ -220,7 +244,7 @@ async fn send_streaming_chat_request(
   messages : Array[Message],
   _tools : Array[Tool],
   model : String,
-) -> ChatResponse raise JarvisError {
+) -> ChatResponse raise {
   // Parse URL
   let url = config.base_url()
   let (host, base_path) = parse_url(url)
@@ -288,6 +312,31 @@ async fn send_streaming_chat_request(
         "Failed to send POST request to '\{host}\{path}': \{e}\nRequest body: \{json_body}",
       )
   }
+
+  // Handle redirect responses
+  if response.code == 301 ||
+    response.code == 302 ||
+    response.code == 307 ||
+    response.code == 308 {
+    let location = match response.headers.get("location") {
+      Some(loc) => loc
+      None =>
+        match response.headers.get("Location") {
+          Some(loc) => loc
+          None => ""
+        }
+    }
+    system_info(
+      "HTTP redirect detected: \{response.code} -> \{location}\nOriginal URL: https://\{host}\{path}",
+    )
+    client.skip_response_body() catch {
+      _ => ()
+    }
+    raise HttpError(
+      "HTTP redirect not supported in API client (code: \{response.code}, location: \{location})",
+    )
+  }
+
   if response.code != 200 {
     let error_body = client.read_all().text() catch {
         _ => "[Failed to read error body]"
