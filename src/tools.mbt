@@ -636,6 +636,57 @@ impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
 }
 
 ///|
+/// WebFetch tool - Fetch and analyze web content
+struct WebFetchTool {} derive(Default)
+
+///|
+impl ToolImpl for WebFetchTool with name(_self) {
+  "web_fetch"
+}
+
+///|
+impl ToolImpl for WebFetchTool with description(_self) {
+  "Fetch content from a URL and optionally process it with a prompt. Useful for retrieving web pages, API responses, or other web content."
+}
+
+///|
+impl ToolImpl for WebFetchTool with input_schema(_self) {
+  {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "The URL to fetch content from",
+      },
+      "prompt": {
+        "type": "string",
+        "description": "Optional prompt to process the fetched content (uses a small fast model)",
+      },
+    },
+    "required": ["url"],
+  }
+}
+
+///|
+impl ToolImpl for WebFetchTool with execute(_self, input, chat_history) {
+  match input {
+    Object(map) => {
+      let url = match map.get("url") {
+        Some(String(u)) => u
+        _ => return tool_error("Missing or invalid 'url' parameter")
+      }
+      let prompt = match map.get("prompt") {
+        Some(String(p)) => Some(p)
+        _ => None
+      }
+      tool_log("\{COLOR_BOLD}WebFetch\{COLOR_RESET}(\{url})")
+      web_fetch_tool(url, prompt, chat_history)
+    }
+    _ => tool_error("Invalid input format for web_fetch")
+  }
+}
+
+///|
 /// Execute tool with Claude API format (takes tool name and input JSON directly)
 async fn execute_tool_claude(
   tool_name : String,
@@ -929,6 +980,7 @@ fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
     GrepTool::default(),
     GlobTool::default(),
     WebSearchTool::default(),
+    WebFetchTool::default(),
     EndElaborateTool::default(),
   ]
   if in_play_mode {
@@ -971,5 +1023,71 @@ fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
     tools.filter(fn(t) { t.type_ is Some(_) })
   } else {
     tools
+  }
+}
+
+///|
+/// WebFetch tool implementation - fetch content from URL
+async fn web_fetch_tool(
+  url : String,
+  prompt : String?,
+  chat_history : ChatHistory,
+) -> String {
+  // Parse URL to get host and path
+  let (host, path) = parse_url(url) catch {
+    e => return tool_error("Invalid URL: \{e}")
+  }
+
+  // Use GET request to fetch content
+  let client = @http.Client::connect(host, headers={
+    "User-Agent": "jarvis/1.0.0",
+    "Accept": "text/html,application/json,text/plain,*/*",
+  }) catch {
+    e => return tool_error("Failed to connect to \{host}: \{e}")
+  }
+  defer client.close()
+  let response = client.get(path) catch {
+    e => return tool_error("Failed to fetch \{url}: \{e}")
+  }
+  if response.code != 200 {
+    return tool_error("HTTP \{response.code} when fetching \{url}")
+  }
+
+  // Read response body
+  let content_data = client.read_all() catch {
+    e => return tool_error("Failed to read response: \{e}")
+  }
+  let content = content_data.text()
+
+  // If prompt is provided, use petite model to process content
+  match prompt {
+    Some(p) => {
+      let messages : Array[Message] = [
+        Message::new("user", "\{p}\n\nContent:\n\{content}"),
+      ]
+      let config = load_config() catch {
+        _ => return tool_error("Failed to load config")
+      }
+      let response = send_streaming_chat_request(
+        config,
+        messages,
+        [],
+        chat_history.petite_model,
+      ) catch {
+        e => return tool_error("Failed to process content: \{e}")
+      }
+      match response.get_text_content() {
+        Some(result) => result
+        None => tool_error("No response from model")
+      }
+    }
+    None =>
+      // Return raw content (truncate if too long)
+      if content.length() > 30000 {
+        (content[:30000] catch { _ => content }).to_string() +
+        "\n\n... (content truncated, total \{content.length()} characters)"
+      } else {
+        content
+      }
   }
 }
