@@ -167,40 +167,36 @@ async fn jarvis_says(message : String) -> Unit {
 }
 
 ///|
-/// System error - shows system-level error message
+/// System error - shows system-level error message (red)
 async fn system_error(message : String) -> Unit {
   @stdio.stdout.write(COLOR_RED)
-  @stdio.stdout.write("[System] ")
+  @stdio.stdout.write("[ERROR] ")
   @stdio.stdout.write(COLOR_RESET)
   println_async(message)
 }
 
 ///|
-/// Tool execution log - shows which tool is being executed
-/// Uses gray color to distinguish from Jarvis responses
+/// Tool execution log - shows which tool is being executed (green)
 async fn tool_log(message : String) -> Unit {
-  @stdio.stdout.write(COLOR_GRAY)
+  @stdio.stdout.write(COLOR_GREEN)
   @stdio.stdout.write("[Tool] ")
   @stdio.stdout.write(COLOR_RESET)
   println_async(message)
 }
 
 ///|
-/// System info - shows system-level information
-/// Uses gray color and brackets to distinguish from Jarvis responses
+/// System info - shows system-level information (white)
 async fn system_info(message : String) -> Unit {
-  @stdio.stdout.write(COLOR_GRAY)
-  @stdio.stdout.write("[System] ")
-  @stdio.stdout.write(COLOR_RESET)
+  @stdio.stdout.write("[INFO] ")
   println_async(message)
 }
 
 ///|
-/// Print debug message (only when debug_mode is enabled)
+/// Print debug message (only when debug_mode is enabled, gray)
 async fn system_debug(message : String) -> Unit {
   if debug_mode.val {
     @stdio.stdout.write(COLOR_GRAY)
-    @stdio.stdout.write("[Debug] ")
+    @stdio.stdout.write("[DEBUG] ")
     @stdio.stdout.write(COLOR_RESET)
     println_async(message)
   }

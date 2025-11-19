@@ -149,7 +149,7 @@ async fn handle_tool_calls(
           }
           None =>
             if !used_streaming {
-              system_error("Error: No content in response")
+              system_error("No content in response")
               return false // Signal error to caller
             }
         }
@@ -219,15 +219,15 @@ async fn handle_tool_calls(
     true // Success
   } catch {
     EnvVarNotSet(msg) => {
-      system_error("Error: Environment variable not set: \{msg}")
+      system_error("Environment variable not set: \{msg}")
       false
     }
     HttpError(msg) => {
-      system_error("Error: HTTP error: \{msg}")
+      system_error("HTTP error: \{msg}")
       false
     }
     StringViewError(msg) => {
-      system_error("Error: String view error: \{msg}")
+      system_error("String view error: \{msg}")
       false
     }
     e => raise e
