@@ -8,6 +8,7 @@ struct ChatHistory {
   mut petite_model : String // Petite model for summaries and titles
   usage_stats : UsageStats // Track API usage
   mut current_file_number : Int // Current conversation file number
+  mut last_context_tokens : Int // Last accurate input_tokens from API (0 if not available)
 }
 
 ///|
@@ -19,6 +20,7 @@ fn ChatHistory::new() -> ChatHistory {
     petite_model: default_petite_model(),
     usage_stats: UsageStats::new(),
     current_file_number: 0, // Will be set when loading/creating conversation
+    last_context_tokens: 0, // Will be updated after first API call
   } // Leave some room for response
 }
 
@@ -123,6 +125,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         petite_model: default_petite_model(),
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
+        last_context_tokens: 0, // Will be updated after first API call
       })
     }
     _ => None
@@ -190,7 +193,15 @@ test "estimate_total_tokens: large message" {
 ///|
 /// Print token usage status with color coding
 async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
-  let total = estimate_total_tokens(self.messages)
+  // Use accurate token count from last API call, fallback to estimate if not available
+  let total = if self.last_context_tokens > 0 {
+    self.last_context_tokens
+  } else {
+    // Estimate includes messages + SYSTEM_PROMPT
+    let messages_tokens = estimate_total_tokens(self.messages)
+    let system_prompt_tokens = SYSTEM_PROMPT.length() / 4 + 10
+    messages_tokens + system_prompt_tokens
+  }
   let percent = total * 100 / self.max_context_tokens
 
   // Color code based on usage
@@ -264,7 +275,10 @@ async fn ChatHistory::manage_history(
   self : ChatHistory,
   config : Config,
 ) -> Bool {
-  let total_tokens = estimate_total_tokens(self.messages)
+  // Estimate total tokens including SYSTEM_PROMPT
+  let messages_tokens = estimate_total_tokens(self.messages)
+  let system_prompt_tokens = SYSTEM_PROMPT.length() / 4 + 10
+  let total_tokens = messages_tokens + system_prompt_tokens
   let max_tokens = self.max_context_tokens
 
   // If under threshold, no need to manage

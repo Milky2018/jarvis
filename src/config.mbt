@@ -179,6 +179,7 @@ async fn jarvis_says(message : String) -> Unit {
 ///|
 /// System error - shows system-level error message (red)
 async fn system_error(message : String) -> Unit {
+  newline_async()
   @stdio.stdout.write(COLOR_RED)
   @stdio.stdout.write("[ERROR] ")
   @stdio.stdout.write(COLOR_RESET)

@@ -219,8 +219,8 @@ async fn log_model_response(json_str : String) -> Unit {
   let log_entry = "\n========== Response ==========\n\{json_str}\n"
 
   // Append to log file
-  @fs.write_file(log_path, log_entry, create=0o644, append=true) catch {
-    _ => () // Ignore errors
+  @fs.write_file(log_path, log_entry, create=0o644, append=true, truncate=false) catch {
+    e => system_error("Log model response: \{e}")
   }
 }
 
@@ -518,17 +518,6 @@ async fn process_sse_line(
     return empty_result
   }
 
-  // Debug: print event type
-  let event_type = match map.get("type") {
-    Some(String(t)) => t
-    _ => "unknown"
-  }
-  system_debug("SSE event type: \{event_type}")
-  // Print full JSON for message_start and message_delta
-  if event_type == "message_start" || event_type == "message_delta" {
-    system_debug("Full event JSON: \{chunk_json.stringify()}")
-  }
-
   // Check event type
   match map.get("type") {
     Some(String("message_start")) =>
@@ -704,6 +693,8 @@ async fn send_streaming_chat_request(
   let mut current_tool_use : (String, String, StringBuilder)? = None // (id, name, json_builder)
   let mut finish_reason = ""
   let mut total_chunks = 0
+  let mut input_tokens_count = 0
+  let mut output_tokens_count = 0
   let has_printed_prefix : Ref[Bool] = { val: false }
 
   // Buffer for reading chunks
@@ -778,6 +769,16 @@ async fn send_streaming_chat_request(
         None => ()
       }
 
+      // Handle token counts
+      match result.input_tokens {
+        Some(tokens) => input_tokens_count = tokens
+        None => ()
+      }
+      match result.output_tokens {
+        Some(tokens) => output_tokens_count = tokens
+        None => ()
+      }
+
       // Handle finish reason
       match result.finish_reason {
         Some(reason) => {
@@ -826,6 +827,14 @@ async fn send_streaming_chat_request(
   system_debug("====================")
 
   // Construct ChatResponse from accumulated data
+  let usage_info = if input_tokens_count > 0 || output_tokens_count > 0 {
+    Some({
+      input_tokens: input_tokens_count,
+      output_tokens: output_tokens_count,
+    })
+  } else {
+    None
+  }
   let response : ChatResponse = {
     id: "",
     type_: "message",
@@ -833,7 +842,7 @@ async fn send_streaming_chat_request(
     content: content_blocks,
     model,
     stop_reason: Some(finish_reason),
-    usage: None,
+    usage: usage_info,
   }
 
   // Log response for debugging

@@ -116,6 +116,8 @@ async fn handle_tool_calls(
           u.input_tokens + u.output_tokens,
           chat_history.current_model,
         )
+        // Update last context tokens with accurate value from API
+        chat_history.last_context_tokens = u.input_tokens
       }
 
       // Extract text content and tool uses from response
@@ -328,7 +330,10 @@ async fn chat_loop(config : Config) -> Unit {
 
           }
         })
+        chat_history.print_token_usage()
         let user_input = input_queue.get()
+        newline_async()
+        print_separator()
         interact(chat_history, user_input, config, command_history)
         raise ActionFinished
       })
@@ -336,7 +341,7 @@ async fn chat_loop(config : Config) -> Unit {
     } catch {
       ExitRequested => break
       InterruptByUser => {
-        jarvis_says("Interrupted by user")
+        system_error("Interrupted by user")
         continue
       }
       ActionFinished => continue

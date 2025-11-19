@@ -5,11 +5,6 @@ async fn interact(
   config : Config,
   command_history : Array[String],
 ) -> Unit {
-  // Show token usage before prompt
-  chat_history.print_token_usage()
-
-  print_separator()
-
   // Check for exit commands
   if is_exit_command(user_input) {
     jarvis_says("Goodbye!")
