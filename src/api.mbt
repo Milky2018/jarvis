@@ -125,6 +125,131 @@ test "parse_url_localhost_with_port" {
 /// Returns (host, path) tuple
 
 ///|
+/// Send non-streaming chat request (for tool calls)
+async fn send_chat_request_non_streaming(
+  config : Config,
+  messages : Array[Message],
+  tools : Array[Tool],
+  model : String,
+) -> ChatResponse {
+  // Parse URL
+  let url = config.base_url()
+  let (host, base_path) = parse_url(url)
+  let path = base_path + "/v1/messages"
+
+  // Build request body (with stream: false)
+  let json_body = build_request_body_non_streaming(messages, tools, model)
+
+  // Debug: print request details
+  system_debug("=== HTTP REQUEST (NON-STREAMING) ===")
+  system_debug("POST https://\{host}\{path}")
+  let preview = json_body[:500].to_string() catch { _ => json_body }
+  system_debug("Request body preview: \{preview}...")
+  system_debug("====================================")
+
+  // Send POST request
+  let (response, body_data) = @http.post(
+    "https://\{host}\{path}",
+    json_body,
+    headers={
+      "Authorization": "Bearer \{config.auth_token()}",
+      "x-api-key": config.auth_token(),
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "Accept": "application/json",
+      "x-app": "cli",
+      "User-Agent": "jarvis/1.0.0",
+      "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+      "accept-language": "*",
+      "sec-fetch-mode": "cors",
+      "Content-Type": "application/json",
+      "X-Stainless-Retry-Count": "0",
+      "X-Stainless-Timeout": "600",
+      "X-Stainless-Lang": "js",
+      "X-Stainless-Package-Version": "0.60.0",
+      "X-Stainless-OS": "MacOS",
+      "X-Stainless-Arch": "arm64",
+      "X-Stainless-Runtime": "node",
+      "X-Stainless-Runtime-Version": "v24.8.0",
+    },
+  )
+
+  // Debug: print response status
+  system_debug("=== HTTP RESPONSE (NON-STREAMING) ===")
+  system_debug("Status: \{response.code}")
+  system_debug("=====================================")
+
+  if response.code != 200 {
+    let error_text = body_data.text() catch { _ => "[Failed to read error body]" }
+    abort(
+      "HTTP request failed with status: \{response.code}\n" +
+      "Response body: \{error_text}",
+    )
+  }
+
+  // Parse JSON response
+  let json_obj = body_data.json() catch {
+    e => {
+      let text = body_data.text() catch { _ => "[binary data]" }
+      abort("Failed to parse JSON: \{e}\nResponse body: \{text}")
+    }
+  }
+  let chat_response : ChatResponse = @json.from_json(json_obj) catch {
+    @json.JsonDecodeError(e) => {
+      let json_str = json_obj.stringify()
+      abort("Failed to decode response: \{e}\nJSON object: \{json_str}")
+    }
+  }
+  chat_response
+}
+
+///|
+/// Build request body JSON for Claude API (non-streaming)
+fn build_request_body_non_streaming(
+  messages : Array[Message],
+  tools : Array[Tool],
+  model : String,
+) -> String {
+  // Build system content blocks array
+  let system_blocks : Array[Json] = [{ "type": "text", "text": SYSTEM_PROMPT }]
+  let non_system_messages : Array[Message] = []
+  for msg in messages {
+    if msg.role == "system" {
+      let text = msg.get_text()
+      if !text.is_empty() {
+        system_blocks.push({ "type": "text", "text": text })
+      }
+    } else {
+      non_system_messages.push(msg)
+    }
+  }
+
+  // Build request with streaming DISABLED
+  let mut request : Json = {
+    "model": model,
+    "messages": non_system_messages.to_json(),
+    "max_tokens": MAX_RESPONSE_TOKENS,
+    "stream": false,
+    "system": system_blocks.to_json(),
+    "metadata": { "user_id": "jarvis-user" },
+  }
+
+  // Add tools if present
+  if tools.length() > 0 {
+    request = {
+      "model": model,
+      "messages": non_system_messages.to_json(),
+      "max_tokens": MAX_RESPONSE_TOKENS,
+      "stream": false,
+      "system": system_blocks.to_json(),
+      "tools": tools.to_json(),
+      "metadata": { "user_id": "jarvis-user" },
+    }
+  }
+  request.stringify()
+}
+
+///|
 /// Build request body JSON for Claude API
 fn build_request_body(
   messages : Array[Message],

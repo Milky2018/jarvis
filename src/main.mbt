@@ -6,23 +6,33 @@ suberror JarvisSignal {
 }
 
 ///|
-/// Send chat request (streaming or non-streaming based on context)
+/// Send chat request (streaming for text, non-streaming for tool calls)
 async fn send_chat_request(
   config : Config,
   chat_history : ChatHistory,
   tools : Array[Tool],
   first_request : Bool,
 ) -> (ChatResponse, Bool) {
-  // Always use streaming mode
-  ignore(first_request)
-  let resp = send_streaming_chat_request(
-    config,
-    chat_history.messages,
-    tools,
-    chat_history.current_model,
-  )
-  newline_async() // Add newline after streaming
-  (resp, true)
+  // First request with tools: use non-streaming to check for tool calls
+  if first_request && tools.length() > 0 {
+    let resp = send_chat_request_non_streaming(
+      config,
+      chat_history.messages,
+      tools,
+      chat_history.current_model,
+    )
+    (resp, false)
+  } else {
+    // Use streaming for text responses
+    let resp = send_streaming_chat_request(
+      config,
+      chat_history.messages,
+      tools,
+      chat_history.current_model,
+    )
+    newline_async() // Add newline after streaming
+    (resp, true)
+  }
 }
 
 ///|
