@@ -156,6 +156,14 @@ async fn send_chat_request_with_tools(
   let request = ChatRequest::with_tools(messages, model, tools)
   let json_body = request.to_json().stringify()
 
+  // Debug: print request body (first 500 chars)
+  let preview = if json_body.length() > 500 {
+    json_body[:500].to_string() catch { _ => json_body }
+  } else {
+    json_body
+  }
+  system_info("Request body preview: \{preview}...")
+
   // Follow redirects (up to 10 times)
   let mut current_host = host
   let mut current_path = path
@@ -164,38 +172,32 @@ async fn send_chat_request_with_tools(
   let mut final_response : ChatResponse? = None
 
   while final_response is None {
-    // Create HTTP client for current request
-    let client = @http.Client::connect(current_host, headers={
-      "Authorization": "Bearer \{config.auth_token()}",
-      "x-api-key": config.auth_token(),
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true",
-      "Accept": "application/json",
-      "x-app": "cli",
-      "User-Agent": "jarvis/1.0.0",
-      "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-      "accept-language": "*",
-      "sec-fetch-mode": "cors",
-    }) catch {
-      e =>
-        raise HttpError(
-          "Failed to connect to host '\{current_host}': \{e}",
-        )
-    }
-    defer client.close()
-
-    // Send POST request
-    let current_response = client.post(current_path, json_body, extra_headers={
-      "Content-Type": "application/json",
-      "X-Stainless-Retry-Count": "0",
-      "X-Stainless-Timeout": "600",
-      "X-Stainless-Lang": "js",
-      "X-Stainless-Package-Version": "0.60.0",
-      "X-Stainless-OS": "MacOS",
-      "X-Stainless-Arch": "arm64",
-      "X-Stainless-Runtime": "node",
-      "X-Stainless-Runtime-Version": "v24.8.0",
-    }) catch {
+    // Send POST request and read response (use @http.post to get body automatically)
+    let (current_response, body_data) = @http.post(
+      "https://\{current_host}\{current_path}",
+      json_body,
+      headers={
+        "Authorization": "Bearer \{config.auth_token()}",
+        "x-api-key": config.auth_token(),
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+        "Accept": "application/json",
+        "x-app": "cli",
+        "User-Agent": "jarvis/1.0.0",
+        "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+        "accept-language": "*",
+        "sec-fetch-mode": "cors",
+        "Content-Type": "application/json",
+        "X-Stainless-Retry-Count": "0",
+        "X-Stainless-Timeout": "600",
+        "X-Stainless-Lang": "js",
+        "X-Stainless-Package-Version": "0.60.0",
+        "X-Stainless-OS": "MacOS",
+        "X-Stainless-Arch": "arm64",
+        "X-Stainless-Runtime": "node",
+        "X-Stainless-Runtime-Version": "v24.8.0",
+      },
+    ) catch {
       e =>
         raise HttpError(
           "Failed to send POST request to '\{current_host}\{current_path}': \{e}\nRequest body: \{json_body}",
@@ -235,22 +237,29 @@ async fn send_chat_request_with_tools(
       current_path = new_path
       redirects_count = redirects_count + 1
 
-      // Skip response body and close connection, will create new one in next iteration
-      client.skip_response_body() catch { _ => () }
+      // body_data is already read, just continue to next iteration
       continue
     }
 
-    // Not a redirect, read response body and return
-    let body = client.read_all() catch {
-      e =>
-        raise HttpError(
-          "Failed to read response body from \{current_host}\{current_path}: \{e}\n" +
-          "Request body: \{json_body}",
-        )
+    // Not a redirect, parse response body
+    system_info("Response code: \{current_response.code}, parsing body...")
+
+    // Debug: print response headers
+    let mut header_info = "Response headers:\n"
+    current_response.headers.each(fn(k, v) {
+      header_info = header_info + "  \{k}: \{v}\n"
+    })
+    system_info(header_info)
+
+    let body_length = body_data.binary().length()
+    system_info("Body length: \{body_length} bytes")
+
+    if body_length == 0 {
+      system_info("WARNING: Response body is empty! This is unexpected for a 200 response.")
     }
 
     if current_response.code != 200 {
-      let error_text = body.text() catch { _ => "[Failed to read error body]" }
+      let error_text = body_data.text() catch { _ => "[Failed to read error body]" }
       raise HttpError(
         "HTTP request failed with status: \{current_response.code}\n" +
         "Request URL: https://\{current_host}\{current_path}\n" +
@@ -260,9 +269,9 @@ async fn send_chat_request_with_tools(
     }
 
     // Parse JSON response
-    let json_obj = body.json() catch {
+    let json_obj = body_data.json() catch {
       e => {
-        let text = body.text() catch { _ => "[binary] \{body.binary()}" }
+        let text = body_data.text() catch { _ => "[binary] \{body_data.binary()}" }
         raise JsonParseError("Failed to parse JSON: \{e}\nResponse body: \{text}")
       }
     }

@@ -3,7 +3,10 @@
 struct ContentBlockItem {
   type_ : String
   text : String
-} derive(ToJson(fields(type_(rename="type"))), FromJson(fields(type_(rename="type"))))
+} derive (
+  ToJson(fields(type_(rename="type"))),
+  FromJson(fields(type_(rename="type"))),
+)
 
 ///|
 /// Message types
@@ -28,14 +31,8 @@ fn Message::new(role : String, content : String) -> Message {
 }
 
 ///|
-/// Create content blocks array from string
-pub fn content_from_string(text : String) -> Array[ContentBlockItem] {
-  [{ type_: "text", text }]
-}
-
-///|
 /// Extract text content from message (concatenate all text blocks)
-pub fn Message::get_text(self : Message) -> String {
+fn Message::get_text(self : Message) -> String {
   match self.content {
     Some(blocks) => {
       let mut result = ""
@@ -77,17 +74,32 @@ struct Tool {
   description : String
   input_schema : Json
   type_ : String? // Optional type for Anthropic built-in tools (e.g., "web_search_20250305")
+  max_uses : Int? // Optional max_uses for built-in tools (e.g., web_search can be set to 5)
 }
 
 ///|
 /// Custom ToJson for Tool to handle optional type field
-/// For Anthropic built-in tools (with type field), only include type and name
-pub impl ToJson for Tool with to_json(self) {
+/// For Anthropic built-in tools (with type field), only include type, name, and optionally max_uses
+impl ToJson for Tool with to_json(self) {
   match self.type_ {
     Some(type_val) => {
-      // Anthropic built-in tools only need type and name
-      "type": type_val,
-      "name": self.name,
+      // Anthropic built-in tools need type and name, optionally max_uses
+      let mut tool_json : Json = {
+        "type": type_val,
+        "name": self.name,
+      }
+      // Add max_uses if present
+      match self.max_uses {
+        Some(max) => {
+          tool_json = {
+            "type": type_val,
+            "name": self.name,
+            "max_uses": max,
+          }
+        }
+        None => ()
+      }
+      tool_json
     }
     None => {
       // Custom tools need name, description, and input_schema

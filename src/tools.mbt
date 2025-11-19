@@ -947,6 +947,7 @@ fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
         type_: Some("web_search_20250305"),
         description: "",
         input_schema: {},
+        max_uses: Some(5),
       })
     } else {
       tools.push({
@@ -954,6 +955,7 @@ fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
         description: tool_impl.description(),
         input_schema: tool_impl.input_schema(),
         type_: None,
+        max_uses: None,
       })
     }
   }
