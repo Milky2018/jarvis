@@ -214,6 +214,8 @@ pub async fn Client::get(
         // Check for redirect using helper function
         match get_redirect_location(response) {
           Some(new_path) => {
+            // Skip the response body before following redirect
+            self.skip_response_body()
             redirects_count = redirects_count + 1
             current_path = new_path
             continue
@@ -258,6 +260,8 @@ pub async fn Client::put(
         // Check for redirect using helper function
         match get_redirect_location(response) {
           Some(new_path) => {
+            // Skip the response body before following redirect
+            self.skip_response_body()
             redirects_count = redirects_count + 1
             current_path = new_path
             continue
@@ -301,6 +305,8 @@ pub async fn Client::post(
         // Check for redirect using helper function
         match get_redirect_location(response) {
           Some(new_path) => {
+            // Skip the response body before following redirect
+            self.skip_response_body()
             redirects_count = redirects_count + 1
             current_path = new_path
             continue
