@@ -94,71 +94,11 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
 }
 
 ///|
-/// Generate a meaningful title for the conversation
-async fn generate_conversation_title(
-  chat_history : ChatHistory,
-  config : Config,
-) -> String {
-  // Build conversation preview (first few messages)
-  let builder = StringBuilder::new()
-  let limit = if chat_history.messages.length() > 6 {
-    6
-  } else {
-    chat_history.messages.length()
-  }
-  for i = 0; i < limit; i = i + 1 {
-    let msg = chat_history.messages[i]
-    let text = msg.get_text()
-    if text.is_empty() {
-      continue
-    }
-    let short = if text.length() > 100 {
-      (text[:100] catch { _ => text }).to_string() + "..."
-    } else {
-      text
-    }
-    builder.write_string(short)
-    builder.write_string("\n")
-  }
-  let preview = builder.to_string()
-  let title_messages : Array[Message] = [
-    Message::new(
-      "user",
-      "Generate a short title (maximum 20 characters) for the following conversation. Return only the title itself, nothing else.\n\nConversation:\n" +
-      preview,
-    ),
-  ]
-  let response = send_streaming_chat_request(
-    config,
-    title_messages,
-    [],
-    chat_history.petite_model,
-  ) catch {
-    _ => return "conversation"
-  }
-  match response.get_text_content() {
-    Some(s) => {
-      let trimmed = s.trim(chars=" \n\t\r\"\'").to_string()
-      // Replace invalid filename characters
-      trimmed
-      .replace(old="/", new="_")
-      .replace(old=":", new="_")
-      .replace(old="\\", new="_")
-    }
-    None => "conversation"
-  }
-}
-
-///|
 /// Generate markdown summary of the conversation with meaningful title
 async fn generate_summary_with_title(
   chat_history : ChatHistory,
   config : Config,
 ) -> (String, String) {
-  // Generate title first
-  system_info("Generating conversation title:")
-  let title = generate_conversation_title(chat_history, config)
-
   // Build conversation text
   let builder = StringBuilder::new()
   for msg in chat_history.messages {
@@ -183,20 +123,20 @@ async fn generate_summary_with_title(
   }
   let conversation_text = builder.to_string()
 
-  // Create prompt for summarization
-  system_info("Generating summary:")
-  let summary_messages : Array[Message] = [
+  // Create prompt for generating both title and summary in one call
+  system_info("Generating title and summary:")
+  let combined_messages : Array[Message] = [
     Message::new(
       "user",
-      "Summarize the following conversation in Markdown format. Include:\n1. Conversation topic\n2. Key points (use bullet points)\n3. Important decisions or conclusions\n4. Information to remember\n\nConversation:\n\n" +
+      "Generate a title and summary for the following conversation.\n\nFirst line: A short title (maximum 20 characters, no quotes)\nRest: Markdown summary including:\n1. Conversation topic\n2. Key points (use bullet points)\n3. Important decisions or conclusions\n4. Information to remember\n\nConversation:\n\n" +
       conversation_text,
     ),
   ]
 
-  // Call API to generate summary
-  let response = send_streaming_chat_request(
+  // Call API to generate both title and summary
+  let response = send_chat_request_non_streaming(
     config,
-    summary_messages,
+    combined_messages,
     [],
     chat_history.petite_model,
   ) catch {
@@ -205,13 +145,42 @@ async fn generate_summary_with_title(
       return ("", "")
     }
   }
-  let summary = match response.get_text_content() {
+  let full_text = match response.get_text_content() {
     Some(s) => s
     None => {
       system_error("Empty summary content")
       return ("", "")
     }
   }
+
+  // Split first line (title) from rest (summary)
+  let lines_view = full_text.split("\n")
+  let lines : Array[String] = []
+  for line in lines_view {
+    lines.push(line.to_string())
+  }
+
+  if lines.length() == 0 {
+    return ("conversation", "")
+  }
+
+  // Extract title (first line, clean filename characters)
+  let first_line = lines[0].trim(chars=" \n\t\r\"\'").to_string()
+  let title = first_line
+    .replace(old="/", new="_")
+    .replace(old=":", new="_")
+    .replace(old="\\", new="_")
+
+  // Extract summary (rest of the lines)
+  let summary_builder = StringBuilder::new()
+  for i = 1; i < lines.length(); i = i + 1 {
+    summary_builder.write_string(lines[i])
+    if i < lines.length() - 1 {
+      summary_builder.write_string("\n")
+    }
+  }
+  let summary = summary_builder.to_string().trim(chars=" \n\t\r").to_string()
+
   (title, summary)
 }
 
