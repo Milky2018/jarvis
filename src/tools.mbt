@@ -1061,7 +1061,8 @@ async fn web_fetch_tool(
       let config = load_config() catch {
         _ => return tool_error("Failed to load config")
       }
-      let response = send_streaming_chat_request(
+      // Use non-streaming for tool internal processing (no need to show progress)
+      let response = send_chat_request_non_streaming(
         config,
         messages,
         [],
