@@ -119,6 +119,27 @@ test "parse_url_localhost_with_port" {
 }
 
 ///|
+/// Parse redirect location (could be absolute URL or relative path)
+/// Returns (host, path) tuple
+fn parse_redirect_location(
+  location : String,
+  original_host : String,
+  _original_path : String
+) -> (String, String) raise JarvisError {
+  if location.has_prefix("http://") || location.has_prefix("https://") {
+    // Absolute URL - parse it
+    parse_url(location)
+  } else if location.has_prefix("/") {
+    // Absolute path on same host
+    (original_host, location)
+  } else {
+    // Relative path - resolve against original path
+    // For simplicity, treat as absolute path on same host
+    (original_host, "/" + location)
+  }
+}
+
+///|
 /// Send chat request with tools support
 async fn send_chat_request_with_tools(
   config : Config,
@@ -135,52 +156,61 @@ async fn send_chat_request_with_tools(
   let request = ChatRequest::with_tools(messages, model, tools)
   let json_body = request.to_json().stringify()
 
-  // Create HTTP client
-  let client = @http.Client::connect(host, headers={
-    "Authorization": "Bearer \{config.auth_token()}",
-    "x-api-key": config.auth_token(),
-    "anthropic-version": "2023-06-01",
-    "anthropic-dangerous-direct-browser-access": "true",
-    "Accept": "application/json",
-    "x-app": "cli",
-    "User-Agent": "jarvis/1.0.0",
-    "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-    "accept-language": "*",
-    "sec-fetch-mode": "cors",
-  }) catch {
-    e =>
-      raise HttpError(
-        "Failed to connect to host '\{host}': \{e}\nFull URL: \{url}",
-      )
-  }
-  defer client.close()
-
-  // Send POST request with redirect handling
-  let mut current_response = client.post(path, json_body, extra_headers={
-    "Content-Type": "application/json",
-    "X-Stainless-Retry-Count": "0",
-    "X-Stainless-Timeout": "600",
-    "X-Stainless-Lang": "js",
-    "X-Stainless-Package-Version": "0.60.0",
-    "X-Stainless-OS": "MacOS",
-    "X-Stainless-Arch": "arm64",
-    "X-Stainless-Runtime": "node",
-    "X-Stainless-Runtime-Version": "v24.8.0",
-  }) catch {
-    e =>
-      raise HttpError(
-        "Failed to send POST request to '\{host}\{path}': \{e}\nRequest body: \{json_body}",
-      )
-  }
-
   // Follow redirects (up to 10 times)
+  let mut current_host = host
+  let mut current_path = path
   let mut redirects_count = 0
   let max_redirects = 10
-  while redirects_count < max_redirects {
+  let mut final_response : ChatResponse? = None
+
+  while final_response is None {
+    // Create HTTP client for current request
+    let client = @http.Client::connect(current_host, headers={
+      "Authorization": "Bearer \{config.auth_token()}",
+      "x-api-key": config.auth_token(),
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "Accept": "application/json",
+      "x-app": "cli",
+      "User-Agent": "jarvis/1.0.0",
+      "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+      "accept-language": "*",
+      "sec-fetch-mode": "cors",
+    }) catch {
+      e =>
+        raise HttpError(
+          "Failed to connect to host '\{current_host}': \{e}",
+        )
+    }
+    defer client.close()
+
+    // Send POST request
+    let current_response = client.post(current_path, json_body, extra_headers={
+      "Content-Type": "application/json",
+      "X-Stainless-Retry-Count": "0",
+      "X-Stainless-Timeout": "600",
+      "X-Stainless-Lang": "js",
+      "X-Stainless-Package-Version": "0.60.0",
+      "X-Stainless-OS": "MacOS",
+      "X-Stainless-Arch": "arm64",
+      "X-Stainless-Runtime": "node",
+      "X-Stainless-Runtime-Version": "v24.8.0",
+    }) catch {
+      e =>
+        raise HttpError(
+          "Failed to send POST request to '\{current_host}\{current_path}': \{e}\nRequest body: \{json_body}",
+        )
+    }
+
+    // Check for redirect
     if current_response.code == 301 ||
       current_response.code == 302 ||
       current_response.code == 307 ||
       current_response.code == 308 {
+      if redirects_count >= max_redirects {
+        raise HttpError("Too many redirects (exceeded \{max_redirects})")
+      }
+
       let location = match current_response.headers.get("location") {
         Some(loc) => loc
         None =>
@@ -194,82 +224,65 @@ async fn send_chat_request_with_tools(
           "HTTP redirect response (\{current_response.code}) missing Location header",
         )
       }
+
       system_info(
         "Following HTTP redirect: \{current_response.code} -> \{location}",
       )
 
-      // Skip current response body before following redirect
-      client.skip_response_body() catch {
-        _ => ()
-      }
-
-      // Follow redirect
+      // Parse redirect location
+      let (new_host, new_path) = parse_redirect_location(location, current_host, current_path)
+      current_host = new_host
+      current_path = new_path
       redirects_count = redirects_count + 1
-      current_response = client.post(location, json_body, extra_headers={
-        "Content-Type": "application/json",
-        "X-Stainless-Retry-Count": "0",
-        "X-Stainless-Timeout": "600",
-        "X-Stainless-Lang": "js",
-        "X-Stainless-Package-Version": "0.60.0",
-        "X-Stainless-OS": "MacOS",
-        "X-Stainless-Arch": "arm64",
-        "X-Stainless-Runtime": "node",
-        "X-Stainless-Runtime-Version": "v24.8.0",
-      }) catch {
-        e =>
-          raise HttpError(
-            "Failed to follow redirect to '\{location}': \{e}",
-          )
-      }
-    } else {
-      break
+
+      // Skip response body and close connection, will create new one in next iteration
+      client.skip_response_body() catch { _ => () }
+      continue
     }
-  }
 
-  if redirects_count >= max_redirects {
-    raise HttpError("Too many redirects (exceeded \{max_redirects})")
-  }
+    // Not a redirect, read response body and return
+    let body = client.read_all() catch {
+      e =>
+        raise HttpError(
+          "Failed to read response body from \{current_host}\{current_path}: \{e}\n" +
+          "Request body: \{json_body}",
+        )
+    }
 
-  let response = current_response
-  if response.code != 200 {
-    let error_body = client.read_all().text() catch {
-        _ => "[Failed to read error body]"
-      }
-    raise HttpError(
-      "HTTP request failed with status: \{response.code}\n" +
-      "Request URL: https://\{host}\{path}\n" +
-      "Request body: \{json_body}\n" +
-      "Response body: \{error_body}",
-    )
-  }
-
-  // Read response body
-  let body = client.read_all() catch {
-    e =>
+    if current_response.code != 200 {
+      let error_text = body.text() catch { _ => "[Failed to read error body]" }
       raise HttpError(
-        "Failed to read response body from \{host}\{path}: \{e}\n" +
-        "Request body: \{json_body}",
+        "HTTP request failed with status: \{current_response.code}\n" +
+        "Request URL: https://\{current_host}\{current_path}\n" +
+        "Request body: \{json_body}\n" +
+        "Response body: \{error_text}",
       )
-  }
+    }
 
-  // Parse JSON response
-  let json_obj = body.json() catch {
-    e => {
-      let text = body.text() catch { _ => "[binary] \{body.binary()}" }
-      raise JsonParseError("Failed to parse JSON: \{e}\nResponse body: \{text}")
+    // Parse JSON response
+    let json_obj = body.json() catch {
+      e => {
+        let text = body.text() catch { _ => "[binary] \{body.binary()}" }
+        raise JsonParseError("Failed to parse JSON: \{e}\nResponse body: \{text}")
+      }
     }
-  }
-  let chat_response : ChatResponse = @json.from_json(json_obj) catch {
-    @json.JsonDecodeError(e) => {
-      let json_str = json_obj.stringify()
-      raise JsonParseError(
-        "Failed to decode response: \{e}\nJSON object: \{json_str}",
-      )
+    let chat_response : ChatResponse = @json.from_json(json_obj) catch {
+      @json.JsonDecodeError(e) => {
+        let json_str = json_obj.stringify()
+        raise JsonParseError(
+          "Failed to decode response: \{e}\nJSON object: \{json_str}",
+        )
+      }
     }
+
+    final_response = Some(chat_response)
   }
 
   // Return full response (including tool_calls)
-  chat_response
+  match final_response {
+    Some(r) => r
+    None => raise HttpError("Failed to get response after redirect handling")
+  }
 }
 
 ///|
