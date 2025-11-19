@@ -223,8 +223,11 @@ async fn handle_tool_calls(
 
       // Send tool results back as a user message
       let results_text = format_tool_results_as_text(tool_uses, tool_results)
-      let user_msg_with_results = Message::new("user", results_text)
-      chat_history.add(user_msg_with_results)
+      // Only add message if there's actual content (avoid empty text blocks)
+      if !results_text.is_empty() {
+        let user_msg_with_results = Message::new("user", results_text)
+        chat_history.add(user_msg_with_results)
+      }
 
       // Continue loop to get final response after tool execution
     }

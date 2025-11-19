@@ -21,6 +21,10 @@ struct Message {
 
 ///|
 fn Message::new(role : String, content : String) -> Message {
+  // Ensure content is not empty to comply with Claude API requirements
+  if content.is_empty() {
+    abort("Cannot create message with empty content. Role: \{role}")
+  }
   {
     role,
     content: Some([{ type_: "text", text: content }]),
