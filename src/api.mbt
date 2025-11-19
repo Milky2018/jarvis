@@ -125,19 +125,12 @@ test "parse_url_localhost_with_port" {
 /// Returns (host, path) tuple
 
 ///|
-/// Send streaming chat request (outputs content in real-time)
-async fn send_streaming_chat_request(
-  config : Config,
+/// Build request body JSON for Claude API
+fn build_request_body(
   messages : Array[Message],
   tools : Array[Tool],
   model : String,
-) -> ChatResponse {
-  // Parse URL
-  let url = config.base_url()
-  let (host, base_path) = parse_url(url)
-  let path = base_path + "/v1/messages"
-
-  // Build request JSON with streaming enabled
+) -> String {
   // Build system content blocks array
   let system_blocks : Array[Json] = [{ "type": "text", "text": SYSTEM_PROMPT }]
   let non_system_messages : Array[Message] = []
@@ -151,6 +144,8 @@ async fn send_streaming_chat_request(
       non_system_messages.push(msg)
     }
   }
+
+  // Build request with streaming enabled
   let mut request_with_stream : Json = {
     "model": model,
     "messages": non_system_messages.to_json(),
@@ -172,17 +167,34 @@ async fn send_streaming_chat_request(
       "metadata": { "user_id": "jarvis-user" },
     }
   }
-  let json_body = request_with_stream.stringify()
+  request_with_stream.stringify()
+}
 
-  // Debug: print request details
-  system_debug("=== HTTP REQUEST ===")
-  system_debug("POST https://\{host}\{path}")
-  system_debug("Request body:")
-  system_debug(json_body)
-  system_debug("===================")
+///|
+/// Get POST request extra headers
+fn get_post_headers() -> Map[String, String] {
+  {
+    "Content-Type": "application/json",
+    "X-Stainless-Retry-Count": "0",
+    "X-Stainless-Timeout": "600",
+    "X-Stainless-Lang": "js",
+    "X-Stainless-Package-Version": "0.60.0",
+    "X-Stainless-OS": "MacOS",
+    "X-Stainless-Arch": "arm64",
+    "X-Stainless-Runtime": "node",
+    "X-Stainless-Runtime-Version": "v24.8.0",
+    "x-stainless-helper-method": "stream",
+  }
+}
 
-  // Create HTTP client
-  let client = @http.Client::connect(host, headers={
+///|
+/// Create HTTP client with authentication headers
+async fn create_http_client(
+  host : String,
+  config : Config,
+  url : String,
+) -> @http.Client raise JarvisError {
+  @http.Client::connect(host, headers={
     "Authorization": "Bearer \{config.auth_token()}",
     "x-api-key": config.auth_token(),
     "anthropic-version": "2023-06-01",
@@ -199,26 +211,17 @@ async fn send_streaming_chat_request(
         "Failed to connect to host '\{host}': \{e}\nFull URL: \{url}",
       )
   }
-  defer client.close()
+}
 
-  // Send POST request with redirect handling
-  let mut current_response = client.post(path, json_body, extra_headers={
-    "Content-Type": "application/json",
-    "X-Stainless-Retry-Count": "0",
-    "X-Stainless-Timeout": "600",
-    "X-Stainless-Lang": "js",
-    "X-Stainless-Package-Version": "0.60.0",
-    "X-Stainless-OS": "MacOS",
-    "X-Stainless-Arch": "arm64",
-    "X-Stainless-Runtime": "node",
-    "X-Stainless-Runtime-Version": "v24.8.0",
-    "x-stainless-helper-method": "stream",
-  }) catch {
-    e =>
-      raise HttpError(
-        "Failed to send POST request to '\{host}\{path}': \{e}\nRequest body: \{json_body}",
-      )
-  }
+///|
+/// Send POST request and follow redirects
+async fn send_post_with_redirects(
+  client : @http.Client,
+  path : String,
+  json_body : String,
+) -> @http.Response {
+  let extra_headers = get_post_headers()
+  let mut current_response = client.post(path, json_body, extra_headers~)
 
   // Follow redirects (up to 10 times)
   let mut redirects_count = 0
@@ -237,12 +240,12 @@ async fn send_streaming_chat_request(
           }
       }
       if location.is_empty() {
-        raise HttpError(
+        abort(
           "HTTP redirect response (\{current_response.code}) missing Location header",
         )
       }
-      system_info(
-        "Following HTTP redirect: \{current_response.code} -> \{location}",
+      println_async(
+        "[INFO] Following HTTP redirect: \{current_response.code} -> \{location}",
       )
 
       // Skip current response body before following redirect
@@ -252,28 +255,172 @@ async fn send_streaming_chat_request(
 
       // Follow redirect
       redirects_count = redirects_count + 1
-      current_response = client.post(location, json_body, extra_headers={
-        "Content-Type": "application/json",
-        "X-Stainless-Retry-Count": "0",
-        "X-Stainless-Timeout": "600",
-        "X-Stainless-Lang": "js",
-        "X-Stainless-Package-Version": "0.60.0",
-        "X-Stainless-OS": "MacOS",
-        "X-Stainless-Arch": "arm64",
-        "X-Stainless-Runtime": "node",
-        "X-Stainless-Runtime-Version": "v24.8.0",
-        "x-stainless-helper-method": "stream",
-      }) catch {
-        e => raise HttpError("Failed to follow redirect to '\{location}': \{e}")
-      }
+      current_response = client.post(location, json_body, extra_headers~)
     } else {
       break
     }
   }
   if redirects_count >= max_redirects {
-    raise HttpError("Too many redirects (exceeded \{max_redirects})")
+    abort("Too many redirects (exceeded \{max_redirects})")
   }
-  let response = current_response
+  current_response
+}
+
+///|
+/// Extract complete lines from accumulated data
+fn extract_lines_from_chunk(accumulated_data : String) -> (Array[String], String) {
+  let lines : Array[String] = []
+  let mut last_newline_pos = 0
+  for i in 0..<accumulated_data.length() {
+    match accumulated_data.get_char(i) {
+      Some('\n') => {
+        let line_view = accumulated_data[last_newline_pos:i] catch { _ => continue }
+        let line = line_view.to_string().trim(chars=" \t\r\n").to_string()
+        if line.length() > 0 {
+          lines.push(line)
+        }
+        last_newline_pos = i + 1
+      }
+      _ => ()
+    }
+  }
+
+  // Return lines and remaining incomplete data
+  let remaining = if last_newline_pos > 0 {
+    let remaining_view = accumulated_data[last_newline_pos:] catch { _ => "" }
+    remaining_view.to_string()
+  } else {
+    accumulated_data
+  }
+  (lines, remaining)
+}
+
+///|
+/// SSE line processing result
+struct SSELineResult {
+  text_delta : String?
+  finish_reason : String?
+}
+
+///|
+/// Process a single SSE line and extract content/finish_reason
+async fn process_sse_line(line : String) -> SSELineResult {
+  // Skip SSE event metadata lines
+  if line.has_prefix("event:") {
+    return { text_delta: None, finish_reason: None }
+  }
+  if !line.has_prefix("data: ") {
+    return { text_delta: None, finish_reason: None }
+  }
+
+  let json_str_view = line[6:] catch {
+      _ => {
+        system_error("Failed to extract JSON from SSE line: \{line}")
+        return { text_delta: None, finish_reason: None }
+      }
+    }
+  let json_str = json_str_view.to_string()
+  let trimmed = json_str.trim(chars=" \t\r\n").to_string()
+  if trimmed == "[DONE]" {
+    return { text_delta: None, finish_reason: None }
+  }
+
+  let chunk_json = @json.parse(json_str) catch {
+    _ => {
+      system_error("Failed to parse streaming JSON chunk: \{json_str}")
+      return { text_delta: None, finish_reason: None }
+    }
+  }
+
+  // Parse Claude native streaming format
+  guard chunk_json is Object(map) else {
+    system_error("Streaming chunk is not a JSON object")
+    return { text_delta: None, finish_reason: None }
+  }
+
+  // Check event type
+  match map.get("type") {
+    Some(String("content_block_delta")) =>
+      // Extract text from delta
+      if map.get("delta") is Some(Object(delta_map)) {
+        if delta_map.get("type") is Some(String("text_delta")) {
+          if delta_map.get("text") is Some(String(text)) {
+            // Output immediately (ignore write errors)
+            @stdio.stdout.write(text) catch {
+              _ => ()
+            }
+            return { text_delta: Some(text), finish_reason: None }
+          }
+        }
+      }
+    Some(String("message_delta")) =>
+      // Extract finish reason from message_delta
+      if map.get("delta") is Some(Object(delta_map)) {
+        if delta_map.get("stop_reason") is Some(String(reason)) {
+          return { text_delta: None, finish_reason: Some(reason) }
+        }
+      }
+    _ => ()
+  }
+  { text_delta: None, finish_reason: None }
+}
+
+///|
+/// Build ChatResponse from accumulated content
+fn build_chat_response(
+  content : String,
+  finish_reason : String,
+  model : String,
+) -> ChatResponse {
+  let content_blocks : Array[ContentBlock] = [
+    {
+      type_: "text",
+      text: Some(content),
+      id: None,
+      name: None,
+      input: None,
+    },
+  ]
+  {
+    id: "",
+    type_: "message",
+    role: "assistant",
+    content: content_blocks,
+    model,
+    stop_reason: Some(finish_reason),
+    usage: None,
+  }
+}
+
+///|
+/// Send streaming chat request (outputs content in real-time)
+async fn send_streaming_chat_request(
+  config : Config,
+  messages : Array[Message],
+  tools : Array[Tool],
+  model : String,
+) -> ChatResponse {
+  // Parse URL
+  let url = config.base_url()
+  let (host, base_path) = parse_url(url)
+  let path = base_path + "/v1/messages"
+
+  // Build request body
+  let json_body = build_request_body(messages, tools, model)
+
+  // Debug: print request details
+  system_debug("=== HTTP REQUEST ===")
+  system_debug("POST https://\{host}\{path}")
+  system_debug("Request body:")
+  system_debug(json_body)
+  system_debug("===================")
+
+  // Create HTTP client
+  let client = create_http_client(host, config, url)
+  defer client.close()
+
+  // Send POST request with redirect handling
+  let response = send_post_with_redirects(client, path, json_body)
 
   // Debug: print response status
   system_debug("=== HTTP RESPONSE ===")
@@ -296,9 +443,9 @@ async fn send_streaming_chat_request(
   }
 
   // Read streaming response (SSE format)
-  // Use true streaming: read chunks as they arrive
   let content_builder = StringBuilder::new()
   let mut finish_reason = ""
+  let mut total_chunks = 0
 
   // Print "Jarvis: " prefix before streaming starts
   print_jarvis_prefix()
@@ -306,7 +453,6 @@ async fn send_streaming_chat_request(
   // Buffer for reading chunks
   let buffer = FixedArray::make(1024, b'\x00')
   let mut accumulated_data = ""
-  let mut total_chunks_received = 0
   let mut total_bytes_read = 0
   for {
     let bytes_read = client.read(buffer) catch {
@@ -327,90 +473,23 @@ async fn send_streaming_chat_request(
     let chunk = @encoding/utf8.decode(chunk_bytes)
     accumulated_data = accumulated_data + chunk
 
-    // Process complete lines (SSE format: "data: {json}\n\n")
-    let lines : Array[String] = []
-    let mut last_newline_pos = 0
-    for i in 0..<accumulated_data.length() {
-      match accumulated_data.get_char(i) {
-        Some('\n') => {
-          let line_view = accumulated_data[last_newline_pos:i] catch {
-              _ => {
-                system_error("Failed to extract line from accumulated data")
-                continue
-              }
-            }
-          let line = line_view.to_string().trim(chars=" \t\r\n").to_string()
-          if line.length() > 0 {
-            lines.push(line)
-          }
-          last_newline_pos = i + 1
-        }
-        _ => ()
-      }
-    }
-
-    // Keep remaining incomplete line in buffer
-    if last_newline_pos > 0 {
-      let remaining_view = accumulated_data[last_newline_pos:] catch { _ => "" }
-      accumulated_data = remaining_view.to_string()
-    }
+    // Extract complete lines from accumulated data
+    let (lines, remaining) = extract_lines_from_chunk(accumulated_data)
+    accumulated_data = remaining
 
     // Process each complete line
     for line in lines {
-      // Skip SSE event metadata lines
-      if line.has_prefix("event:") {
-        continue
+      let result = process_sse_line(line)
+      match result.text_delta {
+        Some(text) => {
+          content_builder.write_string(text)
+          total_chunks = total_chunks + 1
+        }
+        None => ()
       }
-      if line.has_prefix("data: ") {
-        let json_str_view = line[6:] catch {
-            _ => {
-              system_error("Failed to extract JSON from SSE line: \{line}")
-              continue
-            }
-          }
-        let json_str = json_str_view.to_string()
-        let trimmed = json_str.trim(chars=" \t\r\n").to_string()
-        if trimmed == "[DONE]" {
-          break
-        }
-        let chunk_json = @json.parse(json_str) catch {
-          _ => {
-            system_error("Failed to parse streaming JSON chunk: \{json_str}")
-            continue
-          }
-        }
-
-        // Parse Claude native streaming format
-        guard chunk_json is Object(map) else {
-          system_error("Streaming chunk is not a JSON object")
-          continue
-        }
-
-        // Check event type
-        match map.get("type") {
-          Some(String("content_block_delta")) =>
-            // Extract text from delta
-            if map.get("delta") is Some(Object(delta_map)) {
-              if delta_map.get("type") is Some(String("text_delta")) {
-                if delta_map.get("text") is Some(String(text)) {
-                  content_builder.write_string(text)
-                  total_chunks_received = total_chunks_received + 1
-                  // Output immediately after parsing (ignore write errors)
-                  @stdio.stdout.write(text) catch {
-                    _ => ()
-                  }
-                }
-              }
-            }
-          Some(String("message_delta")) =>
-            // Extract finish reason from message_delta
-            if map.get("delta") is Some(Object(delta_map)) {
-              if delta_map.get("stop_reason") is Some(String(reason)) {
-                finish_reason = reason
-              }
-            }
-          _ => ()
-        }
+      match result.finish_reason {
+        Some(reason) => finish_reason = reason
+        None => ()
       }
     }
   }
@@ -419,28 +498,11 @@ async fn send_streaming_chat_request(
   let full_content = content_builder.to_string()
   system_debug("=== STREAMING END ===")
   system_debug(
-    "Total bytes: \{total_bytes_read}, chunks: \{total_chunks_received}, content: \{full_content.length()} chars",
+    "Total bytes: \{total_bytes_read}, chunks: \{total_chunks}, content: \{full_content.length()} chars",
   )
   system_debug("Finish reason: \{finish_reason}")
   system_debug("====================")
 
-  // Construct ChatResponse from accumulated data (Claude format)
-  let content_blocks : Array[ContentBlock] = [
-    {
-      type_: "text",
-      text: Some(full_content),
-      id: None,
-      name: None,
-      input: None,
-    },
-  ]
-  {
-    id: "",
-    type_: "message",
-    role: "assistant",
-    content: content_blocks,
-    model,
-    stop_reason: Some(finish_reason),
-    usage: None,
-  }
+  // Construct ChatResponse from accumulated data
+  build_chat_response(full_content, finish_reason, model)
 }
