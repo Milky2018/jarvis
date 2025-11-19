@@ -491,8 +491,9 @@ async fn handle_command(
   }
 
   // Unknown command
-  jarvis_says("Unknown command: :\{command}")
-  println_async("Type ':help' for available commands")
+  jarvis_says(
+    "Unknown command: :\{command}\nType ':help' for available commands",
+  )
   true
 }
 
@@ -579,8 +580,7 @@ async fn start_play_mode(
     let spent = current_cost - start_cost
     let remaining = budget - spent
     if remaining <= 0.0 {
-      jarvis_says("Budget exhausted! Spent: $\{spent}")
-      println_async("Play mode ended.")
+      jarvis_says("Budget exhausted! Spent: $\{spent}\nPlay mode ended.")
       break
     }
 
@@ -622,12 +622,11 @@ async fn start_play_mode(
     } catch {
       PlayModeEnded => {
         // Jarvis called end_play_mode tool
-        println_async("Play mode ended by Jarvis.")
+        system_info("Play mode ended by Jarvis.")
         break
       }
       e => {
-        system_error("Error in play mode: \{e}")
-        println_async("Ending play session.")
+        system_error("Error in play mode: \{e}\nEnding play session.")
         break
       }
     }

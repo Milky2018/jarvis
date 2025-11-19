@@ -23,11 +23,11 @@ async fn send_chat_request(
     )
     (resp, false)
   } else {
-    // Use streaming for text responses
+    // Use streaming for text responses (no tools since we only expect text)
     let resp = send_streaming_chat_request(
       config,
       chat_history.messages,
-      tools,
+      [],
       chat_history.current_model,
     )
     newline_async() // Add newline after streaming
@@ -169,26 +169,21 @@ async fn handle_tool_calls(
               return
             }
         }
-        // No tool calls, add message to history
-        // Ensure content is not None to avoid API errors
+        // No tool calls, add message to history if non-empty
+        // Claude API requires text content blocks to be non-empty
         let content_str = match content_text {
           Some(c) => c
           None => ""
         }
+        if !content_str.is_empty() {
+          let assistant_msg = Message::new("assistant", content_str)
+          chat_history.add(assistant_msg)
+        }
 
         // If we used streaming, this is the final response - return control to user
         if used_streaming {
-          // Only add to history if content is non-empty
-          if !content_str.is_empty() {
-            let assistant_msg = Message::new("assistant", content_str)
-            chat_history.add(assistant_msg)
-          }
           return
         }
-
-        // For non-streaming, always add to history (even if empty, for error tracking)
-        let assistant_msg = Message::new("assistant", content_str)
-        chat_history.add(assistant_msg)
 
         // Auto-continue: only if we've already called tools (i.e., we're in "work mode")
         // This prevents simple conversational responses from looping forever
@@ -321,8 +316,12 @@ async fn chat_loop(config : Config) -> Unit {
     }
   }
   newline_async()
-  jarvis_says("Hello! I'm Jarvis, your AI assistant. How can I help you today?")
-  println_async("(Type 'exit' or 'quit' to end the conversation)")
+  jarvis_says(
+    (
+      #|Hello! I'm Jarvis, your AI assistant. How can I help you today?
+      #|(Type 'exit' or 'quit' to end the conversation)
+    ),
+  )
   newline_async()
 
   // Main loop: Ctrl+C handling to interrupt operations

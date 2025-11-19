@@ -382,8 +382,8 @@ async fn send_post_with_redirects(
           "HTTP redirect response (\{current_response.code}) missing Location header",
         )
       }
-      println_async(
-        "[INFO] Following HTTP redirect: \{current_response.code} -> \{location}",
+      system_debug(
+        "Following HTTP redirect: \{current_response.code} -> \{location}",
       )
 
       // Skip current response body before following redirect
