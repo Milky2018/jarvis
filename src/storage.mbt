@@ -74,15 +74,17 @@ async fn create_new_conversation_file(
 
 ///|
 /// Load the latest conversation file
-/// Returns the loaded history and the file number
-async fn load_latest_conversation() -> (ChatHistory, Int)? {
+async fn load_latest_conversation() -> ChatHistory? {
   let latest_number = get_latest_conversation_number()
   if latest_number == 0 {
     return None // No conversation files exist
   }
   let path = get_conversation_file_path(latest_number)
   match ChatHistory::load(path) {
-    Some(history) => Some((history, latest_number))
+    Some(history) => {
+      history.current_file_number = latest_number
+      Some(history)
+    }
     None => None
   }
 }

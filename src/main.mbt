@@ -286,9 +286,8 @@ async fn chat_loop(config : Config) -> Unit {
 
   // Try to load the latest conversation using numbered files
   let chat_history = match load_latest_conversation() {
-    Some((loaded_history, file_num)) => {
-      loaded_history.current_file_number = file_num
-      let num_str = format_conv_number(file_num)
+    Some(loaded_history) => {
+      let num_str = format_conv_number(loaded_history.current_file_number)
       system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
@@ -404,9 +403,8 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
 
   // Load existing conversation or create new one (same as chat_loop)
   let chat_history = match load_latest_conversation() {
-    Some((loaded_history, file_num)) => {
-      loaded_history.current_file_number = file_num
-      let num_str = format_conv_number(file_num)
+    Some(loaded_history) => {
+      let num_str = format_conv_number(loaded_history.current_file_number)
       system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }

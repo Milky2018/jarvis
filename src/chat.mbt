@@ -275,10 +275,16 @@ async fn ChatHistory::manage_history(
   self : ChatHistory,
   config : Config,
 ) -> Bool {
-  // Estimate total tokens including SYSTEM_PROMPT
-  let messages_tokens = estimate_total_tokens(self.messages)
-  let system_prompt_tokens = SYSTEM_PROMPT.length() / 4 + 10
-  let total_tokens = messages_tokens + system_prompt_tokens
+  // Use accurate token count from last API call, fallback to estimate
+  // Note: Add buffer for newly added user message (not yet counted by API)
+  let total_tokens = if self.last_context_tokens > 0 {
+    self.last_context_tokens + 100 // rough buffer for new user input
+  } else {
+    // Fallback: estimate including SYSTEM_PROMPT
+    let messages_tokens = estimate_total_tokens(self.messages)
+    let system_prompt_tokens = SYSTEM_PROMPT.length() / 4 + 10
+    messages_tokens + system_prompt_tokens
+  }
   let max_tokens = self.max_context_tokens
 
   // If under threshold, no need to manage
