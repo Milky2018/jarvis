@@ -163,12 +163,12 @@ async fn jarvis_says(message : String) -> Unit {
 }
 
 ///|
-/// Jarvis cries (error output) - shows error in red
-async fn jarvis_cries(message : String) -> Unit {
-  print_jarvis_prefix()
+/// System error - shows system-level error message
+async fn system_error(message : String) -> Unit {
   @stdio.stdout.write(COLOR_RED)
-  println_async(message)
+  @stdio.stdout.write("[System] ")
   @stdio.stdout.write(COLOR_RESET)
+  println_async(message)
 }
 
 ///|
@@ -182,9 +182,9 @@ async fn tool_log(message : String) -> Unit {
 }
 
 ///|
-/// System notification - shows system-level information
+/// System info - shows system-level information
 /// Uses gray color and brackets to distinguish from Jarvis responses
-async fn system_notify(message : String) -> Unit {
+async fn system_info(message : String) -> Unit {
   @stdio.stdout.write(COLOR_GRAY)
   @stdio.stdout.write("[System] ")
   @stdio.stdout.write(COLOR_RESET)

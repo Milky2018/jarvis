@@ -10,7 +10,7 @@ trait ToolImpl {
 ///|
 /// Helper function to report tool errors
 async fn tool_error(msg : String) -> String {
-  jarvis_cries(msg)
+  system_error(msg)
   msg
 }
 

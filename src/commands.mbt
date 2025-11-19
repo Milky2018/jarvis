@@ -316,7 +316,7 @@ impl Command for SummarizeCommand with execute(
   // Save markdown summary using @fs API
   let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
   @fs.write_file(md_filename, summary, create=0o644) catch {
-    e => jarvis_cries("Failed to save summary file: \{e}")
+    e => system_error("Failed to save summary file: \{e}")
   }
   jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
 
@@ -629,7 +629,7 @@ async fn start_play_mode(
         break
       }
       e => {
-        jarvis_cries("Error in play mode: \{e}")
+        system_error("Error in play mode: \{e}")
         println_async("Ending play session.")
         break
       }

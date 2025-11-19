@@ -52,7 +52,6 @@ fn parse_url(url : String) -> (String, String) raise JarvisError {
     // No path provided
     ""
   }
-
   (host, path)
 }
 
@@ -198,7 +197,7 @@ async fn send_chat_request_with_tools(
   // Parse JSON response
   let json_obj = body.json() catch {
     e => {
-      let text = body.text() catch { _ => "[Failed to read body text]" }
+      let text = body.text() catch { _ => "[binary] \{body.binary()}" }
       raise JsonParseError("Failed to parse JSON: \{e}\nResponse body: \{text}")
     }
   }

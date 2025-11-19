@@ -165,187 +165,155 @@ pub async fn Client::skip_response_body(self : Client) -> Unit {
 }
 
 ///|
+/// Check if a response is a redirect and extract the Location header if present.
+/// Returns Some(location) if it's a redirect with a Location header, None otherwise.
+fn get_redirect_location(response : Response) -> String? {
+  if response.code == 301 ||
+    response.code == 302 ||
+    response.code == 307 ||
+    response.code == 308 {
+    // Try lowercase "location" first, then uppercase "Location"
+    match response.headers.get("location") {
+      Some(location) => Some(location)
+      None => response.headers.get("Location")
+    }
+  } else {
+    None
+  }
+}
+
+///|
 /// Perform a `GET` request to the server, see `Client::request` for more details.
-/// By default, automatically follows redirects (301, 302, 307, 308).
-/// Set `redirect` to `false` to disable automatic redirect following.
-/// Set `max_redirects` to control the maximum number of redirects (default: 10).
+/// By default, automatically follows up to 10 redirects (301, 302, 307, 308).
+/// Set `redirect_strategy` to `NoRedirect` to disable automatic redirect following.
 pub async fn Client::get(
   self : Client,
   path : String,
   extra_headers? : Map[String, String] = {},
   body? : &@io.Data,
-  redirect? : Bool = true,
-  max_redirects? : Int = 10,
+  redirect_strategy? : RedirectStrategy = Retry(10),
 ) -> Response {
-  // If redirect is disabled, use simple get
-  if not(redirect) {
-    self.request(Get, path, extra_headers~)
-    if body is Some(body) {
-      self.write(body)
-    }
-    return self.end_request()
-  }
-
-  // Automatic redirect handling
-  let mut redirects_count = 0
-  let mut current_path = path
-
-  while redirects_count < max_redirects {
-    self.request(Get, current_path, extra_headers~)
-    if body is Some(body) {
-      self.write(body)
-    }
-    let response = self.end_request()
-
-    // Check if response is a redirect
-    if response.code == 301 || response.code == 302 || response.code == 307 ||
-      response.code == 308 {
-      // Get Location header
-      match response.headers.get("location") {
-        Some(new_path) => {
-          redirects_count = redirects_count + 1
-          current_path = new_path
-          continue
-        }
-        None =>
-          match response.headers.get("Location") {
-            Some(new_path) => {
-              redirects_count = redirects_count + 1
-              current_path = new_path
-              continue
-            }
-            None => return response
-          }
+  match redirect_strategy {
+    NoRedirect => {
+      self.request(Get, path, extra_headers~)
+      if body is Some(body) {
+        self.write(body)
       }
+      self.end_request()
     }
+    Retry(max_redirects) => {
+      let mut redirects_count = 0
+      let mut current_path = path
+      while redirects_count < max_redirects {
+        self.request(Get, current_path, extra_headers~)
+        if body is Some(body) {
+          self.write(body)
+        }
+        let response = self.end_request()
 
-    // Not a redirect, return the response
-    return response
-  }
+        // Check for redirect using helper function
+        match get_redirect_location(response) {
+          Some(new_path) => {
+            redirects_count = redirects_count + 1
+            current_path = new_path
+            continue
+          }
+          None => return response
+        }
+      }
 
-  // Max redirects exceeded, return the last response
-  self.request(Get, current_path, extra_headers~)
-  if body is Some(body) {
-    self.write(body)
+      // Max redirects exceeded, return the last response
+      self.request(Get, current_path, extra_headers~)
+      if body is Some(body) {
+        self.write(body)
+      }
+      self.end_request()
+    }
   }
-  self.end_request()
 }
 
 ///|
 /// Perform a `PUT` request to the server, see `Client::request` for more details.
-/// By default, automatically follows redirects (301, 302, 307, 308).
-/// Set `redirect` to `false` to disable automatic redirect following.
-/// Set `max_redirects` to control the maximum number of redirects (default: 10).
+/// By default, automatically follows up to 10 redirects (301, 302, 307, 308).
+/// Set `redirect_strategy` to `NoRedirect` to disable automatic redirect following.
 pub async fn Client::put(
   self : Client,
   path : String,
   body : &@io.Data,
   extra_headers? : Map[String, String] = {},
-  redirect? : Bool = true,
-  max_redirects? : Int = 10,
+  redirect_strategy? : RedirectStrategy = Retry(10),
 ) -> Response {
-  // If redirect is disabled, use simple put
-  if not(redirect) {
-    return self..request(Put, path, extra_headers~)..write(body).end_request()
-  }
+  match redirect_strategy {
+    NoRedirect =>
+      self..request(Put, path, extra_headers~)..write(body).end_request()
+    Retry(max_redirects) => {
+      let mut redirects_count = 0
+      let mut current_path = path
+      while redirects_count < max_redirects {
+        let response = self
+          ..request(Put, current_path, extra_headers~)
+          ..write(body)
+          .end_request()
 
-  // Automatic redirect handling
-  let mut redirects_count = 0
-  let mut current_path = path
-
-  while redirects_count < max_redirects {
-    let response = self..request(Put, current_path, extra_headers~)..write(body)
-      .end_request()
-
-    // Check if response is a redirect
-    if response.code == 301 || response.code == 302 || response.code == 307 ||
-      response.code == 308 {
-      // Get Location header
-      match response.headers.get("location") {
-        Some(new_path) => {
-          redirects_count = redirects_count + 1
-          current_path = new_path
-          continue
-        }
-        None =>
-          match response.headers.get("Location") {
-            Some(new_path) => {
-              redirects_count = redirects_count + 1
-              current_path = new_path
-              continue
-            }
-            None => return response
+        // Check for redirect using helper function
+        match get_redirect_location(response) {
+          Some(new_path) => {
+            redirects_count = redirects_count + 1
+            current_path = new_path
+            continue
           }
+          None => return response
+        }
       }
+
+      // Max redirects exceeded, return the last response
+      self
+      ..request(Put, current_path, extra_headers~)
+      ..write(body)
+      .end_request()
     }
-
-    // Not a redirect, return the response
-    return response
   }
-
-  // Max redirects exceeded, return the last response
-  self..request(Put, current_path, extra_headers~)..write(body).end_request()
 }
 
 ///|
 /// Perform a `POST` request to the server, see `Client::request` for more details.
-/// By default, automatically follows redirects (301, 302, 307, 308).
-/// Set `redirect` to `false` to disable automatic redirect following.
-/// Set `max_redirects` to control the maximum number of redirects (default: 10).
+/// By default, automatically follows up to 10 redirects (301, 302, 307, 308).
+/// Set `redirect_strategy` to `NoRedirect` to disable automatic redirect following.
 pub async fn Client::post(
   self : Client,
   path : String,
   body : &@io.Data,
   extra_headers? : Map[String, String] = {},
-  redirect? : Bool = true,
-  max_redirects? : Int = 10,
+  redirect_strategy? : RedirectStrategy = Retry(10),
 ) -> Response {
-  // If redirect is disabled, use simple post
-  if not(redirect) {
-    return self..request(Post, path, extra_headers~)..write(body).end_request()
-  }
+  match redirect_strategy {
+    NoRedirect =>
+      self..request(Post, path, extra_headers~)..write(body).end_request()
+    Retry(max_redirects) => {
+      let mut redirects_count = 0
+      let mut current_path = path
+      while redirects_count < max_redirects {
+        let response = self
+          ..request(Post, current_path, extra_headers~)
+          ..write(body)
+          .end_request()
 
-  // Automatic redirect handling
-  let mut redirects_count = 0
-  let mut current_path = path
-  while redirects_count < max_redirects {
-    let response = self
+        // Check for redirect using helper function
+        match get_redirect_location(response) {
+          Some(new_path) => {
+            redirects_count = redirects_count + 1
+            current_path = new_path
+            continue
+          }
+          None => return response
+        }
+      }
+
+      // Max redirects exceeded, return the last response
+      self
       ..request(Post, current_path, extra_headers~)
       ..write(body)
       .end_request()
-
-    // Check if response is a redirect
-    if response.code == 301 ||
-      response.code == 302 ||
-      response.code == 307 ||
-      response.code == 308 {
-      // Get Location header (try both lowercase and uppercase)
-      match response.headers.get("location") {
-        Some(new_path) => {
-          redirects_count = redirects_count + 1
-          current_path = new_path
-          continue
-        }
-        None =>
-          match response.headers.get("Location") {
-            Some(new_path) => {
-              redirects_count = redirects_count + 1
-              current_path = new_path
-              continue
-            }
-            None =>
-              // Location header missing, just return the redirect response
-              // The caller can handle it
-              return response
-          }
-      }
     }
-
-    // Not a redirect, return the response
-    return response
   }
-
-  // Max redirects exceeded, return the last response
-  // The caller can check response.code to see it's still a redirect
-  self..request(Post, current_path, extra_headers~)..write(body).end_request()
 }

@@ -38,3 +38,10 @@ pub(all) struct Response {
   reason : String
   headers : Map[String, String]
 }
+
+///|
+/// Strategy for handling HTTP redirects
+pub(all) enum RedirectStrategy {
+  NoRedirect // Do not follow redirects
+  Retry(Int) // Follow redirects up to the specified number of times
+}

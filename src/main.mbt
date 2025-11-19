@@ -173,7 +173,7 @@ async fn handle_tool_calls(
           }
           None =>
             if !used_streaming {
-              jarvis_cries("Error: No content in response")
+              system_error("Error: No content in response")
               return false // Signal error to caller
             }
         }
@@ -237,25 +237,25 @@ async fn handle_tool_calls(
       // Continue loop to get final response after tool execution
     }
     if max_iterations == 0 {
-      jarvis_cries("Maximum tool calling iterations reached")
+      system_error("Maximum tool calling iterations reached")
       return false
     }
     true // Success
   } catch {
     EnvVarNotSet(msg) => {
-      jarvis_cries("Error: Environment variable not set: \{msg}")
+      system_error("Error: Environment variable not set: \{msg}")
       false
     }
     HttpError(msg) => {
-      jarvis_cries("Error: HTTP error: \{msg}")
+      system_error("Error: HTTP error: \{msg}")
       false
     }
     JsonParseError(msg) => {
-      jarvis_cries("Error: JSON parse error: \{msg}")
+      system_error("Error: JSON parse error: \{msg}")
       false
     }
     StringViewError(msg) => {
-      jarvis_cries("Error: String view error: \{msg}")
+      system_error("Error: String view error: \{msg}")
       false
     }
     e => raise e
@@ -287,7 +287,7 @@ async fn handle_user_input(
   } catch {
     e =>
       // If history management fails, just log and continue
-      jarvis_cries("History management failed: \{e}")
+      system_error("History management failed: \{e}")
   }
 
   // Tool calling loop
@@ -319,7 +319,7 @@ async fn chat_loop(config : Config) -> Unit {
     Some((loaded_history, file_num)) => {
       loaded_history.current_file_number = file_num
       let num_str = format_conv_number(file_num)
-      system_notify("Loaded conversation from conv_\{num_str}.json")
+      system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
     None => {
@@ -332,7 +332,7 @@ async fn chat_loop(config : Config) -> Unit {
         history.current_model,
       )
       history.current_file_number = file_num
-      system_notify("Created new conversation: conv_001.json")
+      system_info("Created new conversation: conv_001.json")
       history
     }
   }
@@ -381,7 +381,7 @@ async fn chat_loop(config : Config) -> Unit {
       ActionFinished => continue
       e => {
         newline_async()
-        jarvis_cries("Fatal error: \{e}")
+        system_error("Fatal error: \{e}")
         break
       }
     }
@@ -435,7 +435,7 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
     Some((loaded_history, file_num)) => {
       loaded_history.current_file_number = file_num
       let num_str = format_conv_number(file_num)
-      system_notify("Loaded conversation from conv_\{num_str}.json")
+      system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
     None => {
@@ -448,11 +448,11 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
         history.current_model,
       )
       history.current_file_number = file_num
-      system_notify("Created new conversation: conv_001.json")
+      system_info("Created new conversation: conv_001.json")
       history
     }
   }
-  system_notify("Consulting: \{prompt}")
+  system_info("Consulting: \{prompt}")
   newline_async()
 
   // Enable raw mode for Ctrl+C detection

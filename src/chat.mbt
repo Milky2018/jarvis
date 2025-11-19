@@ -43,7 +43,7 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
 
   // Use native fs API to write file
   @fs.write_file(filename, json_str, create=0o644) catch {
-    e => jarvis_cries("Failed to save conversation: \{e}")
+    e => system_error("Failed to save conversation: \{e}")
   }
 }
 
@@ -87,9 +87,9 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
   let num_str = format_conv_number(next_number)
 
   // Print notifications
-  system_notify("Created new conversation file: conv_\{num_str}.json")
+  system_info("Created new conversation file: conv_\{num_str}.json")
   if old_number > 0 {
-    system_notify(
+    system_info(
       "(Previous conversation archived in conv_\{old_num_str}.json)",
     )
   }
@@ -156,7 +156,7 @@ async fn generate_summary_with_title(
   config : Config,
 ) -> (String, String) {
   // Generate title first
-  system_notify("Generating conversation title:")
+  system_info("Generating conversation title:")
   let title = generate_conversation_title(chat_history, config)
 
   // Build conversation text
@@ -179,7 +179,7 @@ async fn generate_summary_with_title(
   }
 
   // Create prompt for summarization
-  system_notify("Generating summary:")
+  system_info("Generating summary:")
   let summary_messages : Array[Message] = [
     Message::new(
       "user",
@@ -196,14 +196,14 @@ async fn generate_summary_with_title(
     chat_history.petite_model,
   ) catch {
     _ => {
-      jarvis_cries("Failed to generate conversation summary")
+      system_error("Failed to generate conversation summary")
       return ("", "")
     }
   }
   let summary = match response.get_text_content() {
     Some(s) => s
     None => {
-      jarvis_cries("Empty summary content")
+      system_error("Empty summary content")
       return ("", "")
     }
   }
