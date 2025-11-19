@@ -318,9 +318,9 @@ async fn summarize_messages(
     builder.to_string()
   }
   let summary_messages : Array[Message] = [Message::new("user", summary_prompt)]
-  let tools = get_available_tools()
-  let response = send_streaming_chat_request(
-    config, summary_messages, tools, model,
+  // Use non-streaming without tools for summary (we only need text output, no need to show progress)
+  let response = send_chat_request_non_streaming(
+    config, summary_messages, [], model,
   )
   match response.get_text_content() {
     Some(text) =>
