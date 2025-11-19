@@ -121,187 +121,14 @@ test "parse_url_localhost_with_port" {
 ///|
 /// Parse redirect location (could be absolute URL or relative path)
 /// Returns (host, path) tuple
-fn parse_redirect_location(
-  location : String,
-  original_host : String,
-  _original_path : String
-) -> (String, String) raise JarvisError {
-  if location.has_prefix("http://") || location.has_prefix("https://") {
-    // Absolute URL - parse it
-    parse_url(location)
-  } else if location.has_prefix("/") {
-    // Absolute path on same host
-    (original_host, location)
-  } else {
-    // Relative path - resolve against original path
-    // For simplicity, treat as absolute path on same host
-    (original_host, "/" + location)
-  }
-}
-
-///|
-/// Send chat request with tools support
-async fn send_chat_request_with_tools(
-  config : Config,
-  messages : Array[Message],
-  tools : Array[Tool],
-  model : String,
-) -> ChatResponse raise {
-  // Parse URL to extract host and path
-  let url = config.base_url()
-  let (host, base_path) = parse_url(url)
-  let path = base_path + "/v1/messages"
-
-  // Build request JSON with tools
-  let request = ChatRequest::with_tools(messages, model, tools)
-  let json_body = request.to_json().stringify()
-
-  // Debug: print request body (first 500 chars)
-  let preview = if json_body.length() > 500 {
-    json_body[:500].to_string() catch { _ => json_body }
-  } else {
-    json_body
-  }
-  system_info("Request body preview: \{preview}...")
-
-  // Follow redirects (up to 10 times)
-  let mut current_host = host
-  let mut current_path = path
-  let mut redirects_count = 0
-  let max_redirects = 10
-  let mut final_response : ChatResponse? = None
-
-  while final_response is None {
-    // Send POST request and read response (use @http.post to get body automatically)
-    let (current_response, body_data) = @http.post(
-      "https://\{current_host}\{current_path}",
-      json_body,
-      headers={
-        "Authorization": "Bearer \{config.auth_token()}",
-        "x-api-key": config.auth_token(),
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "Accept": "application/json",
-        "x-app": "cli",
-        "User-Agent": "jarvis/1.0.0",
-        "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-        "accept-language": "*",
-        "sec-fetch-mode": "cors",
-        "Content-Type": "application/json",
-        "X-Stainless-Retry-Count": "0",
-        "X-Stainless-Timeout": "600",
-        "X-Stainless-Lang": "js",
-        "X-Stainless-Package-Version": "0.60.0",
-        "X-Stainless-OS": "MacOS",
-        "X-Stainless-Arch": "arm64",
-        "X-Stainless-Runtime": "node",
-        "X-Stainless-Runtime-Version": "v24.8.0",
-      },
-    ) catch {
-      e =>
-        raise HttpError(
-          "Failed to send POST request to '\{current_host}\{current_path}': \{e}\nRequest body: \{json_body}",
-        )
-    }
-
-    // Check for redirect
-    if current_response.code == 301 ||
-      current_response.code == 302 ||
-      current_response.code == 307 ||
-      current_response.code == 308 {
-      if redirects_count >= max_redirects {
-        raise HttpError("Too many redirects (exceeded \{max_redirects})")
-      }
-
-      let location = match current_response.headers.get("location") {
-        Some(loc) => loc
-        None =>
-          match current_response.headers.get("Location") {
-            Some(loc) => loc
-            None => ""
-          }
-      }
-      if location.is_empty() {
-        raise HttpError(
-          "HTTP redirect response (\{current_response.code}) missing Location header",
-        )
-      }
-
-      system_info(
-        "Following HTTP redirect: \{current_response.code} -> \{location}",
-      )
-
-      // Parse redirect location
-      let (new_host, new_path) = parse_redirect_location(location, current_host, current_path)
-      current_host = new_host
-      current_path = new_path
-      redirects_count = redirects_count + 1
-
-      // body_data is already read, just continue to next iteration
-      continue
-    }
-
-    // Not a redirect, parse response body
-    system_info("Response code: \{current_response.code}, parsing body...")
-
-    // Debug: print response headers
-    let mut header_info = "Response headers:\n"
-    current_response.headers.each(fn(k, v) {
-      header_info = header_info + "  \{k}: \{v}\n"
-    })
-    system_info(header_info)
-
-    let body_length = body_data.binary().length()
-    system_info("Body length: \{body_length} bytes")
-
-    if body_length == 0 {
-      system_info("WARNING: Response body is empty! This is unexpected for a 200 response.")
-    }
-
-    if current_response.code != 200 {
-      let error_text = body_data.text() catch { _ => "[Failed to read error body]" }
-      raise HttpError(
-        "HTTP request failed with status: \{current_response.code}\n" +
-        "Request URL: https://\{current_host}\{current_path}\n" +
-        "Request body: \{json_body}\n" +
-        "Response body: \{error_text}",
-      )
-    }
-
-    // Parse JSON response
-    let json_obj = body_data.json() catch {
-      e => {
-        let text = body_data.text() catch { _ => "[binary] \{body_data.binary()}" }
-        raise JsonParseError("Failed to parse JSON: \{e}\nResponse body: \{text}")
-      }
-    }
-    let chat_response : ChatResponse = @json.from_json(json_obj) catch {
-      @json.JsonDecodeError(e) => {
-        let json_str = json_obj.stringify()
-        raise JsonParseError(
-          "Failed to decode response: \{e}\nJSON object: \{json_str}",
-        )
-      }
-    }
-
-    final_response = Some(chat_response)
-  }
-
-  // Return full response (including tool_calls)
-  match final_response {
-    Some(r) => r
-    None => raise HttpError("Failed to get response after redirect handling")
-  }
-}
-
 ///|
 /// Send streaming chat request (outputs content in real-time)
 async fn send_streaming_chat_request(
   config : Config,
   messages : Array[Message],
-  _tools : Array[Tool],
+  tools : Array[Tool],
   model : String,
-) -> ChatResponse raise {
+) -> ChatResponse {
   // Parse URL
   let url = config.base_url()
   let (host, base_path) = parse_url(url)
@@ -321,7 +148,7 @@ async fn send_streaming_chat_request(
       non_system_messages.push(msg)
     }
   }
-  let request_with_stream : Json = {
+  let mut request_with_stream : Json = {
     "model": model,
     "messages": non_system_messages.to_json(),
     "max_tokens": MAX_RESPONSE_TOKENS,
@@ -329,7 +156,33 @@ async fn send_streaming_chat_request(
     "system": system_blocks.to_json(),
     "metadata": { "user_id": "jarvis-user" },
   }
+
+  // Add tools if present
+  if tools.length() > 0 {
+    request_with_stream = {
+      "model": model,
+      "messages": non_system_messages.to_json(),
+      "max_tokens": MAX_RESPONSE_TOKENS,
+      "stream": true,
+      "system": system_blocks.to_json(),
+      "tools": tools.to_json(),
+      "metadata": { "user_id": "jarvis-user" },
+    }
+  }
+
   let json_body = request_with_stream.stringify()
+
+  // Debug: print request details
+  system_debug("=== HTTP REQUEST ===")
+  system_debug("URL: https://\{host}\{path}")
+  system_debug("Method: POST")
+  system_debug("Body length: \{json_body.length()} bytes")
+  if debug_mode.val {
+    // Print full request body in debug mode
+    system_debug("Request body:")
+    system_debug(json_body)
+  }
+  system_debug("===================")
 
   // Create HTTP client
   let client = @http.Client::connect(host, headers={
@@ -414,21 +267,28 @@ async fn send_streaming_chat_request(
         "X-Stainless-Runtime-Version": "v24.8.0",
         "x-stainless-helper-method": "stream",
       }) catch {
-        e =>
-          raise HttpError(
-            "Failed to follow redirect to '\{location}': \{e}",
-          )
+        e => raise HttpError("Failed to follow redirect to '\{location}': \{e}")
       }
     } else {
       break
     }
   }
-
   if redirects_count >= max_redirects {
     raise HttpError("Too many redirects (exceeded \{max_redirects})")
   }
-
   let response = current_response
+
+  // Debug: print response status
+  system_debug("=== HTTP RESPONSE ===")
+  system_debug("Status: \{response.code}")
+  if debug_mode.val {
+    // Print response headers in debug mode
+    system_debug("Response headers:")
+    for header in response.headers {
+      system_debug("  \{header.0}: \{header.1}")
+    }
+  }
+  system_debug("====================")
 
   if response.code != 200 {
     let error_body = client.read_all().text() catch {
@@ -447,9 +307,13 @@ async fn send_streaming_chat_request(
   let mut full_content = ""
   let mut finish_reason = ""
 
+  // Debug: streaming start
+  system_debug("=== STREAMING START ===")
+
   // Buffer for reading chunks
   let buffer = FixedArray::make(1024, b'\x00')
   let mut accumulated_data = ""
+  let mut total_chunks_received = 0
   for {
     let bytes_read = client.read(buffer) catch {
       e =>
@@ -475,7 +339,10 @@ async fn send_streaming_chat_request(
       match accumulated_data.get_char(i) {
         Some('\n') => {
           let line_view = accumulated_data[last_newline_pos:i] catch {
-              _ => continue
+              _ => {
+                system_error("Failed to extract line from accumulated data")
+                continue
+              }
             }
           let line = line_view.to_string().trim(chars=" \t\r\n").to_string()
           if line.length() > 0 {
@@ -496,24 +363,47 @@ async fn send_streaming_chat_request(
     // Process each complete line
     for line in lines {
       if line.has_prefix("data: ") {
-        let json_str_view = line[6:] catch { _ => continue }
+        let json_str_view = line[6:] catch {
+          _ => {
+            system_error("Failed to extract JSON from SSE line: \{line}")
+            continue
+          }
+        }
         let json_str = json_str_view.to_string()
         let trimmed = json_str.trim(chars=" \t\r\n").to_string()
         if trimmed == "[DONE]" {
           break
         }
-        let chunk_json = @json.parse(json_str) catch { _ => continue }
+        let chunk_json = @json.parse(json_str) catch {
+          _ => {
+            system_error("Failed to parse streaming JSON chunk: \{json_str}")
+            continue
+          }
+        }
 
         // Use guard statements to flatten nested match expressions
-        guard chunk_json is Object(map) else { continue }
-        guard map.get("choices") is Some(Array(choices)) else { continue }
-        guard choices.length() > 0 else { continue }
-        guard choices[0] is Object(choice_map) else { continue }
+        guard chunk_json is Object(map) else {
+          system_error("Streaming chunk is not a JSON object")
+          continue
+        }
+        guard map.get("choices") is Some(Array(choices)) else {
+          system_error("Streaming chunk missing 'choices' array")
+          continue
+        }
+        guard choices.length() > 0 else {
+          system_error("Streaming chunk has empty 'choices' array")
+          continue
+        }
+        guard choices[0] is Object(choice_map) else {
+          system_error("Streaming choice is not a JSON object")
+          continue
+        }
 
         // Extract delta content
         if choice_map.get("delta") is Some(Object(delta_map)) {
           if delta_map.get("content") is Some(String(content)) {
             full_content = full_content + content
+            total_chunks_received = total_chunks_received + 1
             // Output immediately after parsing (ignore write errors)
             @stdio.stdout.write(content) catch {
               _ => ()
@@ -524,6 +414,11 @@ async fn send_streaming_chat_request(
         // Extract finish reason
         if choice_map.get("finish_reason") is Some(String(reason)) {
           finish_reason = reason
+          system_debug("=== STREAMING END ===")
+          system_debug("Total chunks received: \{total_chunks_received}")
+          system_debug("Total content length: \{full_content.length()} characters")
+          system_debug("Finish reason: \{reason}")
+          system_debug("====================")
           break
         }
       }

@@ -13,40 +13,16 @@ async fn send_chat_request(
   tools : Array[Tool],
   first_request : Bool,
 ) -> (ChatResponse, Bool) {
-  // Returns (response, used_streaming)
-  if first_request && tools.length() > 0 {
-    // First request with tools: use non-streaming to check for tool calls
-    (
-      send_chat_request_with_tools(
-        config,
-        chat_history.messages,
-        tools,
-        chat_history.current_model,
-      ),
-      false,
-    )
-  } else if first_request {
-    // First request without tools: use streaming
-    let resp = send_streaming_chat_request(
-      config,
-      chat_history.messages,
-      tools,
-      chat_history.current_model,
-    )
-    newline_async() // Add newline after streaming
-    (resp, true)
-  } else {
-    // Subsequent requests: non-streaming
-    (
-      send_chat_request_with_tools(
-        config,
-        chat_history.messages,
-        tools,
-        chat_history.current_model,
-      ),
-      false,
-    )
-  }
+  // Always use streaming mode
+  ignore(first_request)
+  let resp = send_streaming_chat_request(
+    config,
+    chat_history.messages,
+    tools,
+    chat_history.current_model,
+  )
+  newline_async() // Add newline after streaming
+  (resp, true)
 }
 
 ///|
@@ -248,10 +224,6 @@ async fn handle_tool_calls(
     }
     HttpError(msg) => {
       system_error("Error: HTTP error: \{msg}")
-      false
-    }
-    JsonParseError(msg) => {
-      system_error("Error: JSON parse error: \{msg}")
       false
     }
     StringViewError(msg) => {
@@ -501,6 +473,10 @@ async fn main {
         short='c',
         help="Consult mode: execute with persistent conversation history",
       ),
+      "debug": @clap.Arg::flag(
+        short='d',
+        help="Enable debug mode (verbose logging)",
+      ),
       "prompt": @clap.Arg::positional(
         nargs=@clap.Any,
         help="Prompt to execute (requires -e or -c flag)",
@@ -530,6 +506,9 @@ async fn main {
   // Check modes
   let execute_mode = value.flags.get("execute").unwrap_or(false)
   let consult_mode = value.flags.get("consult").unwrap_or(false)
+
+  // Set debug mode
+  debug_mode.val = value.flags.get("debug").unwrap_or(false)
 
   // Get prompt if provided
   let prompt = if (execute_mode || consult_mode) &&
@@ -584,8 +563,6 @@ async fn main {
     EnvVarNotSet(msg) =>
       @stdio.stderr.write("Error: Environment variable not set: \{msg}\n")
     HttpError(msg) => @stdio.stderr.write("Error: HTTP error: \{msg}\n")
-    JsonParseError(msg) =>
-      @stdio.stderr.write("Error: JSON parse error: \{msg}\n")
     StringViewError(msg) =>
       @stdio.stderr.write("Error: String view error: \{msg}\n")
     e => @stdio.stderr.write("Error: Unknown error occurred: \{e}\n")

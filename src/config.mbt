@@ -7,6 +7,10 @@ struct Config {
 } derive(Show)
 
 ///|
+/// Global debug flag
+let debug_mode : Ref[Bool] = { val: false }
+
+///|
 const COLOR_CYAN : String = "\u001b[36m"
 
 ///|
@@ -192,6 +196,17 @@ async fn system_info(message : String) -> Unit {
 }
 
 ///|
+/// Print debug message (only when debug_mode is enabled)
+async fn system_debug(message : String) -> Unit {
+  if debug_mode.val {
+    @stdio.stdout.write(COLOR_GRAY)
+    @stdio.stdout.write("[Debug] ")
+    @stdio.stdout.write(COLOR_RESET)
+    println_async(message)
+  }
+}
+
+///|
 async fn println_async(s : String) -> Unit {
   @stdio.stdout.write("\{s}\n")
 }
@@ -236,7 +251,6 @@ fn Config::auth_token(self : Config) -> String {
 suberror JarvisError {
   EnvVarNotSet(String)
   HttpError(String)
-  JsonParseError(String)
   StringViewError(String)
   ExitRequested
 } derive(Show)

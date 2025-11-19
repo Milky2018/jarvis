@@ -117,7 +117,6 @@ impl Command for ModelsCommand with execute(
 ) {
   let current = chat_history.current_model
   let petite = chat_history.petite_model
-
   let mut output = "Available models:\n"
   for model in available_models() {
     let marker = if current == model.id {
@@ -127,10 +126,15 @@ impl Command for ModelsCommand with execute(
     } else {
       "          "
     }
-    output = output + "  " + marker + model.id + " - " + model.description + "\n"
+    output = output +
+      "  " +
+      marker +
+      model.id +
+      " - " +
+      model.description +
+      "\n"
   }
   output = output + "\nUse ':model <name>' to switch models"
-
   jarvis_says(output)
   true
 }

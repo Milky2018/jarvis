@@ -2,15 +2,10 @@
 package "Milky2018/jarvis"
 
 import(
-  "Milky2018/jarvis/http"
-  "moonbitlang/async/io"
   "moonbitlang/core/json"
 )
 
 // Values
-fn content_from_string(String) -> Array[ContentBlockItem]
-
-async fn get_with_proxy(String) -> (@http.Response, &@io.Data)
 
 // Errors
 type JarvisError
@@ -78,7 +73,6 @@ type KeyPress
 type LineEditor
 
 type Message
-fn Message::get_text(Self) -> String
 impl ToJson for Message
 impl @json.FromJson for Message
 
@@ -126,7 +120,6 @@ impl ToJson for SystemContentBlock
 type TestContext
 
 type Tool
-impl ToJson for Tool
 
 type ToolCall
 impl ToJson for ToolCall

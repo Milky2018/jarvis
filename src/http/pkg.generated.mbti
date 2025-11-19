@@ -44,9 +44,9 @@ fn Client::close(Self) -> Unit
 async fn Client::connect(String, headers? : Map[String, String], protocol? : Protocol, port? : Int, proxy? : Proxy) -> Self
 async fn Client::end_request(Self) -> Response
 async fn Client::flush(Self) -> Unit
-async fn Client::get(Self, String, extra_headers? : Map[String, String], body? : &@io.Data, redirect_strategy? : RedirectStrategy) -> Response
-async fn Client::post(Self, String, &@io.Data, extra_headers? : Map[String, String], redirect_strategy? : RedirectStrategy) -> Response
-async fn Client::put(Self, String, &@io.Data, extra_headers? : Map[String, String], redirect_strategy? : RedirectStrategy) -> Response
+async fn Client::get(Self, String, extra_headers? : Map[String, String], body? : &@io.Data) -> Response
+async fn Client::post(Self, String, &@io.Data, extra_headers? : Map[String, String]) -> Response
+async fn Client::put(Self, String, &@io.Data, extra_headers? : Map[String, String]) -> Response
 async fn Client::request(Self, RequestMethod, String, extra_headers? : Map[String, String]) -> Unit
 async fn Client::skip_response_body(Self) -> Unit
 impl @io.Reader for Client
@@ -63,11 +63,6 @@ fn Proxy::all(String, port~ : Int) -> Self
 fn Proxy::custom(String, http_port~ : Int, String, https_port~ : Int) -> Self
 fn Proxy::http(String, port~ : Int) -> Self
 fn Proxy::https(String, port~ : Int) -> Self
-
-pub(all) enum RedirectStrategy {
-  NoRedirect
-  Retry(Int)
-}
 
 pub(all) struct Request {
   meth : RequestMethod

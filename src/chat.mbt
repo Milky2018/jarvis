@@ -89,9 +89,7 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
   // Print notifications
   system_info("Created new conversation file: conv_\{num_str}.json")
   if old_number > 0 {
-    system_info(
-      "(Previous conversation archived in conv_\{old_num_str}.json)",
-    )
+    system_info("(Previous conversation archived in conv_\{old_num_str}.json)")
   }
 }
 
@@ -125,10 +123,10 @@ async fn generate_conversation_title(
     Message::new(
       "user",
       "Generate a short title (maximum 20 characters) for the following conversation. Return only the title itself, nothing else.\n\nConversation:\n" +
-        preview,
+      preview,
     ),
   ]
-  let response = send_chat_request_with_tools(
+  let response = send_streaming_chat_request(
     config,
     title_messages,
     [],
@@ -184,12 +182,12 @@ async fn generate_summary_with_title(
     Message::new(
       "user",
       "Summarize the following conversation in Markdown format. Include:\n1. Conversation topic\n2. Key points (use bullet points)\n3. Important decisions or conclusions\n4. Information to remember\n\nConversation:\n\n" +
-        conversation_text,
+      conversation_text,
     ),
   ]
 
   // Call API to generate summary
-  let response = send_chat_request_with_tools(
+  let response = send_streaming_chat_request(
     config,
     summary_messages,
     [],
@@ -292,7 +290,7 @@ async fn summarize_messages(
   config : Config,
   messages : Array[Message],
   model : String,
-) -> String raise {
+) -> String {
   // Calculate approximate token limit for the summary (40k tokens ≈ 160k characters)
   let max_summary_chars = MAX_SUMMARY_TOKENS * 4
   let summary_prompt = {
@@ -308,7 +306,7 @@ async fn summarize_messages(
   }
   let summary_messages : Array[Message] = [Message::new("user", summary_prompt)]
   let tools = get_available_tools()
-  let response = send_chat_request_with_tools(
+  let response = send_streaming_chat_request(
     config, summary_messages, tools, model,
   )
   match response.get_text_content() {
@@ -330,7 +328,7 @@ async fn summarize_messages(
 async fn ChatHistory::manage_history(
   self : ChatHistory,
   config : Config,
-) -> Bool raise {
+) -> Bool {
   let total_tokens = estimate_total_tokens(self.messages)
   let max_tokens = self.max_context_tokens
 

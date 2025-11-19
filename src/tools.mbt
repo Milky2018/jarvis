@@ -611,7 +611,9 @@ impl ToolImpl for WebSearchTool with input_schema(_self) {
   // But we keep it for compatibility with our tool framework
   {
     "type": "object",
-    "properties": { "query": { "type": "string", "description": "Search query" } },
+    "properties": {
+      "query": { "type": "string", "description": "Search query" },
+    },
     "required": ["query"],
   }
 }
@@ -872,6 +874,7 @@ async fn edit_file_tool(
   tool_log(builder.to_string())
   "Successfully edited \{path}"
 }
+
 ///|
 /// Grep tool implementation (search file contents)
 async fn grep_tool(pattern : String, path : String) -> String {
@@ -938,10 +941,13 @@ fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
 fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
   let tool_impls = get_all_tool_impls(in_play_mode~)
   let tools : Array[Tool] = []
+  let mut has_web_search = false
+
   for tool_impl in tool_impls {
     let tool_name = tool_impl.name()
     // Use Anthropic's built-in web_search tool type
     if tool_name == "web_search" {
+      has_web_search = true
       tools.push({
         name: "web_search",
         type_: Some("web_search_20250305"),
@@ -959,5 +965,12 @@ fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
       })
     }
   }
-  tools
+
+  // WORKAROUND: 88code.org proxy doesn't support mixing built-in tools with custom tools
+  // If web_search is enabled, ONLY send web_search tool
+  if has_web_search {
+    tools.filter(fn(t) { t.type_ is Some(_) })
+  } else {
+    tools
+  }
 }
