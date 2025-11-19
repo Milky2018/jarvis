@@ -48,7 +48,7 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
     Object(map) =>
       match map.get("command") {
         Some(String(cmd)) => {
-          tool_log("\{COLOR_BOLD}Execute\{COLOR_RESET}(\{cmd})")
+          tool_log("Execute", cmd)
           execute_shell_command(cmd, chat_history)
         }
         Some(_) => tool_error("Error: 'command' must be a string")
@@ -146,7 +146,7 @@ impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match map.get("path") {
         Some(String(path)) => {
-          tool_log("\{COLOR_BOLD}Read\{COLOR_RESET}(\{path})")
+          tool_log("Read", path)
           read_file_tool(path, input)
         }
         Some(_) => tool_error("Error: 'path' must be a string")
@@ -194,7 +194,7 @@ impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("content")) {
         (Some(String(path)), Some(String(content))) => {
-          tool_log("\{COLOR_BOLD}Write\{COLOR_RESET}(\{path})")
+          tool_log("Write", path)
           write_file_tool(path, content)
         }
         (None, _) => tool_error("Error: Missing 'path' argument")
@@ -247,7 +247,7 @@ impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("old_string"), map.get("new_string")) {
         (Some(String(path)), Some(String(old)), Some(String(new))) => {
-          tool_log("\{COLOR_BOLD}Edit\{COLOR_RESET}(\{path})")
+          tool_log("Edit", path)
           edit_file_tool(path, old, new)
         }
         (None, _, _) => tool_error("Error: Missing 'path' argument")
@@ -301,7 +301,7 @@ impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          tool_log("\{COLOR_BOLD}Grep\{COLOR_RESET}(\{pattern})")
+          tool_log("Grep", pattern)
           grep_tool(pattern, path)
         }
         Some(_) => tool_error("Error: 'pattern' must be a string")
@@ -386,7 +386,7 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          tool_log("\{COLOR_BOLD}Glob\{COLOR_RESET}(\{pattern})")
+          tool_log("Glob", pattern)
           glob_tool(pattern, path)
         }
         Some(_) => tool_error("Error: 'pattern' must be a string")
@@ -583,7 +583,7 @@ impl ToolImpl for EndPlayModeTool with execute(_self, input, _chat_history) {
       }
     _ => "No reason provided"
   }
-  tool_log("\{COLOR_BOLD}End\{COLOR_RESET}(\{reason})")
+  tool_log("EndElaborate", reason)
   raise PlayModeEnded
 }
 
@@ -626,7 +626,7 @@ impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match map.get("query") {
         Some(String(query)) => {
-          tool_log("\{COLOR_BOLD}WebSearch\{COLOR_RESET}(\{query}) [Anthropic]")
+          tool_log("WebSearch", "\{query} [Anthropic]")
           "Web search is handled by Anthropic server-side and should not reach client execution"
         }
         _ => "Error: Invalid web_search input"
@@ -679,7 +679,7 @@ impl ToolImpl for WebFetchTool with execute(_self, input, chat_history) {
         Some(String(p)) => Some(p)
         _ => None
       }
-      tool_log("\{COLOR_BOLD}WebFetch\{COLOR_RESET}(\{url})")
+      tool_log("WebFetch", url)
       web_fetch_tool(url, prompt, chat_history)
     }
     _ => tool_error("Invalid input format for web_fetch")
@@ -850,7 +850,8 @@ async fn write_file_tool(path : String, content : String) -> String {
     let (prefix, removed, added, suffix) = compute_line_diff(old_text, content)
     format_diff(prefix, removed, added, suffix)
   }
-  tool_log(display)
+  // Print the diff output
+  println_async(display)
   "Successfully wrote \{content.length()} bytes to \{path}"
 }
 
@@ -922,7 +923,8 @@ async fn edit_file_tool(
     builder.write_string(COLOR_RESET)
     builder.write_string("\n")
   }
-  tool_log(builder.to_string())
+  // Print the diff output
+  println_async(builder.to_string())
   "Successfully edited \{path}"
 }
 

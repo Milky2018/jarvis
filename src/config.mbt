@@ -169,11 +169,17 @@ async fn system_error(message : String) -> Unit {
 
 ///|
 /// Tool execution log - shows which tool is being executed (green)
-async fn tool_log(message : String) -> Unit {
+async fn tool_log(tool_name : String, content : String) -> Unit {
   @stdio.stdout.write(COLOR_GREEN)
   @stdio.stdout.write("[Tool] ")
   @stdio.stdout.write(COLOR_RESET)
-  println_async(message)
+  @stdio.stdout.write(COLOR_BOLD)
+  @stdio.stdout.write(tool_name)
+  @stdio.stdout.write(COLOR_RESET)
+  @stdio.stdout.write("(")
+  @stdio.stdout.write(content)
+  @stdio.stdout.write(")")
+  @stdio.stdout.write("\n")
 }
 
 ///|
