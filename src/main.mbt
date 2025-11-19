@@ -33,8 +33,8 @@ async fn execute_tools_and_collect_results(
 ) -> (Array[Json], Bool) {
   let tool_results : Array[Json] = []
   let mut elaborate_complete = false
-  for i = 0; i < tool_uses.length(); i = i + 1 {
-    let (tool_id, tool_name, tool_input) = tool_uses[i]
+  for tool_use in tool_uses {
+    let (tool_id, tool_name, tool_input) = tool_use
     let result = execute_tool_claude(tool_name, tool_input, chat_history)
 
     // Check if end_elaborate was called
@@ -60,6 +60,7 @@ fn format_tool_results_as_text(
   tool_results : Array[Json],
 ) -> String {
   let builder = StringBuilder::new()
+  let mut first = true
   for i = 0; i < tool_uses.length(); i = i + 1 {
     let (tool_id, tool_name, _) = tool_uses[i]
     let result_json = tool_results[i]
@@ -68,7 +69,7 @@ fn format_tool_results_as_text(
       Object(map) =>
         match map.get("content") {
           Some(String(content)) => {
-            if i > 0 {
+            if !first {
               builder.write_string("\n\n")
             }
             builder.write_string("Tool: ")
@@ -77,6 +78,7 @@ fn format_tool_results_as_text(
             builder.write_string(tool_id)
             builder.write_string(")\nResult: ")
             builder.write_string(content)
+            first = false
           }
           _ => ()
         }
@@ -519,11 +521,13 @@ async fn main {
     value.positional_args.length() > 0 {
     // Join all positional args as the prompt
     let builder = StringBuilder::new()
-    for i = 0; i < value.positional_args.length(); i = i + 1 {
-      if i > 0 {
+    let mut first = true
+    for arg in value.positional_args {
+      if !first {
         builder.write_string(" ")
       }
-      builder.write_string(value.positional_args[i])
+      builder.write_string(arg)
+      first = false
     }
     Some(builder.to_string())
   } else {

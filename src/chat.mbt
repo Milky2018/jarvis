@@ -254,19 +254,16 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
 ///|
 /// Estimate token count for a message (rough approximation: 1 token ≈ 4 chars)
 fn estimate_tokens(message : Message) -> Int {
-  let mut total = 0
   guard message.content is Some(content) else { return 10 }
-  total = total + content.length() / 4
-  // Add overhead for role, tool calls, etc.
-  total + 10
+  content.length() / 4 + 10
 }
 
 ///|
 /// Estimate total tokens for a message array
 fn estimate_total_tokens(messages : Array[Message]) -> Int {
   let mut total = 0
-  for i = 0; i < messages.length(); i = i + 1 {
-    total = total + estimate_tokens(messages[i])
+  for msg in messages {
+    total = total + estimate_tokens(msg)
   }
   total
 }

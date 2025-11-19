@@ -99,10 +99,10 @@ fn format_diff(
 
   // Show removed lines (red)
   if removed.length() > 0 {
-    for i = 0; i < removed.length(); i = i + 1 {
+    for line in removed {
       builder.write_string(COLOR_RED)
       builder.write_string("- ")
-      builder.write_string(removed[i])
+      builder.write_string(line)
       builder.write_string(COLOR_RESET)
       builder.write_string("\n")
     }
@@ -110,10 +110,10 @@ fn format_diff(
 
   // Show added lines (green)
   if added.length() > 0 {
-    for i = 0; i < added.length(); i = i + 1 {
+    for line in added {
       builder.write_string(COLOR_GREEN)
       builder.write_string("+ ")
-      builder.write_string(added[i])
+      builder.write_string(line)
       builder.write_string(COLOR_RESET)
       builder.write_string("\n")
     }

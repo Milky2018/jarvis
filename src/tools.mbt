@@ -903,10 +903,10 @@ async fn edit_file_tool(
   for line in old_lines_view {
     old_lines.push(line.to_string())
   }
-  for i = 0; i < old_lines.length(); i = i + 1 {
+  for line in old_lines {
     builder.write_string(COLOR_RED)
     builder.write_string("- ")
-    builder.write_string(old_lines[i])
+    builder.write_string(line)
     builder.write_string(COLOR_RESET)
     builder.write_string("\n")
   }
@@ -916,10 +916,10 @@ async fn edit_file_tool(
   for line in new_lines_view {
     new_lines.push(line.to_string())
   }
-  for i = 0; i < new_lines.length(); i = i + 1 {
+  for line in new_lines {
     builder.write_string(COLOR_GREEN)
     builder.write_string("+ ")
-    builder.write_string(new_lines[i])
+    builder.write_string(line)
     builder.write_string(COLOR_RESET)
     builder.write_string("\n")
   }

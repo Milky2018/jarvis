@@ -145,8 +145,8 @@ fn MockOutputCapture::write_stderr(
 /// Get all stdout output as a single string
 fn MockOutputCapture::get_stdout(self : MockOutputCapture) -> String {
   let builder = StringBuilder::new()
-  for i = 0; i < self.stdout_lines.length(); i = i + 1 {
-    builder.write_string(self.stdout_lines[i])
+  for line in self.stdout_lines {
+    builder.write_string(line)
     builder.write_string("\n")
   }
   builder.to_string()
@@ -156,8 +156,8 @@ fn MockOutputCapture::get_stdout(self : MockOutputCapture) -> String {
 /// Get all stderr output as a single string
 fn MockOutputCapture::get_stderr(self : MockOutputCapture) -> String {
   let builder = StringBuilder::new()
-  for i = 0; i < self.stderr_lines.length(); i = i + 1 {
-    builder.write_string(self.stderr_lines[i])
+  for line in self.stderr_lines {
+    builder.write_string(line)
     builder.write_string("\n")
   }
   builder.to_string()
