@@ -147,7 +147,6 @@ async fn send_chat_request_with_tools(
     "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
     "accept-language": "*",
     "sec-fetch-mode": "cors",
-    "accept-encoding": "gzip, deflate",
   }) catch {
     e =>
       raise HttpError(
@@ -263,7 +262,6 @@ async fn send_streaming_chat_request(
     "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
     "accept-language": "*",
     "sec-fetch-mode": "cors",
-    "accept-encoding": "gzip, deflate",
   }) catch {
     e =>
       raise HttpError(

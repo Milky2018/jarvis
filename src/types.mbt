@@ -76,7 +76,27 @@ struct Tool {
   name : String
   description : String
   input_schema : Json
-} derive(ToJson)
+  type_ : String? // Optional type for Anthropic built-in tools (e.g., "web_search_20250305")
+}
+
+///|
+/// Custom ToJson for Tool to handle optional type field
+/// For Anthropic built-in tools (with type field), only include type and name
+pub impl ToJson for Tool with to_json(self) {
+  match self.type_ {
+    Some(type_val) => {
+      // Anthropic built-in tools only need type and name
+      "type": type_val,
+      "name": self.name,
+    }
+    None => {
+      // Custom tools need name, description, and input_schema
+      "name": self.name,
+      "description": self.description,
+      "input_schema": self.input_schema,
+    }
+  }
+}
 
 ///|
 /// Usage statistics for API calls

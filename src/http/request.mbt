@@ -73,8 +73,18 @@ async fn perform_request(
   let (protocol, port, host, path) = resolve_url(uri, port?)
   let client = Client::connect(host, headers~, protocol~, port~, proxy?)
   defer client.close()
-  client..request(meth, path)..write(body)
-  let response = client.end_request()
+
+  // Use Client::get/post/put which support automatic redirect
+  let response = match meth {
+    Get => client.get(path, extra_headers={}, body~)
+    Post => client.post(path, body, extra_headers={})
+    Put => client.put(path, body, extra_headers={})
+    _ => {
+      // For other HTTP methods, use low-level API without redirect support
+      client..request(meth, path)..write(body)
+      client.end_request()
+    }
+  }
   (response, client.read_all())
 }
 
