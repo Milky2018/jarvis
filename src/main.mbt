@@ -304,14 +304,15 @@ async fn chat_loop(config : Config) -> Unit {
       history
     }
   }
-  newline_async()
   jarvis_says(
     (
       #|Hello! I'm Jarvis, your AI assistant. How can I help you today?
       #|(Type 'exit' or 'quit' to end the conversation)
     ),
   )
-  newline_async()
+
+  // Load user input history from file (at the beginning of chat_loop)
+  let command_history = load_user_input_history()
 
   // Main loop: Ctrl+C handling to interrupt operations
   for {
@@ -322,24 +323,13 @@ async fn chat_loop(config : Config) -> Unit {
 
         // Start readline task in background
         group.spawn_bg(fn() {
-          // Extract user messages from chat history for readline history
-          // Filter out tool result messages (they start with "Tool:")
-          let user_inputs : Array[String] = []
-          for msg in chat_history.messages {
-            if msg.role == "user" {
-              let content = msg.get_text()
-              // Skip tool result messages
-              if !content.is_empty() {
-                user_inputs.push(content)
-              }
-            }
-          }
-          let rl = ReadlineInterface::with_history(100, user_inputs)
+          let rl = ReadlineInterface::with_history(100, command_history)
           while rl.read_to_queue(input_queue) {
 
           }
         })
-        interact(chat_history, input_queue, config)
+        let user_input = input_queue.get()
+        interact(chat_history, user_input, config, command_history)
         raise ActionFinished
       })
       continue
@@ -347,17 +337,16 @@ async fn chat_loop(config : Config) -> Unit {
       ExitRequested => break
       InterruptByUser => {
         jarvis_says("Interrupted by user")
-        newline_async()
         continue
       }
       ActionFinished => continue
       e => {
-        newline_async()
         system_error("Fatal error: \{e}")
         break
       }
     }
   }
+  save_user_input_history(command_history)
 }
 
 ///|
@@ -385,15 +374,9 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
     handle_user_input(prompt, chat_history, config)
     raise ActionFinished
   }) catch {
-    InterruptByUser => {
-      jarvis_says("Interrupted by user")
-      newline_async()
-    }
+    InterruptByUser => system_error("Interrupted by user")
     ActionFinished => ()
-    e => {
-      jarvis_says("Error: \{e}")
-      newline_async()
-    }
+    e => system_error("Fatal: \{e}")
   }
 }
 
@@ -446,15 +429,9 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
     handle_user_input(prompt, chat_history, config)
     raise ActionFinished
   }) catch {
-    InterruptByUser => {
-      jarvis_says("Interrupted by user")
-      newline_async()
-    }
+    InterruptByUser => system_error("Interrupted by user")
     ActionFinished => ()
-    e => {
-      jarvis_says("Error: \{e}")
-      newline_async()
-    }
+    e => system_error("Fatal: \{e}")
   }
 }
 

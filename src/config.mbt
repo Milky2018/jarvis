@@ -173,6 +173,7 @@ async fn print_jarvis_prefix() -> Unit {
 async fn jarvis_says(message : String) -> Unit {
   print_jarvis_prefix()
   println_async(message)
+  newline_async()
 }
 
 ///|
@@ -196,7 +197,7 @@ async fn tool_log(tool_name : String, content : String) -> Unit {
   @stdio.stdout.write("(")
   @stdio.stdout.write(content)
   @stdio.stdout.write(")")
-  @stdio.stdout.write("\n")
+  @stdio.stdout.write("\n\n")
 }
 
 ///|

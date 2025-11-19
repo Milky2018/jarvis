@@ -147,6 +147,47 @@ fn estimate_total_tokens(messages : Array[Message]) -> Int {
 }
 
 ///|
+test "estimate_total_tokens: empty array" {
+  let messages : Array[Message] = []
+  let total = estimate_total_tokens(messages)
+  inspect(total, content="0")
+}
+
+///|
+test "estimate_total_tokens: single message" {
+  // "Hello, world!" has 13 chars
+  // estimate_tokens = 13 / 4 + 10 = 3 + 10 = 13
+  let messages : Array[Message] = [Message::new("user", "Hello, world!")]
+  let total = estimate_total_tokens(messages)
+  inspect(total, content="13")
+}
+
+///|
+test "estimate_total_tokens: multiple messages" {
+  // Message 1: "Hi" (2 chars) -> 2/4 + 10 = 0 + 10 = 10
+  // Message 2: "How are you?" (12 chars) -> 12/4 + 10 = 3 + 10 = 13
+  // Message 3: "I am fine, thank you!" (21 chars) -> 21/4 + 10 = 5 + 10 = 15
+  // Total: 10 + 13 + 15 = 38
+  let messages : Array[Message] = [
+    Message::new("user", "Hi"),
+    Message::new("assistant", "How are you?"),
+    Message::new("user", "I am fine, thank you!"),
+  ]
+  let total = estimate_total_tokens(messages)
+  inspect(total, content="38")
+}
+
+///|
+test "estimate_total_tokens: large message" {
+  // 400 character message
+  // 400 / 4 + 10 = 100 + 10 = 110
+  let long_text = "a".repeat(400)
+  let messages : Array[Message] = [Message::new("user", long_text)]
+  let total = estimate_total_tokens(messages)
+  inspect(total, content="110")
+}
+
+///|
 /// Print token usage status with color coding
 async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
   let total = estimate_total_tokens(self.messages)

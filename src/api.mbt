@@ -460,6 +460,8 @@ struct SSELineResult {
   finish_reason : String?
   block_start : ContentBlockStart?
   input_json_delta : String?
+  input_tokens : Int? // from message_start
+  output_tokens : Int? // from message_delta
 }
 
 ///|
@@ -481,6 +483,8 @@ async fn process_sse_line(
     finish_reason: None,
     block_start: None,
     input_json_delta: None,
+    input_tokens: None,
+    output_tokens: None,
   }
 
   // Skip SSE event metadata lines
@@ -514,8 +518,35 @@ async fn process_sse_line(
     return empty_result
   }
 
+  // Debug: print event type
+  let event_type = match map.get("type") {
+    Some(String(t)) => t
+    _ => "unknown"
+  }
+  system_debug("SSE event type: \{event_type}")
+  // Print full JSON for message_start and message_delta
+  if event_type == "message_start" || event_type == "message_delta" {
+    system_debug("Full event JSON: \{chunk_json.stringify()}")
+  }
+
   // Check event type
   match map.get("type") {
+    Some(String("message_start")) =>
+      // Extract input tokens from message_start
+      if map.get("message") is Some(Object(msg_map)) {
+        if msg_map.get("usage") is Some(Object(usage_map)) {
+          if usage_map.get("input_tokens") is Some(Number(n, ..)) {
+            return {
+              text_delta: None,
+              finish_reason: None,
+              block_start: None,
+              input_json_delta: None,
+              input_tokens: Some(n.to_int()),
+              output_tokens: None,
+            }
+          }
+        }
+      }
     Some(String("content_block_start")) =>
       // New content block starting
       if map.get("content_block") is Some(Object(block_map)) {
@@ -536,6 +567,8 @@ async fn process_sse_line(
           finish_reason: None,
           block_start: Some({ type_, id, name }),
           input_json_delta: None,
+          input_tokens: None,
+          output_tokens: None,
         }
       }
     Some(String("content_block_delta")) =>
@@ -558,6 +591,8 @@ async fn process_sse_line(
                 finish_reason: None,
                 block_start: None,
                 input_json_delta: None,
+                input_tokens: None,
+                output_tokens: None,
               }
             }
           Some(String("input_json_delta")) =>
@@ -567,20 +602,37 @@ async fn process_sse_line(
                 finish_reason: None,
                 block_start: None,
                 input_json_delta: Some(json),
+                input_tokens: None,
+                output_tokens: None,
               }
             }
           _ => ()
         }
       }
     Some(String("message_delta")) =>
-      // Extract finish reason from message_delta
+      // Extract finish reason and output tokens from message_delta
       if map.get("delta") is Some(Object(delta_map)) {
-        if delta_map.get("stop_reason") is Some(String(reason)) {
+        let reason = match delta_map.get("stop_reason") {
+          Some(String(r)) => Some(r)
+          _ => None
+        }
+        // Also check for usage.output_tokens in message_delta
+        let output_tokens = if map.get("usage") is Some(Object(usage_map)) {
+          match usage_map.get("output_tokens") {
+            Some(Number(n, ..)) => Some(n.to_int())
+            _ => None
+          }
+        } else {
+          None
+        }
+        if reason is Some(_) || output_tokens is Some(_) {
           return {
             text_delta: None,
-            finish_reason: Some(reason),
+            finish_reason: reason,
             block_start: None,
             input_json_delta: None,
+            input_tokens: None,
+            output_tokens,
           }
         }
       }
@@ -591,6 +643,8 @@ async fn process_sse_line(
     finish_reason: None,
     block_start: None,
     input_json_delta: None,
+    input_tokens: None,
+    output_tokens: None,
   }
 }
 

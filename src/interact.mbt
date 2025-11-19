@@ -1,15 +1,13 @@
 ///|
 async fn interact(
   chat_history : ChatHistory,
-  input_queue : @async.Queue[String],
+  user_input : String,
   config : Config,
+  command_history : Array[String],
 ) -> Unit {
   // Show token usage before prompt
   chat_history.print_token_usage()
 
-  // Wait for input from readline task
-  let user_input = input_queue.get()
-  newline_async() // Print newline after user input
   print_separator()
 
   // Check for exit commands
@@ -20,11 +18,12 @@ async fn interact(
 
   // Handle special commands
   if handle_command(user_input, chat_history, config) {
-    newline_async()
     return
   }
 
+  // Add user input to in-memory command history
+  command_history.push(user_input)
+
   // Handle normal user input
   handle_user_input(user_input, chat_history, config)
-  newline_async()
 }

@@ -86,3 +86,45 @@ async fn load_latest_conversation() -> (ChatHistory, Int)? {
     None => None
   }
 }
+
+///|
+/// Get user input history file path
+fn get_input_history_path() -> String {
+  get_jarvis_dir() + "/input_history.txt"
+}
+
+///|
+/// Load user input history from file
+async fn load_user_input_history() -> Array[String] {
+  let path = get_input_history_path()
+  // Use sh to read file
+  let (exit_code, output) = @process.collect_output_merged("sh", [
+    "-c",
+    "cat '\{path}' 2>/dev/null",
+  ])
+  if exit_code != 0 {
+    return [] // File doesn't exist yet
+  }
+  let content = output.text()
+  let lines : Array[String] = []
+  for line in content.split("\n") {
+    let trimmed = line.trim(chars=" \t\r\n").to_string()
+    if !trimmed.is_empty() {
+      lines.push(trimmed)
+    }
+  }
+  lines
+}
+
+///|
+/// Save entire user input history to file
+async fn save_user_input_history(history : Array[String]) -> Unit {
+  let path = get_input_history_path()
+  let mut content = ""
+  for line in history {
+    content = content + line + "\n"
+  }
+  @fs.write_file(path, content, create=0o644) catch {
+    e => system_error("Failed to save user input history: \{e}")
+  }
+}
