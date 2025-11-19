@@ -155,8 +155,8 @@ async fn send_chat_request_with_tools(
   }
   defer client.close()
 
-  // Send POST request
-  let response = client.post(path, json_body, extra_headers={
+  // Send POST request with redirect handling
+  let mut current_response = client.post(path, json_body, extra_headers={
     "Content-Type": "application/json",
     "X-Stainless-Retry-Count": "0",
     "X-Stainless-Timeout": "600",
@@ -173,29 +173,64 @@ async fn send_chat_request_with_tools(
       )
   }
 
-  // Handle redirect responses
-  if response.code == 301 ||
-    response.code == 302 ||
-    response.code == 307 ||
-    response.code == 308 {
-    let location = match response.headers.get("location") {
-      Some(loc) => loc
-      None =>
-        match response.headers.get("Location") {
-          Some(loc) => loc
-          None => ""
-        }
+  // Follow redirects (up to 10 times)
+  let mut redirects_count = 0
+  let max_redirects = 10
+  while redirects_count < max_redirects {
+    if current_response.code == 301 ||
+      current_response.code == 302 ||
+      current_response.code == 307 ||
+      current_response.code == 308 {
+      let location = match current_response.headers.get("location") {
+        Some(loc) => loc
+        None =>
+          match current_response.headers.get("Location") {
+            Some(loc) => loc
+            None => ""
+          }
+      }
+      if location.is_empty() {
+        raise HttpError(
+          "HTTP redirect response (\{current_response.code}) missing Location header",
+        )
+      }
+      system_info(
+        "Following HTTP redirect: \{current_response.code} -> \{location}",
+      )
+
+      // Skip current response body before following redirect
+      client.skip_response_body() catch {
+        _ => ()
+      }
+
+      // Follow redirect
+      redirects_count = redirects_count + 1
+      current_response = client.post(location, json_body, extra_headers={
+        "Content-Type": "application/json",
+        "X-Stainless-Retry-Count": "0",
+        "X-Stainless-Timeout": "600",
+        "X-Stainless-Lang": "js",
+        "X-Stainless-Package-Version": "0.60.0",
+        "X-Stainless-OS": "MacOS",
+        "X-Stainless-Arch": "arm64",
+        "X-Stainless-Runtime": "node",
+        "X-Stainless-Runtime-Version": "v24.8.0",
+      }) catch {
+        e =>
+          raise HttpError(
+            "Failed to follow redirect to '\{location}': \{e}",
+          )
+      }
+    } else {
+      break
     }
-    system_info(
-      "HTTP redirect detected: \{response.code} -> \{location}\nOriginal URL: https://\{host}\{path}",
-    )
-    client.skip_response_body() catch {
-      _ => ()
-    }
-    raise HttpError(
-      "HTTP redirect not supported in API client (code: \{response.code}, location: \{location})",
-    )
   }
+
+  if redirects_count >= max_redirects {
+    raise HttpError("Too many redirects (exceeded \{max_redirects})")
+  }
+
+  let response = current_response
   if response.code != 200 {
     let error_body = client.read_all().text() catch {
         _ => "[Failed to read error body]"
@@ -294,8 +329,8 @@ async fn send_streaming_chat_request(
   }
   defer client.close()
 
-  // Send POST request
-  let response = client.post(path, json_body, extra_headers={
+  // Send POST request with redirect handling
+  let mut current_response = client.post(path, json_body, extra_headers={
     "Content-Type": "application/json",
     "X-Stainless-Retry-Count": "0",
     "X-Stainless-Timeout": "600",
@@ -313,29 +348,65 @@ async fn send_streaming_chat_request(
       )
   }
 
-  // Handle redirect responses
-  if response.code == 301 ||
-    response.code == 302 ||
-    response.code == 307 ||
-    response.code == 308 {
-    let location = match response.headers.get("location") {
-      Some(loc) => loc
-      None =>
-        match response.headers.get("Location") {
-          Some(loc) => loc
-          None => ""
-        }
+  // Follow redirects (up to 10 times)
+  let mut redirects_count = 0
+  let max_redirects = 10
+  while redirects_count < max_redirects {
+    if current_response.code == 301 ||
+      current_response.code == 302 ||
+      current_response.code == 307 ||
+      current_response.code == 308 {
+      let location = match current_response.headers.get("location") {
+        Some(loc) => loc
+        None =>
+          match current_response.headers.get("Location") {
+            Some(loc) => loc
+            None => ""
+          }
+      }
+      if location.is_empty() {
+        raise HttpError(
+          "HTTP redirect response (\{current_response.code}) missing Location header",
+        )
+      }
+      system_info(
+        "Following HTTP redirect: \{current_response.code} -> \{location}",
+      )
+
+      // Skip current response body before following redirect
+      client.skip_response_body() catch {
+        _ => ()
+      }
+
+      // Follow redirect
+      redirects_count = redirects_count + 1
+      current_response = client.post(location, json_body, extra_headers={
+        "Content-Type": "application/json",
+        "X-Stainless-Retry-Count": "0",
+        "X-Stainless-Timeout": "600",
+        "X-Stainless-Lang": "js",
+        "X-Stainless-Package-Version": "0.60.0",
+        "X-Stainless-OS": "MacOS",
+        "X-Stainless-Arch": "arm64",
+        "X-Stainless-Runtime": "node",
+        "X-Stainless-Runtime-Version": "v24.8.0",
+        "x-stainless-helper-method": "stream",
+      }) catch {
+        e =>
+          raise HttpError(
+            "Failed to follow redirect to '\{location}': \{e}",
+          )
+      }
+    } else {
+      break
     }
-    system_info(
-      "HTTP redirect detected: \{response.code} -> \{location}\nOriginal URL: https://\{host}\{path}",
-    )
-    client.skip_response_body() catch {
-      _ => ()
-    }
-    raise HttpError(
-      "HTTP redirect not supported in API client (code: \{response.code}, location: \{location})",
-    )
   }
+
+  if redirects_count >= max_redirects {
+    raise HttpError("Too many redirects (exceeded \{max_redirects})")
+  }
+
+  let response = current_response
 
   if response.code != 200 {
     let error_body = client.read_all().text() catch {
