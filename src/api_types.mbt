@@ -1,5 +1,6 @@
 ///|
 /// API Response types
+
 ///|
 struct ResponseUsage {
   input_tokens : Int

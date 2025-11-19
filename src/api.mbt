@@ -121,6 +121,7 @@ test "parse_url_localhost_with_port" {
 ///|
 /// Parse redirect location (could be absolute URL or relative path)
 /// Returns (host, path) tuple
+
 ///|
 /// Send streaming chat request (outputs content in real-time)
 async fn send_streaming_chat_request(
@@ -169,19 +170,13 @@ async fn send_streaming_chat_request(
       "metadata": { "user_id": "jarvis-user" },
     }
   }
-
   let json_body = request_with_stream.stringify()
 
   // Debug: print request details
   system_debug("=== HTTP REQUEST ===")
-  system_debug("URL: https://\{host}\{path}")
-  system_debug("Method: POST")
-  system_debug("Body length: \{json_body.length()} bytes")
-  if debug_mode.val {
-    // Print full request body in debug mode
-    system_debug("Request body:")
-    system_debug(json_body)
-  }
+  system_debug("POST https://\{host}\{path}")
+  system_debug("Request body:")
+  system_debug(json_body)
   system_debug("===================")
 
   // Create HTTP client
@@ -281,15 +276,11 @@ async fn send_streaming_chat_request(
   // Debug: print response status
   system_debug("=== HTTP RESPONSE ===")
   system_debug("Status: \{response.code}")
-  if debug_mode.val {
-    // Print response headers in debug mode
-    system_debug("Response headers:")
-    for header in response.headers {
-      system_debug("  \{header.0}: \{header.1}")
-    }
+  system_debug("Response headers:")
+  for header in response.headers {
+    system_debug("  \{header.0}: \{header.1}")
   }
   system_debug("====================")
-
   if response.code != 200 {
     let error_body = client.read_all().text() catch {
         _ => "[Failed to read error body]"
@@ -307,13 +298,11 @@ async fn send_streaming_chat_request(
   let mut full_content = ""
   let mut finish_reason = ""
 
-  // Debug: streaming start
-  system_debug("=== STREAMING START ===")
-
   // Buffer for reading chunks
   let buffer = FixedArray::make(1024, b'\x00')
   let mut accumulated_data = ""
   let mut total_chunks_received = 0
+  let mut total_bytes_read = 0
   for {
     let bytes_read = client.read(buffer) catch {
       e =>
@@ -325,17 +314,18 @@ async fn send_streaming_chat_request(
     if bytes_read == 0 {
       break // End of stream
     }
+    total_bytes_read = total_bytes_read + bytes_read
 
-    // Convert bytes to string using Bytes::from_array
+    // Convert bytes to string using UTF-8 decode
     let buffer_view = buffer[:bytes_read]
     let chunk_bytes = Bytes::from_array(buffer_view)
-    let chunk = chunk_bytes.to_string()
+    let chunk = @encoding/utf8.decode(chunk_bytes)
     accumulated_data = accumulated_data + chunk
 
     // Process complete lines (SSE format: "data: {json}\n\n")
     let lines : Array[String] = []
     let mut last_newline_pos = 0
-    for i = 0; i < accumulated_data.length(); i = i + 1 {
+    for i in 0..<accumulated_data.length() {
       match accumulated_data.get_char(i) {
         Some('\n') => {
           let line_view = accumulated_data[last_newline_pos:i] catch {
@@ -362,13 +352,17 @@ async fn send_streaming_chat_request(
 
     // Process each complete line
     for line in lines {
+      // Skip SSE event metadata lines
+      if line.has_prefix("event:") {
+        continue
+      }
       if line.has_prefix("data: ") {
         let json_str_view = line[6:] catch {
-          _ => {
-            system_error("Failed to extract JSON from SSE line: \{line}")
-            continue
+            _ => {
+              system_error("Failed to extract JSON from SSE line: \{line}")
+              continue
+            }
           }
-        }
         let json_str = json_str_view.to_string()
         let trimmed = json_str.trim(chars=" \t\r\n").to_string()
         if trimmed == "[DONE]" {
@@ -381,49 +375,48 @@ async fn send_streaming_chat_request(
           }
         }
 
-        // Use guard statements to flatten nested match expressions
+        // Parse Claude native streaming format
         guard chunk_json is Object(map) else {
           system_error("Streaming chunk is not a JSON object")
           continue
         }
-        guard map.get("choices") is Some(Array(choices)) else {
-          system_error("Streaming chunk missing 'choices' array")
-          continue
-        }
-        guard choices.length() > 0 else {
-          system_error("Streaming chunk has empty 'choices' array")
-          continue
-        }
-        guard choices[0] is Object(choice_map) else {
-          system_error("Streaming choice is not a JSON object")
-          continue
-        }
 
-        // Extract delta content
-        if choice_map.get("delta") is Some(Object(delta_map)) {
-          if delta_map.get("content") is Some(String(content)) {
-            full_content = full_content + content
-            total_chunks_received = total_chunks_received + 1
-            // Output immediately after parsing (ignore write errors)
-            @stdio.stdout.write(content) catch {
-              _ => ()
+        // Check event type
+        match map.get("type") {
+          Some(String("content_block_delta")) =>
+            // Extract text from delta
+            if map.get("delta") is Some(Object(delta_map)) {
+              if delta_map.get("type") is Some(String("text_delta")) {
+                if delta_map.get("text") is Some(String(text)) {
+                  full_content = full_content + text
+                  total_chunks_received = total_chunks_received + 1
+                  // Output immediately after parsing (ignore write errors)
+                  @stdio.stdout.write(text) catch {
+                    _ => ()
+                  }
+                }
+              }
             }
-          }
-        }
-
-        // Extract finish reason
-        if choice_map.get("finish_reason") is Some(String(reason)) {
-          finish_reason = reason
-          system_debug("=== STREAMING END ===")
-          system_debug("Total chunks received: \{total_chunks_received}")
-          system_debug("Total content length: \{full_content.length()} characters")
-          system_debug("Finish reason: \{reason}")
-          system_debug("====================")
-          break
+          Some(String("message_delta")) =>
+            // Extract finish reason from message_delta
+            if map.get("delta") is Some(Object(delta_map)) {
+              if delta_map.get("stop_reason") is Some(String(reason)) {
+                finish_reason = reason
+              }
+            }
+          _ => ()
         }
       }
     }
   }
+
+  // Debug: streaming summary
+  system_debug("=== STREAMING END ===")
+  system_debug(
+    "Total bytes: \{total_bytes_read}, chunks: \{total_chunks_received}, content: \{full_content.length()} chars",
+  )
+  system_debug("Finish reason: \{finish_reason}")
+  system_debug("====================")
 
   // Construct ChatResponse from accumulated data (Claude format)
   let content_blocks : Array[ContentBlock] = [

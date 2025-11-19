@@ -942,7 +942,6 @@ fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
   let tool_impls = get_all_tool_impls(in_play_mode~)
   let tools : Array[Tool] = []
   let mut has_web_search = false
-
   for tool_impl in tool_impls {
     let tool_name = tool_impl.name()
     // Use Anthropic's built-in web_search tool type
