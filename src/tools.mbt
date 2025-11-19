@@ -25,7 +25,7 @@ impl ToolImpl for ExecuteCommandTool with name(_self) {
 
 ///|
 impl ToolImpl for ExecuteCommandTool with description(_self) {
-  "Execute a shell command and return the output. Use this when you need to interact with the system, run programs, or perform file operations."
+  "Executes a shell command and returns the output. Use for terminal operations like git, npm, docker, etc. DO NOT use for file operations (reading, writing, editing, searching) - use specialized tools instead. For multiple commands: use '&&' to chain dependent commands, run independent commands in parallel."
 }
 
 ///|
@@ -115,7 +115,7 @@ impl ToolImpl for ReadFileTool with name(_self) {
 
 ///|
 impl ToolImpl for ReadFileTool with description(_self) {
-  "Read a file from the filesystem. Returns the file content with line numbers. Supports optional offset and limit parameters for reading large files."
+  "Reads a file from the filesystem. Returns content with line numbers (cat -n format). Supports optional offset and limit for large files. File path must be absolute. Lines longer than 2000 chars are truncated. Read multiple files in parallel when possible."
 }
 
 ///|
@@ -167,7 +167,7 @@ impl ToolImpl for WriteFileTool with name(_self) {
 
 ///|
 impl ToolImpl for WriteFileTool with description(_self) {
-  "Write entire file content. Use this ONLY when: (1) creating a new file, (2) completely rewriting a file, or (3) making changes to many different parts of a file. For small, localized changes, prefer edit_file instead."
+  "Writes a file to the filesystem. This tool will overwrite existing files. MUST use read_file first for existing files. ALWAYS prefer edit_file for small changes. Use write_file ONLY for: (1) new files, (2) complete rewrites, (3) changes to many parts of a file. File path must be absolute."
 }
 
 ///|
@@ -216,7 +216,7 @@ impl ToolImpl for EditFileTool with name(_self) {
 
 ///|
 impl ToolImpl for EditFileTool with description(_self) {
-  "Edit a file by replacing exact text. PREFERRED for small, localized changes (fixing a bug, updating a function, changing a few lines). More efficient than write_file. The old_string must appear exactly once in the file - include enough context to make it unique."
+  "Performs exact string replacements in files. MUST use read_file first. Preserve exact indentation from read_file output (after line number prefix). PREFERRED for small changes. Edit will FAIL if old_string is not unique - provide more context or use replace_all. Use replace_all for renaming across file."
 }
 
 ///|
@@ -270,7 +270,7 @@ impl ToolImpl for GrepTool with name(_self) {
 
 ///|
 impl ToolImpl for GrepTool with description(_self) {
-  "Search for a pattern in files. Uses ripgrep (rg) if available, otherwise falls back to grep. Returns matching lines with line numbers and file paths."
+  "A powerful search tool built on ripgrep. ALWAYS use grep for search tasks (never rg command). Supports full regex syntax. Filter files with glob or type parameter. Output modes: content (matching lines), files_with_matches (file paths), count. Pattern uses ripgrep syntax - literal braces need escaping."
 }
 
 ///|
@@ -355,7 +355,7 @@ impl ToolImpl for GlobTool with name(_self) {
 
 ///|
 impl ToolImpl for GlobTool with description(_self) {
-  "Find files matching a glob pattern. Returns a list of file paths. Useful for discovering files before reading or editing them."
+  "Fast file pattern matching tool. Supports glob patterns like **/*.js or src/**/*.ts. Returns matching file paths sorted by modification time. Use for finding files by name patterns. Perform multiple searches in parallel when possible."
 }
 
 ///|
@@ -602,7 +602,7 @@ impl ToolImpl for WebSearchTool with name(_self) {
 impl ToolImpl for WebSearchTool with description(_self) {
   // Description is not used for Anthropic's built-in tools,
   // but we provide one for consistency
-  "Search the web for current information (handled by Anthropic)"
+  "Allows searching the web for current information. Provides up-to-date information for current events and recent data. Returns search result blocks. Use for accessing information beyond knowledge cutoff. Domain filtering supported (handled by Anthropic)."
 }
 
 ///|
@@ -646,7 +646,7 @@ impl ToolImpl for WebFetchTool with name(_self) {
 
 ///|
 impl ToolImpl for WebFetchTool with description(_self) {
-  "Fetch content from a URL and optionally process it with a prompt. Useful for retrieving web pages, API responses, or other web content."
+  "Fetches content from a URL and processes it using an AI model. Takes URL and optional prompt. Converts HTML to text. Processes content with prompt using fast model. Returns response or raw content. Read-only. Content truncated if too large (>30k chars without prompt)."
 }
 
 ///|
