@@ -424,19 +424,6 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
       history
     }
   }
-
-  // Get accurate token count for loaded conversation
-  if chat_history.messages.length() > 0 {
-    let token_count = count_context_tokens(
-      config,
-      chat_history.messages,
-      chat_history.current_model,
-    )
-    if token_count > 0 {
-      chat_history.last_context_tokens = token_count
-    }
-  }
-
   system_info("Consulting: \{prompt}")
   newline_async()
 
