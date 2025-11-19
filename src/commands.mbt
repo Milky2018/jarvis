@@ -546,8 +546,6 @@ async fn start_play_mode(
 
   // Add initial user message to trigger Jarvis's first response
   chat_history.add(Message::new("user", "Begin your exploration."))
-  jarvis_says("Play mode initialized. Jarvis is now autonomous!")
-  newline_async()
 
   // First iteration - let Jarvis start autonomously
   let mut iterations = 0
@@ -566,7 +564,6 @@ async fn start_play_mode(
 
     // Show remaining budget
     jarvis_says("Budget remaining: $\{remaining} (iteration \{iterations})")
-    newline_async()
 
     // Get response and handle tool calls
     try {

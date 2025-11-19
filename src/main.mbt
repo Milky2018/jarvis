@@ -6,33 +6,23 @@ suberror JarvisSignal {
 }
 
 ///|
-/// Send chat request (streaming for text, non-streaming for tool calls)
+/// Send chat request (always non-streaming when tools are available)
 async fn send_chat_request(
   config : Config,
   chat_history : ChatHistory,
   tools : Array[Tool],
   first_request : Bool,
 ) -> (ChatResponse, Bool) {
-  // First request with tools: use non-streaming to check for tool calls
-  if first_request && tools.length() > 0 {
-    let resp = send_chat_request_non_streaming(
-      config,
-      chat_history.messages,
-      tools,
-      chat_history.current_model,
-    )
-    (resp, false)
-  } else {
-    // Use streaming for text responses (no tools since we only expect text)
-    let resp = send_streaming_chat_request(
-      config,
-      chat_history.messages,
-      [],
-      chat_history.current_model,
-    )
-    newline_async() // Add newline after streaming
-    (resp, true)
-  }
+  ignore(first_request)
+  // Always use non-streaming when tools are available
+  // This ensures LLM can call tools instead of outputting XML-formatted text
+  let resp = send_chat_request_non_streaming(
+    config,
+    chat_history.messages,
+    tools,
+    chat_history.current_model,
+  )
+  (resp, false)
 }
 
 ///|
