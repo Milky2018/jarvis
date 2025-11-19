@@ -286,7 +286,7 @@ impl Command for SummarizeCommand with usage(_self) {
 
 ///|
 impl Command for SummarizeCommand with description(_self) {
-  "Summarize and save current conversation"
+  "Compress conversation history to reduce token usage"
 }
 
 ///|
@@ -297,75 +297,57 @@ impl Command for SummarizeCommand with execute(
   config,
 ) {
   if chat_history.messages.length() == 0 {
-    jarvis_says("No messages to summarize")
+    jarvis_says("No messages to compress")
     return true
   }
-  jarvis_says("Summarizing conversation:")
-  let (title, summary) = generate_summary_with_title(chat_history, config)
-  if title.is_empty() || summary.is_empty() {
-    jarvis_says("Failed to generate summary")
-    return true
-  }
-
-  // Generate timestamp-based filename
-  let (exit_code, output) = @process.collect_output_merged("sh", [
-    "-c", "date +%Y%m%d_%H%M%S",
-  ])
-  let timestamp = if exit_code == 0 {
-    output.text().trim(chars=" \n\t\r").to_string()
-  } else {
-    "unknown"
-  }
-
-  // Save markdown summary using @fs API
-  let md_filename = get_jarvis_dir() + "/" + timestamp + "_" + title + ".md"
-  @fs.write_file(md_filename, summary, create=0o644) catch {
-    e => system_error("Failed to save summary file: \{e}")
-  }
-  jarvis_says("Summary saved as: \{timestamp}_\{title}.md")
 
   // Compress the conversation history by replacing old messages with summary
-  // Force compression regardless of token count since user explicitly requested summarization
+  // Force compression regardless of token count since user explicitly requested it
   let messages_count = chat_history.messages.length()
   let recent_keep = SUMMARIZE_KEEP_RECENT
-  if messages_count > recent_keep + 1 {
-    // Separate messages: first + middle + recent
-    let first_message = chat_history.messages[0]
-    let recent_start = messages_count - recent_keep
-
-    // Middle messages to summarize (skip first, keep recent)
-    let middle_messages : Array[Message] = []
-    for i = 1; i < recent_start; i = i + 1 {
-      middle_messages.push(chat_history.messages[i])
-    }
-    if middle_messages.length() > 0 {
-      // Generate summary
-      let summary_text = summarize_messages(
-        config,
-        middle_messages,
-        chat_history.current_model,
-      )
-      let summary_message = Message::new(
-        "system",
-        "Previous conversation summary: " + summary_text,
-      )
-
-      // Rebuild messages array: first + summary + recent
-      let new_messages : Array[Message] = [first_message, summary_message]
-      for i = recent_start; i < messages_count; i = i + 1 {
-        new_messages.push(chat_history.messages[i])
-      }
-
-      // Replace messages
-      while chat_history.messages.length() > 0 {
-        ignore(chat_history.messages.pop())
-      }
-      for msg in new_messages {
-        chat_history.messages.push(msg)
-      }
-      jarvis_says("(Conversation history compressed)")
-    }
+  if messages_count <= recent_keep + 1 {
+    jarvis_says("Not enough messages to compress (need at least \{recent_keep + 2} messages)")
+    return true
   }
+
+  jarvis_says("Compressing conversation history...")
+
+  // Separate messages: first + middle + recent
+  let first_message = chat_history.messages[0]
+  let recent_start = messages_count - recent_keep
+
+  // Middle messages to summarize (skip first, keep recent)
+  let middle_messages : Array[Message] = []
+  for i = 1; i < recent_start; i = i + 1 {
+    middle_messages.push(chat_history.messages[i])
+  }
+
+  // Generate summary
+  let summary_text = summarize_messages(
+    config,
+    middle_messages,
+    chat_history.current_model,
+  )
+  let summary_message = Message::new(
+    "system",
+    "Previous conversation summary: " + summary_text,
+  )
+
+  // Rebuild messages array: first + summary + recent
+  let new_messages : Array[Message] = [first_message, summary_message]
+  for i = recent_start; i < messages_count; i = i + 1 {
+    new_messages.push(chat_history.messages[i])
+  }
+
+  // Replace messages
+  while chat_history.messages.length() > 0 {
+    ignore(chat_history.messages.pop())
+  }
+  for msg in new_messages {
+    chat_history.messages.push(msg)
+  }
+
+  jarvis_says("Conversation history compressed (\{middle_messages.length()} messages → 1 summary)")
 
   // Create new file and print notifications
   chat_history.create_new_file_after_summary()
