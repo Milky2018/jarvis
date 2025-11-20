@@ -7,10 +7,18 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-release:
-    runs-on: macos-latest
-    permissions:
-      contents: write
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            artifact: jarvis-macos
+          - os: ubuntu-latest
+            platform: linux
+            artifact: jarvis-linux
 
     steps:
       - uses: actions/checkout@v4
@@ -32,18 +40,44 @@ jobs:
 
       - name: Prepare release binary
         run: |
-          cp target/native/release/build/jarvis/jarvis.exe jarvis-macos
-          chmod +x jarvis-macos
-          tar -czf jarvis-macos.tar.gz jarvis-macos
-          shasum -a 256 jarvis-macos.tar.gz > jarvis-macos.tar.gz.sha256
+          cp target/native/release/build/cli/cli.exe ${{ matrix.artifact }}
+          chmod +x ${{ matrix.artifact }}
+          tar -czf ${{ matrix.artifact }}.tar.gz ${{ matrix.artifact }}
+          shasum -a 256 ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            ${{ matrix.artifact }}.tar.gz
+            ${{ matrix.artifact }}.tar.gz.sha256
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            jarvis-macos.tar.gz
-            jarvis-macos.tar.gz.sha256
+            artifacts/jarvis-macos/jarvis-macos.tar.gz
+            artifacts/jarvis-macos/jarvis-macos.tar.gz.sha256
+            artifacts/jarvis-linux/jarvis-linux.tar.gz
+            artifacts/jarvis-linux/jarvis-linux.tar.gz.sha256
           draft: false
           prerelease: false
           generate_release_notes: true
