@@ -1,16 +1,16 @@
 ///|
 /// Command trait - defines interface for all commands
-trait Command {
+priv trait Command {
   name(Self) -> String
   aliases(Self) -> Array[String]
   usage(Self) -> String
   description(Self) -> String
-  async execute(Self, Array[String], ChatHistory, Config) -> Bool
+  async execute(Self, Array[String], @session.ChatHistory, @types.Config) -> Bool
 }
 
 ///|
 /// Help Command
-struct HelpCommand {} derive(Default)
+priv struct HelpCommand {} derive(Default)
 
 ///|
 impl Command for HelpCommand with name(_self) {
@@ -44,13 +44,13 @@ impl Command for HelpCommand with execute(_self, _parts, _chat_history, _config)
       cmd.description() +
       "\n"
   }
-  jarvis_says(help_text.trim(chars=" \n\t\r").to_string())
+  @output.jarvis_says(help_text.trim(chars=" \n\t\r").to_string())
   true
 }
 
 ///|
 /// Model Command
-struct ModelCommand {} derive(Default)
+priv struct ModelCommand {} derive(Default)
 
 ///|
 impl Command for ModelCommand with name(_self) {
@@ -75,18 +75,18 @@ impl Command for ModelCommand with description(_self) {
 ///|
 impl Command for ModelCommand with execute(_self, parts, chat_history, _config) {
   if parts.length() == 1 {
-    jarvis_says("Current model: \{chat_history.current_model}")
+    @output.jarvis_says("Current model: \{chat_history.current_model}")
   } else {
     let new_model = parts[1]
     chat_history.set_model(new_model)
-    jarvis_says("Model changed to: \{new_model}")
+    @output.jarvis_says("Model changed to: \{new_model}")
   }
   true
 }
 
 ///|
 /// Models Command
-struct ModelsCommand {} derive(Default)
+priv struct ModelsCommand {} derive(Default)
 
 ///|
 impl Command for ModelsCommand with name(_self) {
@@ -119,7 +119,7 @@ impl Command for ModelsCommand with execute(
   let petite = chat_history.petite_model
   let builder = StringBuilder::new()
   builder.write_string("Available models:\n")
-  for model in available_models() {
+  for model in @types.available_models() {
     let marker = if current == model.id {
       "[current] "
     } else if petite == model.id {
@@ -135,13 +135,13 @@ impl Command for ModelsCommand with execute(
     builder.write_string("\n")
   }
   builder.write_string("\nUse ':model <name>' to switch models")
-  jarvis_says(builder.to_string())
+  @output.jarvis_says(builder.to_string())
   true
 }
 
 ///|
 /// Petite Command
-struct PetiteCommand {} derive(Default)
+priv struct PetiteCommand {} derive(Default)
 
 ///|
 impl Command for PetiteCommand with name(_self) {
@@ -166,18 +166,18 @@ impl Command for PetiteCommand with description(_self) {
 ///|
 impl Command for PetiteCommand with execute(_self, parts, chat_history, _config) {
   if parts.length() == 1 {
-    jarvis_says("Current petite model: \{chat_history.petite_model}")
+    @output.jarvis_says("Current petite model: \{chat_history.petite_model}")
   } else {
     let new_model = parts[1]
     chat_history.petite_model = new_model
-    jarvis_says("Petite model changed to: \{new_model}")
+    @output.jarvis_says("Petite model changed to: \{new_model}")
   }
   true
 }
 
 ///|
 /// Clear Command
-struct ClearCommand {} derive(Default)
+priv struct ClearCommand {} derive(Default)
 
 ///|
 impl Command for ClearCommand with name(_self) {
@@ -203,7 +203,7 @@ impl Command for ClearCommand with description(_self) {
 impl Command for ClearCommand with execute(_self, _parts, chat_history, _config) {
   // Clear all messages
   chat_history.messages.clear()
-  jarvis_says("Conversation history cleared")
+  @output.jarvis_says("Conversation history cleared")
   // Persist the cleared state to file
   chat_history.save_to_numbered_file()
   true
@@ -211,7 +211,7 @@ impl Command for ClearCommand with execute(_self, _parts, chat_history, _config)
 
 ///|
 /// Cost Command
-struct CostCommand {} derive(Default)
+priv struct CostCommand {} derive(Default)
 
 ///|
 impl Command for CostCommand with name(_self) {
@@ -238,7 +238,7 @@ impl Command for CostCommand with execute(_self, _parts, chat_history, _config) 
   let stats = chat_history.usage_stats
   let mut cost_breakdown = ""
   stats.cost_by_model.each(fn(model_id, cost) {
-    let short_name = match get_model_info(model_id) {
+    let short_name = match @types.get_model_info(model_id) {
       Some(info) => info.name
       None => model_id
     }
@@ -249,7 +249,7 @@ impl Command for CostCommand with execute(_self, _parts, chat_history, _config) 
       cost.to_string() +
       "\n"
   })
-  jarvis_says(
+  @output.jarvis_says(
     (
       $| API Usage Statistics:
       $|   Total requests:    \{stats.total_requests}
@@ -267,7 +267,7 @@ impl Command for CostCommand with execute(_self, _parts, chat_history, _config) 
 
 ///|
 /// Summarize Command
-struct SummarizeCommand {} derive(Default)
+priv struct SummarizeCommand {} derive(Default)
 
 ///|
 impl Command for SummarizeCommand with name(_self) {
@@ -297,45 +297,45 @@ impl Command for SummarizeCommand with execute(
   config,
 ) {
   if chat_history.messages.length() == 0 {
-    jarvis_says("No messages to compress")
+    @output.jarvis_says("No messages to compress")
     return true
   }
 
   // Compress the conversation history by replacing old messages with summary
   // Force compression regardless of token count since user explicitly requested it
   let messages_count = chat_history.messages.length()
-  let recent_keep = SUMMARIZE_KEEP_RECENT
+  let recent_keep = @types.SUMMARIZE_KEEP_RECENT
   if messages_count <= recent_keep + 1 {
-    jarvis_says(
+    @output.jarvis_says(
       "Not enough messages to compress (need at least \{recent_keep + 2} messages)",
     )
     return true
   }
-  jarvis_says("Compressing conversation history...")
+  @output.jarvis_says("Compressing conversation history...")
 
   // Separate messages: first + middle + recent
   let first_message = chat_history.messages[0]
   let recent_start = messages_count - recent_keep
 
   // Middle messages to summarize (skip first, keep recent)
-  let middle_messages : Array[Message] = []
+  let middle_messages : Array[@types.Message] = []
   for i = 1; i < recent_start; i = i + 1 {
     middle_messages.push(chat_history.messages[i])
   }
 
   // Generate summary
-  let summary_text = summarize_messages(
+  let summary_text = @session.summarize_messages(
     config,
     middle_messages,
     chat_history.current_model,
   )
-  let summary_message = Message::new(
+  let summary_message = @types.Message::new(
     "system",
     "Previous conversation summary: " + summary_text,
   )
 
   // Rebuild messages array: first + summary + recent
-  let new_messages : Array[Message] = [first_message, summary_message]
+  let new_messages : Array[@types.Message] = [first_message, summary_message]
   for i = recent_start; i < messages_count; i = i + 1 {
     new_messages.push(chat_history.messages[i])
   }
@@ -345,7 +345,7 @@ impl Command for SummarizeCommand with execute(
   for msg in new_messages {
     chat_history.messages.push(msg)
   }
-  jarvis_says(
+  @output.jarvis_says(
     "Conversation history compressed (\{middle_messages.length()} messages → 1 summary)",
   )
 
@@ -356,7 +356,7 @@ impl Command for SummarizeCommand with execute(
 
 ///|
 /// Play Command
-struct PlayCommand {} derive(Default)
+priv struct PlayCommand {} derive(Default)
 
 ///|
 impl Command for PlayCommand with name(_self) {
@@ -383,12 +383,12 @@ impl Command for PlayCommand with execute(_self, parts, chat_history, config) {
   // Parse budget (default from config)
   let budget = if parts.length() > 1 {
     @strconv.parse_double(parts[1]) catch {
-      _ => DEFAULT_PLAY_BUDGET
+      _ => @types.DEFAULT_PLAY_BUDGET
     }
   } else {
-    DEFAULT_PLAY_BUDGET
+    @types.DEFAULT_PLAY_BUDGET
   }
-  jarvis_says("Entering play mode with budget: $\{budget}")
+  @output.jarvis_says("Entering play mode with budget: $\{budget}")
 
   // Start autonomous play session
   start_play_mode(config, chat_history, budget)
@@ -397,7 +397,7 @@ impl Command for PlayCommand with execute(_self, parts, chat_history, config) {
 
 ///|
 /// Exit Command
-struct ExitCommand {} derive(Default)
+priv struct ExitCommand {} derive(Default)
 
 ///|
 impl Command for ExitCommand with name(_self) {
@@ -421,8 +421,8 @@ impl Command for ExitCommand with description(_self) {
 
 ///|
 impl Command for ExitCommand with execute(_self, _parts, _chat_history, _config) {
-  jarvis_says("Goodbye!")
-  raise ExitRequested
+  @output.jarvis_says("Goodbye!")
+  raise @types.ExitRequested
 }
 
 ///|
@@ -442,10 +442,10 @@ fn get_all_commands() -> Array[&Command] {
 }
 
 ///|
-async fn handle_command(
+pub async fn handle_command(
   input : String,
-  chat_history : ChatHistory,
-  config : Config,
+  chat_history : @session.ChatHistory,
+  config : @types.Config,
 ) -> Bool {
   guard input.has_prefix(":") else { return false }
   let parts_view = input[1:].split(" ")
@@ -472,7 +472,7 @@ async fn handle_command(
   }
 
   // Unknown command
-  jarvis_says(
+  @output.jarvis_says(
     "Unknown command: :\{command}\nType ':help' for available commands",
   )
   true
@@ -481,12 +481,12 @@ async fn handle_command(
 ///|
 /// Start autonomous play mode where Jarvis explores freely
 async fn start_play_mode(
-  config : Config,
-  chat_history : ChatHistory,
+  config : @types.Config,
+  chat_history : @session.ChatHistory,
   budget : Double,
 ) -> Unit {
   // Ensure playground directory exists
-  let playground_dir = get_jarvis_dir() + "/playground"
+  let playground_dir = @session.get_jarvis_dir() + "/playground"
   let (_exit_code, _) = @process.collect_output_merged("sh", [
     "-c",
     "mkdir -p '\{playground_dir}'",
@@ -543,14 +543,14 @@ async fn start_play_mode(
     #| What would you like to do first?
 
   // Add play mode message to history
-  chat_history.add(Message::new("system", play_prompt))
+  chat_history.add(@types.Message::new("system", play_prompt))
 
   // Add initial user message to trigger Jarvis's first response
-  chat_history.add(Message::new("user", "Begin your exploration."))
+  chat_history.add(@types.Message::new("user", "Begin your exploration."))
 
   // First iteration - let Jarvis start autonomously
   let mut iterations = 0
-  let max_iterations = MAX_PLAY_ITERATIONS // Safety limit
+  let max_iterations = @types.MAX_PLAY_ITERATIONS // Safety limit
   while iterations < max_iterations {
     iterations = iterations + 1
 
@@ -559,25 +559,25 @@ async fn start_play_mode(
     let spent = current_cost - start_cost
     let remaining = budget - spent
     if remaining <= 0.0 {
-      jarvis_says("Budget exhausted! Spent: $\{spent}\nPlay mode ended.")
+      @output.jarvis_says("Budget exhausted! Spent: $\{spent}\nPlay mode ended.")
       break
     }
 
     // Show remaining budget
-    jarvis_says("Budget remaining: $\{remaining} (iteration \{iterations})")
+    @output.jarvis_says("Budget remaining: $\{remaining} (iteration \{iterations})")
 
     // Get response and handle tool calls
     try {
       // Check if need to summarize
       let summarized = chat_history.manage_history(config)
       if summarized {
-        jarvis_says("(Context summarized to continue playing)")
+        @output.jarvis_says("(Context summarized to continue playing)")
         chat_history.create_new_file_after_summary()
       }
 
       // Use the shared handle_tool_calls function with play mode tools
-      let tools = get_available_tools(in_play_mode=true)
-      handle_tool_calls(config, chat_history, tools)
+      let tools = @tools.get_available_tools(in_play_mode=true)
+      @executor.handle_tool_calls(config, chat_history, tools)
 
       // In play mode, if Jarvis responded without using tools, we need to add a user message
       // to prompt continuation. Otherwise, the next iteration will fail because the last
@@ -588,7 +588,7 @@ async fn start_play_mode(
         if last_msg.role == "assistant" {
           // Jarvis just responded with text, add a continuation prompt
           chat_history.add(
-            Message::new(
+            @types.Message::new(
               "user", "Continue your exploration. If you're done or satisfied, use the end_play_mode tool to exit.",
             ),
           )
@@ -598,21 +598,21 @@ async fn start_play_mode(
       // Save after each iteration
       chat_history.save_to_numbered_file()
     } catch {
-      PlayModeEnded => {
+      @types.PlayModeEnded => {
         // Jarvis called end_play_mode tool
-        system_info("Play mode ended by Jarvis.")
+        @output.system_info("Play mode ended by Jarvis.")
         break
       }
       e => {
-        system_error("Error in play mode: \{e}\nEnding play session.")
+        @output.system_error("Error in play mode: \{e}\nEnding play session.")
         break
       }
     }
   }
   if iterations >= max_iterations {
-    jarvis_says("Max iterations reached. Play mode ended.")
+    @output.jarvis_says("Max iterations reached. Play mode ended.")
   }
   let final_cost = chat_history.usage_stats.total_cost()
   let total_spent = final_cost - start_cost
-  jarvis_says("Play session complete! Total spent: $\{total_spent}")
+  @output.jarvis_says("Play session complete! Total spent: $\{total_spent}")
 }

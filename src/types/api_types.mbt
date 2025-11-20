@@ -2,7 +2,7 @@
 /// API Response types
 
 ///|
-struct ResponseUsage {
+pub(all) struct ResponseUsage {
   input_tokens : Int
   output_tokens : Int
 } derive (
@@ -16,7 +16,7 @@ struct ResponseUsage {
 )
 
 ///|
-struct ChatResponse {
+pub(all) struct ChatResponse {
   id : String
   type_ : String
   role : String
@@ -30,7 +30,7 @@ struct ChatResponse {
 )
 
 ///|
-struct ContentBlock {
+pub(all) struct ContentBlock {
   type_ : String
   text : String?
   id : String?
@@ -43,11 +43,10 @@ struct ContentBlock {
 
 ///|
 /// Extract text content from Claude response
-fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
+pub fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
   if self.content.length() == 0 {
     return None
   }
-  // Concatenate all text blocks
   let builder = StringBuilder::new()
   for block in self.content {
     if block.type_ == "text" && block.text is Some(t) {
@@ -64,7 +63,7 @@ fn ChatResponse::get_text_content(self : ChatResponse) -> String? {
 
 ///|
 /// Extract tool uses from Claude response
-fn ChatResponse::get_tool_uses(
+pub fn ChatResponse::get_tool_uses(
   self : ChatResponse,
 ) -> Array[(String, String, Json)] {
   ignore(self.id)

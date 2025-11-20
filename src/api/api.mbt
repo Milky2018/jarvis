@@ -1,6 +1,6 @@
 ///|
 /// Current block being built during streaming
-enum StreamingBlock {
+priv enum StreamingBlock {
   NoBlock
   TextBlock(StringBuilder)
   ToolUseBlock(String, String, StringBuilder) // (id, name, json_builder)
@@ -15,19 +15,19 @@ enum StreamingBlock {
 ///   "https://api.example.com" -> ("api.example.com", "")
 ///   "https://api.example.com/" -> ("api.example.com", "")
 ///   "api.example.com/api" -> ("api.example.com", "/api")
-fn parse_url(url : String) -> (String, String) raise JarvisError {
+fn parse_url(url : String) -> (String, String) raise @types.JarvisError {
   // Remove protocol prefix if present
   let host_and_path : StringView = if url.has_prefix("https://") {
     url[8:] catch {
       IndexOutOfBounds(_) | InvalidIndex(_) =>
-        raise StringViewError(
+        raise @types.StringViewError(
           "Invalid URL format when removing HTTPS prefix\nURL: \{url}",
         )
     }
   } else if url.has_prefix("http://") {
     url[7:] catch {
       IndexOutOfBounds(_) | InvalidIndex(_) =>
-        raise StringViewError(
+        raise @types.StringViewError(
           "Invalid URL format when removing HTTP prefix\nURL: \{url}",
         )
     }
@@ -135,12 +135,12 @@ test "parse_url_localhost_with_port" {
 
 ///|
 /// Send non-streaming chat request (for tool calls)
-async fn send_chat_request_non_streaming(
-  config : Config,
-  messages : Array[Message],
-  tools : Array[Tool],
+pub async fn send_chat_request_non_streaming(
+  config : @types.Config,
+  messages : Array[@types.Message],
+  tools : Array[@types.Tool],
   model : String,
-) -> ChatResponse {
+) -> @types.ChatResponse {
   // Parse URL
   let url = config.base_url()
   let (host, base_path) = parse_url(url)
@@ -150,14 +150,14 @@ async fn send_chat_request_non_streaming(
   let json_body = build_request_body_non_streaming(messages, tools, model)
 
   // Debug: print request details
-  system_debug("=== HTTP REQUEST (NON-STREAMING) ===")
-  system_debug("POST https://\{host}\{path}")
+  @output.system_debug("=== HTTP REQUEST (NON-STREAMING) ===")
+  @output.system_debug("POST https://\{host}\{path}")
   let preview = json_body[:500].to_string() catch { _ => json_body }
-  system_debug("Request body preview: \{preview}...")
-  system_debug("====================================")
+  @output.system_debug("Request body preview: \{preview}...")
+  @output.system_debug("====================================")
 
   // Send POST request with proxy support
-  let (response, body_data) = post_with_proxy(
+  let (response, body_data) = @proxy.post_with_proxy(
     "https://\{host}\{path}",
     json_body,
     headers={
@@ -184,14 +184,14 @@ async fn send_chat_request_non_streaming(
   )
 
   // Debug: print response status
-  system_debug("=== HTTP RESPONSE (NON-STREAMING) ===")
-  system_debug("Status: \{response.code}")
-  system_debug("=====================================")
+  @output.system_debug("=== HTTP RESPONSE (NON-STREAMING) ===")
+  @output.system_debug("Status: \{response.code}")
+  @output.system_debug("=====================================")
   if response.code != 200 {
     let error_text = body_data.text() catch {
       _ => "[Failed to read error body]"
     }
-    raise HttpError(
+    raise @types.HttpError(
       "HTTP request failed with status: \{response.code}\n" +
       "Response body: \{error_text}",
     )
@@ -201,16 +201,16 @@ async fn send_chat_request_non_streaming(
   let json_obj = body_data.json() catch {
     e => {
       let text = body_data.text() catch { _ => "[binary data]" }
-      raise HttpError("Failed to parse JSON: \{e}\nResponse body: \{text}")
+      raise @types.HttpError("Failed to parse JSON: \{e}\nResponse body: \{text}")
     }
   }
 
   // Log response for debugging
   log_model_response(json_obj.stringify())
-  let chat_response : ChatResponse = @json.from_json(json_obj) catch {
+  let chat_response : @types.ChatResponse = @json.from_json(json_obj) catch {
     @json.JsonDecodeError(e) => {
       let json_str = json_obj.stringify()
-      raise HttpError(
+      raise @types.HttpError(
         "Failed to decode response: \{e}\nJSON object: \{json_str}",
       )
     }
@@ -233,20 +233,20 @@ async fn log_model_response(json_str : String) -> Unit {
 
   // Append to log file
   @fs.write_file(log_path, log_entry, create=0o644, append=true, truncate=false) catch {
-    e => system_error("Log model response: \{e}")
+    e => @output.system_error("Log model response: \{e}")
   }
 }
 
 ///|
 /// Build request body JSON for Claude API (non-streaming)
 fn build_request_body_non_streaming(
-  messages : Array[Message],
-  tools : Array[Tool],
+  messages : Array[@types.Message],
+  tools : Array[@types.Tool],
   model : String,
 ) -> String {
   // Build system content blocks array
-  let system_blocks : Array[Json] = [{ "type": "text", "text": SYSTEM_PROMPT }]
-  let non_system_messages : Array[Message] = []
+  let system_blocks : Array[Json] = [{ "type": "text", "text": @types.SYSTEM_PROMPT }]
+  let non_system_messages : Array[@types.Message] = []
   for msg in messages {
     if msg.role == "system" {
       let text = msg.get_text()
@@ -262,7 +262,7 @@ fn build_request_body_non_streaming(
   let mut request : Json = {
     "model": model,
     "messages": non_system_messages.to_json(),
-    "max_tokens": MAX_RESPONSE_TOKENS,
+    "max_tokens": @types.MAX_RESPONSE_TOKENS,
     "stream": false,
     "system": system_blocks.to_json(),
     "metadata": { "user_id": "jarvis-user" },
@@ -273,7 +273,7 @@ fn build_request_body_non_streaming(
     request = {
       "model": model,
       "messages": non_system_messages.to_json(),
-      "max_tokens": MAX_RESPONSE_TOKENS,
+      "max_tokens": @types.MAX_RESPONSE_TOKENS,
       "stream": false,
       "system": system_blocks.to_json(),
       "tools": tools.to_json(),
@@ -286,13 +286,13 @@ fn build_request_body_non_streaming(
 ///|
 /// Build request body JSON for Claude API
 fn build_request_body(
-  messages : Array[Message],
-  tools : Array[Tool],
+  messages : Array[@types.Message],
+  tools : Array[@types.Tool],
   model : String,
 ) -> String {
   // Build system content blocks array
-  let system_blocks : Array[Json] = [{ "type": "text", "text": SYSTEM_PROMPT }]
-  let non_system_messages : Array[Message] = []
+  let system_blocks : Array[Json] = [{ "type": "text", "text": @types.SYSTEM_PROMPT }]
+  let non_system_messages : Array[@types.Message] = []
   for msg in messages {
     if msg.role == "system" {
       let text = msg.get_text()
@@ -308,7 +308,7 @@ fn build_request_body(
   let mut request_with_stream : Json = {
     "model": model,
     "messages": non_system_messages.to_json(),
-    "max_tokens": MAX_RESPONSE_TOKENS,
+    "max_tokens": @types.MAX_RESPONSE_TOKENS,
     "stream": true,
     "system": system_blocks.to_json(),
     "metadata": { "user_id": "jarvis-user" },
@@ -319,7 +319,7 @@ fn build_request_body(
     request_with_stream = {
       "model": model,
       "messages": non_system_messages.to_json(),
-      "max_tokens": MAX_RESPONSE_TOKENS,
+      "max_tokens": @types.MAX_RESPONSE_TOKENS,
       "stream": true,
       "system": system_blocks.to_json(),
       "tools": tools.to_json(),
@@ -348,8 +348,8 @@ fn get_post_headers() -> Map[String, String] {
 
 ///|
 /// Create HTTP client with authentication headers
-async fn create_http_client(host : String, config : Config) -> @http.Client {
-  let proxy = get_proxy_config()
+async fn create_http_client(host : String, config : @types.Config) -> @http.Client {
+  let proxy = @proxy.get_proxy_config()
   match proxy {
     Some(p) =>
       @http.Client::connect(
@@ -411,11 +411,11 @@ async fn send_post_with_redirects(
           }
       }
       if location.is_empty() {
-        raise HttpError(
+        raise @types.HttpError(
           "HTTP redirect response (\{current_response.code}) missing Location header",
         )
       }
-      system_debug(
+      @output.system_debug(
         "Following HTTP redirect: \{current_response.code} -> \{location}",
       )
 
@@ -432,7 +432,7 @@ async fn send_post_with_redirects(
     }
   }
   if redirects_count >= max_redirects {
-    raise HttpError("Too many redirects (exceeded \{max_redirects})")
+    raise @types.HttpError("Too many redirects (exceeded \{max_redirects})")
   }
   current_response
 }
@@ -472,7 +472,7 @@ fn extract_lines_from_chunk(
 
 ///|
 /// SSE line processing result
-struct SSELineResult {
+priv struct SSELineResult {
   text_delta : String?
   finish_reason : String?
   block_start : ContentBlockStart?
@@ -484,7 +484,7 @@ struct SSELineResult {
 
 ///|
 /// Content block start event
-struct ContentBlockStart {
+priv struct ContentBlockStart {
   type_ : String // "text" or "tool_use"
   id : String? // tool_use id
   name : String? // tool_use name
@@ -515,7 +515,7 @@ async fn process_sse_line(
   }
   let json_str_view = line[6:] catch {
       _ => {
-        system_error("Failed to extract JSON from SSE line: \{line}")
+        @output.system_error("Failed to extract JSON from SSE line: \{line}")
         return empty_result
       }
     }
@@ -526,14 +526,14 @@ async fn process_sse_line(
   }
   let chunk_json = @json.parse(json_str) catch {
     _ => {
-      system_error("Failed to parse streaming JSON chunk: \{json_str}")
+      @output.system_error("Failed to parse streaming JSON chunk: \{json_str}")
       return empty_result
     }
   }
 
   // Parse Claude native streaming format
   guard chunk_json is Object(map) else {
-    system_error("Streaming chunk is not a JSON object")
+    @output.system_error("Streaming chunk is not a JSON object")
     return empty_result
   }
 
@@ -600,12 +600,12 @@ async fn process_sse_line(
             if delta_map.get("text") is Some(String(text)) {
               // Print "Jarvis: " prefix on first text output
               if !has_printed_prefix.val {
-                print_jarvis_prefix()
+                @output.print_jarvis_prefix()
                 has_printed_prefix.val = true
               }
               // Output immediately
               @stdio.stdout.write(text) catch {
-                e => system_error("Failed to write to stdout: \{e}")
+                e => @output.system_error("Failed to write to stdout: \{e}")
               }
               return {
                 text_delta: Some(text),
@@ -675,12 +675,12 @@ async fn process_sse_line(
 
 ///|
 /// Send streaming chat request (outputs content in real-time)
-async fn send_streaming_chat_request(
-  config : Config,
-  messages : Array[Message],
-  tools : Array[Tool],
+pub async fn send_streaming_chat_request(
+  config : @types.Config,
+  messages : Array[@types.Message],
+  tools : Array[@types.Tool],
   model : String,
-) -> ChatResponse {
+) -> @types.ChatResponse {
   // Parse URL
   let url = config.base_url()
   let (host, base_path) = parse_url(url)
@@ -690,11 +690,11 @@ async fn send_streaming_chat_request(
   let json_body = build_request_body(messages, tools, model)
 
   // Debug: print request details
-  system_debug("=== HTTP REQUEST ===")
-  system_debug("POST https://\{host}\{path}")
-  system_debug("Request body:")
-  system_debug(json_body)
-  system_debug("===================")
+  @output.system_debug("=== HTTP REQUEST ===")
+  @output.system_debug("POST https://\{host}\{path}")
+  @output.system_debug("Request body:")
+  @output.system_debug(json_body)
+  @output.system_debug("===================")
 
   // Create HTTP client
   let client = create_http_client(host, config)
@@ -704,18 +704,18 @@ async fn send_streaming_chat_request(
   let response = send_post_with_redirects(client, path, json_body)
 
   // Debug: print response status
-  system_debug("=== HTTP RESPONSE ===")
-  system_debug("Status: \{response.code}")
-  system_debug("Response headers:")
+  @output.system_debug("=== HTTP RESPONSE ===")
+  @output.system_debug("Status: \{response.code}")
+  @output.system_debug("Response headers:")
   for header in response.headers {
-    system_debug("  \{header.0}: \{header.1}")
+    @output.system_debug("  \{header.0}: \{header.1}")
   }
-  system_debug("====================")
+  @output.system_debug("====================")
   if response.code != 200 {
     let error_body = client.read_all().text() catch {
         _ => "[Failed to read error body]"
       }
-    raise HttpError(
+    raise @types.HttpError(
       "HTTP request failed with status: \{response.code}\n" +
       "Request URL: https://\{host}\{path}\n" +
       "Request body: \{json_body}\n" +
@@ -724,7 +724,7 @@ async fn send_streaming_chat_request(
   }
 
   // Read streaming response (SSE format)
-  let content_blocks : Array[ContentBlock] = []
+  let content_blocks : Array[@types.ContentBlock] = []
   let mut current_block : StreamingBlock = NoBlock
   let mut finish_reason = ""
   let mut total_chunks = 0
@@ -739,7 +739,7 @@ async fn send_streaming_chat_request(
   for {
     let bytes_read = client.read(buffer) catch {
       e =>
-        raise HttpError(
+        raise @types.HttpError(
           "Failed to read streaming response from \{host}\{path}: \{e}\n" +
           "Request body: \{json_body}",
         )
@@ -778,7 +778,7 @@ async fn send_streaming_chat_request(
             match block_start.name {
               Some(name) => {
                 // Immediately log server tool usage (query will be shown later if needed)
-                tool_log(name, "")
+                @output.tool_log(name, "")
                 current_block = ServerToolBlock(StringBuilder::new())
               }
               None => ()
@@ -830,7 +830,7 @@ async fn send_streaming_chat_request(
             let json_str = builder.to_string()
             let input_json = @json.parse(json_str) catch {
               e => {
-                system_error(
+                @output.system_error(
                   "Failed to parse tool_use input JSON: \{e}\nJSON: \{json_str}",
                 )
                 {}
@@ -878,7 +878,7 @@ async fn send_streaming_chat_request(
               let json_str = builder.to_string()
               let input_json = @json.parse(json_str) catch {
                 e => {
-                  system_error(
+                  @output.system_error(
                     "Failed to parse tool_use input JSON: \{e}\nJSON: \{json_str}",
                   )
                   {}
@@ -901,26 +901,28 @@ async fn send_streaming_chat_request(
       }
     }
   }
-  newline_async()
+  @output.newline_async()
 
   // Debug: streaming summary
-  system_debug("=== STREAMING END ===")
-  system_debug(
+  @output.system_debug("=== STREAMING END ===")
+  @output.system_debug(
     "Total bytes: \{total_bytes_read}, chunks: \{total_chunks}, blocks: \{content_blocks.length()}",
   )
-  system_debug("Finish reason: \{finish_reason}")
-  system_debug("====================")
+  @output.system_debug("Finish reason: \{finish_reason}")
+  @output.system_debug("====================")
 
-  // Construct ChatResponse from accumulated data
+  // Construct @types.ChatResponse from accumulated data
   let usage_info = if input_tokens_count > 0 || output_tokens_count > 0 {
-    Some({
-      input_tokens: input_tokens_count,
-      output_tokens: output_tokens_count,
-    })
+    Some(
+      @types.ResponseUsage::{
+        input_tokens: input_tokens_count,
+        output_tokens: output_tokens_count,
+      },
+    )
   } else {
     None
   }
-  let response : ChatResponse = {
+  let response : @types.ChatResponse = {
     id: "",
     type_: "message",
     role: "assistant",

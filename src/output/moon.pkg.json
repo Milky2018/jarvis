@@ -1,0 +1,8 @@
+{
+  "import": [
+    "moonbitlang/async/stdio",
+    "moonbitlang/async/io",
+    "Milky2018/jarvis/types",
+    "Milky2018/jarvis/readline"
+  ]
+}

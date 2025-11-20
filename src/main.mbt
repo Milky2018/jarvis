@@ -1,257 +1,19 @@
 ///|
-suberror JarvisSignal {
-  ActionFinished
-  PlayModeEnded
-}
-
-///|
-/// Send chat request (streaming for text output, but always with tools)
-async fn send_chat_request(
-  config : Config,
-  chat_history : ChatHistory,
-  tools : Array[Tool],
-) -> (ChatResponse, Bool) {
-  // Use streaming for real-time output, with tools available
-  // This allows both tool calls and text output
-  let resp = send_streaming_chat_request(
-    config,
-    chat_history.messages,
-    tools,
-    chat_history.current_model,
-  )
-  newline_async() // Add newline after streaming
-  (resp, true)
-}
-
-///|
-/// Execute tools and collect results
-async fn execute_tools_and_collect_results(
-  tool_uses : Array[(String, String, Json)],
-  chat_history : ChatHistory,
-) -> (Array[Json], Bool) {
-  let tool_results : Array[Json] = []
-  let mut elaborate_complete = false
-  for tool_use in tool_uses {
-    let (tool_id, tool_name, tool_input) = tool_use
-    let result = execute_tool_claude(tool_name, tool_input, chat_history)
-
-    // Check if end_elaborate was called
-    if result.has_prefix("ELABORATE_COMPLETE:") {
-      elaborate_complete = true
-    }
-
-    // Create tool_result content block
-    let tool_result : Json = {
-      "type": "tool_result",
-      "tool_use_id": tool_id,
-      "content": result,
-    }
-    tool_results.push(tool_result)
-  }
-  (tool_results, elaborate_complete)
-}
-
-///|
-/// Format tool results as text message
-fn format_tool_results_as_text(
-  tool_uses : Array[(String, String, Json)],
-  tool_results : Array[Json],
-) -> String {
-  let builder = StringBuilder::new()
-  let mut first = true
-  for i = 0; i < tool_uses.length(); i = i + 1 {
-    let (tool_id, tool_name, _) = tool_uses[i]
-    let result_json = tool_results[i]
-    // Extract the content from tool_result
-    match result_json {
-      Object(map) =>
-        match map.get("content") {
-          Some(String(content)) => {
-            if !first {
-              builder.write_string("\n\n")
-            }
-            builder.write_string("Tool: ")
-            builder.write_string(tool_name)
-            builder.write_string(" (ID: ")
-            builder.write_string(tool_id)
-            builder.write_string(")\nResult: ")
-            builder.write_string(content)
-            first = false
-          }
-          _ => ()
-        }
-      _ => ()
-    }
-  }
-  builder.to_string()
-}
-
-///|
-async fn handle_tool_calls(
-  config : Config,
-  chat_history : ChatHistory,
-  tools : Array[Tool],
-) -> Unit {
-  let mut max_iterations = MAX_TOOL_ITERATIONS // Prevent infinite loops
-  let mut used_streaming = false // Track if we used streaming
-  let mut has_called_tools = false // Track if any tools have been called
-  try {
-    while max_iterations > 0 {
-      max_iterations = max_iterations - 1
-
-      // Send request (use streaming for first request)
-      let (response, was_streaming) = send_chat_request(
-        config, chat_history, tools,
-      )
-      if was_streaming {
-        used_streaming = true
-      }
-
-      // Record usage statistics
-      if response.usage is Some(u) {
-        chat_history.usage_stats.add_request(
-          u.input_tokens,
-          u.output_tokens,
-          u.input_tokens + u.output_tokens,
-          chat_history.current_model,
-        )
-        // Update last context tokens with accurate value from API
-        chat_history.last_context_tokens = u.input_tokens
-      }
-
-      // Extract text content and tool uses from response
-      let content_text = response.get_text_content()
-      let tool_uses = response.get_tool_uses()
-
-      // Display text content if present and not using streaming
-      if tool_uses.length() == 0 {
-        match content_text {
-          Some(content_str) => {
-            if !used_streaming {
-              jarvis_says(content_str)
-            }
-
-            // Check if message ends with a colon (: or ：)
-            // This often indicates Claude is about to describe an action but hasn't taken it
-            let trimmed = content_str.trim(chars=" \t\n\r").to_string()
-            let ends_with_colon = trimmed.has_suffix(":") ||
-              trimmed.has_suffix("：")
-            if ends_with_colon {
-              // Message added to history
-              let assistant_msg = Message::new("assistant", content_str)
-              chat_history.add(assistant_msg)
-
-              // Prompt Claude to actually call the tool instead of just describing
-              let continuation_prompt = Message::new(
-                "user", "Please proceed with the actual tool call now. Do not describe what you will do - execute the tool.",
-              )
-              chat_history.add(continuation_prompt)
-
-              // Continue the loop to get the actual tool call
-              continue
-            }
-          }
-          None =>
-            if !used_streaming {
-              system_error("No content in response")
-              return
-            }
-        }
-        // No tool calls, add message to history if non-empty
-        // Claude API requires text content blocks to be non-empty
-        let content_str = match content_text {
-          Some(c) => c
-          None => ""
-        }
-        if !content_str.is_empty() {
-          let assistant_msg = Message::new("assistant", content_str)
-          chat_history.add(assistant_msg)
-        }
-
-        // If we used streaming, this is the final response - return control to user
-        if used_streaming {
-          return
-        }
-
-        // Auto-continue: only if we've already called tools (i.e., we're in "work mode")
-        // This prevents simple conversational responses from looping forever
-        if has_called_tools {
-          // system_notify("Working on your request...")
-          let continue_msg = Message::new(
-            "user", "Continue with your task. If you have completed everything, call the end_elaborate tool.",
-          )
-          chat_history.add(continue_msg)
-          // Continue the loop instead of breaking
-          continue
-        } else {
-          // First response with no tool calls - just return control to user
-          return
-        }
-      }
-
-      // We have tool calls to execute
-      has_called_tools = true // Mark that we've entered work mode
-      // Display text content only if not using streaming (streaming already printed it)
-      if !used_streaming {
-        if content_text is Some(content_str) && !content_str.is_blank() {
-          jarvis_says(content_str)
-        }
-      }
-
-      // Build assistant message with the full response for history
-      // IMPORTANT: Only add message if there's actual content
-      // Claude API requires content field to be non-null
-      if content_text is Some(content) {
-        if !content.is_empty() {
-          let assistant_msg = Message::new("assistant", content)
-          chat_history.add(assistant_msg)
-        }
-      }
-
-      // Execute each tool and collect results
-      let (tool_results, elaborate_complete) = execute_tools_and_collect_results(
-        tool_uses, chat_history,
-      )
-
-      // If elaborate is complete, end the loop
-      if elaborate_complete {
-        return
-      }
-
-      // Send tool results back as a user message
-      let results_text = format_tool_results_as_text(tool_uses, tool_results)
-      let user_msg_with_results = Message::new("user", results_text)
-      chat_history.add(user_msg_with_results)
-
-      // Continue loop to get final response after tool execution
-    }
-    if max_iterations == 0 {
-      system_error("Maximum tool calling iterations reached")
-    }
-  } catch {
-    EnvVarNotSet(msg) => system_error("Environment variable not set: \{msg}")
-    HttpError(msg) => system_error("HTTP error: \{msg}")
-    StringViewError(msg) => system_error("String view error: \{msg}")
-    e => raise e
-  }
-}
-
-///|
 /// Handle user input and generate response
 async fn handle_user_input(
   user_input : String,
-  chat_history : ChatHistory,
-  config : Config,
+  chat_history : @session.ChatHistory,
+  config : @types.Config,
 ) -> Unit {
   // Add user message to history
-  let user_message = Message::new("user", user_input)
+  let user_message = @types.Message::new("user", user_input)
   chat_history.add(user_message)
 
   // Manage history before sending request
   try {
     let summarized = chat_history.manage_history(config)
     if summarized {
-      jarvis_says(
+      @output.jarvis_says(
         "(Summarized old conversation history to manage context length)",
       )
 
@@ -261,12 +23,12 @@ async fn handle_user_input(
   } catch {
     e =>
       // If history management fails, just log and continue
-      system_error("History management failed: \{e}")
+      @output.system_error("History management failed: \{e}")
   }
 
-  // Tool calling loop
-  let tools = get_available_tools()
-  handle_tool_calls(config, chat_history, tools)
+  // @types.Tool calling loop
+  let tools = @tools.get_available_tools()
+  @executor.handle_tool_calls(config, chat_history, tools)
 
   // Save conversation after each interaction
   chat_history.save_to_numbered_file()
@@ -279,33 +41,33 @@ fn is_exit_command(input : String) -> Bool {
 }
 
 ///|
-async fn chat_loop(config : Config) -> Unit {
+async fn chat_loop(config : @types.Config) -> Unit {
   // Ensure .jarvis directory exists
-  ensure_jarvis_dir()
+  @session.ensure_jarvis_dir()
 
   // Try to load the latest conversation using numbered files
-  let chat_history = match load_latest_conversation() {
+  let chat_history = match @session.load_latest_conversation() {
     Some(loaded_history) => {
-      let num_str = format_conv_number(loaded_history.current_file_number)
-      system_info("Loaded conversation from conv_\{num_str}.json")
+      let num_str = @session.format_conv_number(loaded_history.current_file_number)
+      @output.system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
     None => {
       // Create new conversation with initial system message
-      let history = ChatHistory::new()
+      let history = @session.ChatHistory::new()
 
       // Create the first conversation file
-      let file_num = create_new_conversation_file(
+      let file_num = @session.create_new_conversation_file(
         history.messages,
         history.current_model,
         history.last_context_tokens,
       )
       history.current_file_number = file_num
-      system_info("Created new conversation: conv_001.json")
+      @output.system_info("Created new conversation: conv_001.json")
       history
     }
   }
-  jarvis_says(
+  @output.jarvis_says(
     (
       #|Hello! I'm Jarvis, your AI assistant. How can I help you today?
       #|(Type 'exit' or 'quit' to end the conversation)
@@ -313,7 +75,7 @@ async fn chat_loop(config : Config) -> Unit {
   )
 
   // Load user input history from file (at the beginning of chat_loop)
-  let command_history = load_user_input_history()
+  let command_history = @session.load_user_input_history()
 
   // Main loop: Ctrl+C handling to interrupt operations
   for {
@@ -331,33 +93,33 @@ async fn chat_loop(config : Config) -> Unit {
         })
         chat_history.print_token_usage()
         let user_input = input_queue.get()
-        newline_async()
-        print_separator()
+        @output.newline_async()
+        @output.print_separator()
         interact(chat_history, user_input, config, command_history)
-        raise ActionFinished
+        raise @types.ActionFinished
       })
       continue
     } catch {
-      ExitRequested => break
+      @types.ExitRequested => break
       @readline.InterruptByUser => {
-        system_error("Interrupted by user")
+        @output.system_error("Interrupted by user")
         continue
       }
-      ActionFinished => continue
+      @types.ActionFinished => continue
       e => {
-        system_error("Fatal error: \{e}")
+        @output.system_error("Fatal error: \{e}")
         break
       }
     }
   }
-  save_user_input_history(command_history)
+  @session.save_user_input_history(command_history)
 }
 
 ///|
 /// Execute a single prompt and exit (for -e flag)
-async fn execute_prompt(config : Config, prompt : String) -> Unit {
-  ensure_jarvis_dir()
-  let chat_history = ChatHistory::new()
+async fn execute_prompt(config : @types.Config, prompt : String) -> Unit {
+  @session.ensure_jarvis_dir()
+  let chat_history = @session.ChatHistory::new()
 
   // Enable raw mode for Ctrl+C detection
   @readline.set_raw_mode(@stdio.stdin.fd())
@@ -369,43 +131,43 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
 
     // Execute the prompt
     handle_user_input(prompt, chat_history, config)
-    raise ActionFinished
+    raise @types.ActionFinished
   }) catch {
-    @readline.InterruptByUser => system_error("Interrupted by user")
-    ActionFinished => ()
-    e => system_error("Fatal: \{e}")
+    @readline.InterruptByUser => @output.system_error("Interrupted by user")
+    @types.ActionFinished => ()
+    e => @output.system_error("Fatal: \{e}")
   }
 }
 
 ///|
 /// Consult mode: Execute a single prompt with persistent conversation history
-async fn consult_prompt(config : Config, prompt : String) -> Unit {
-  ensure_jarvis_dir()
+async fn consult_prompt(config : @types.Config, prompt : String) -> Unit {
+  @session.ensure_jarvis_dir()
 
   // Load existing conversation or create new one (same as chat_loop)
-  let chat_history = match load_latest_conversation() {
+  let chat_history = match @session.load_latest_conversation() {
     Some(loaded_history) => {
-      let num_str = format_conv_number(loaded_history.current_file_number)
-      system_info("Loaded conversation from conv_\{num_str}.json")
+      let num_str = @session.format_conv_number(loaded_history.current_file_number)
+      @output.system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
     None => {
       // Create new conversation
-      let history = ChatHistory::new()
+      let history = @session.ChatHistory::new()
 
       // Create the first conversation file
-      let file_num = create_new_conversation_file(
+      let file_num = @session.create_new_conversation_file(
         history.messages,
         history.current_model,
         history.last_context_tokens,
       )
       history.current_file_number = file_num
-      system_info("Created new conversation: conv_001.json")
+      @output.system_info("Created new conversation: conv_001.json")
       history
     }
   }
-  system_info("Consulting: \{prompt}")
-  newline_async()
+  @output.system_info("Consulting: \{prompt}")
+  @output.newline_async()
 
   // Enable raw mode for Ctrl+C detection
   @readline.set_raw_mode(@stdio.stdin.fd())
@@ -417,18 +179,18 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
 
     // Execute the prompt
     handle_user_input(prompt, chat_history, config)
-    raise ActionFinished
+    raise @types.ActionFinished
   }) catch {
-    @readline.InterruptByUser => system_error("Interrupted by user")
-    ActionFinished => ()
-    e => system_error("Fatal: \{e}")
+    @readline.InterruptByUser => @output.system_error("Interrupted by user")
+    @types.ActionFinished => ()
+    e => @output.system_error("Fatal: \{e}")
   }
 }
 
 ///|
 async fn main {
   // Initialize proxy configuration from environment variables
-  init_proxy_config()
+  @proxy.init_proxy_config()
 
   // Parse command line arguments using clap
   let parser = @clap.Parser::new(
@@ -469,7 +231,7 @@ async fn main {
   // Parse arguments
   if parser.parse(value, cli_args) is Some(help_msg) {
     // Help message requested or parse error
-    println_async(help_msg)
+    @output.println_async(help_msg)
     return
   }
 
@@ -478,7 +240,7 @@ async fn main {
   let consult_mode = value.flags.get("consult").unwrap_or(false)
 
   // Set debug mode
-  debug_mode.val = value.flags.get("debug").unwrap_or(false)
+  @types.debug_mode.val = value.flags.get("debug").unwrap_or(false)
 
   // Get prompt if provided
   let prompt = if (execute_mode || consult_mode) &&
@@ -498,7 +260,7 @@ async fn main {
     None
   }
   try {
-    let config = load_config()
+    let config = @types.load_config()
 
     // Check which mode to use
     if execute_mode && consult_mode {
@@ -532,10 +294,10 @@ async fn main {
       }
     }
   } catch {
-    EnvVarNotSet(msg) =>
+    @types.EnvVarNotSet(msg) =>
       @stdio.stderr.write("Error: Environment variable not set: \{msg}\n")
-    HttpError(msg) => @stdio.stderr.write("Error: HTTP error: \{msg}\n")
-    StringViewError(msg) =>
+    @types.HttpError(msg) => @stdio.stderr.write("Error: HTTP error: \{msg}\n")
+    @types.StringViewError(msg) =>
       @stdio.stderr.write("Error: String view error: \{msg}\n")
     e => @stdio.stderr.write("Error: Unknown error occurred: \{e}\n")
   }

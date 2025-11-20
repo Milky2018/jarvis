@@ -21,7 +21,7 @@ struct MockLLMClient {
   responses : Array[MockLLMResponse] // Queue of responses to return
   mut current_index : Int // Current position in response queue
   mut request_count : Int // Number of requests made
-  mut last_messages : Array[Message] // Last messages sent to the LLM
+  mut last_messages : Array[@types.Message] // Last messages sent to the LLM
 }
 
 ///|
@@ -47,7 +47,7 @@ fn MockLLMClient::get_next_response(self : MockLLMClient) -> MockLLMResponse? {
 /// Record the messages sent in a request
 fn MockLLMClient::record_messages(
   self : MockLLMClient,
-  messages : Array[Message],
+  messages : Array[@types.Message],
 ) -> Unit {
   self.last_messages = messages
 }
@@ -227,7 +227,7 @@ struct TestContext {
   llm_client : MockLLMClient
   file_system : MockFileSystem
   output_capture : MockOutputCapture
-  chat_history : ChatHistory
+  chat_history : @session.ChatHistory
 }
 
 ///|
@@ -237,7 +237,7 @@ fn TestContext::new(llm_responses : Array[MockLLMResponse]) -> TestContext {
     llm_client: MockLLMClient::new(llm_responses),
     file_system: MockFileSystem::new(),
     output_capture: MockOutputCapture::new(),
-    chat_history: ChatHistory::new(),
+    chat_history: @session.ChatHistory::new(),
   }
 }
 
@@ -393,7 +393,7 @@ test "integration: test context with all mocks" {
   )
 
   // Test chat history
-  let msg = Message::new("user", "test message")
+  let msg = @types.Message::new("user", "test message")
   ctx.chat_history.add(msg)
   inspect(ctx.chat_history.messages.length(), content="1")
   inspect(ctx.chat_history.messages[0].role, content="user")
@@ -410,9 +410,9 @@ test "mock_llm_client_record_messages" {
   let client = MockLLMClient::new(responses)
 
   // Create test messages
-  let messages : Array[Message] = [
-    Message::new("user", "Hello"),
-    Message::new("assistant", "Hi there!"),
+  let messages : Array[@types.Message] = [
+    @types.Message::new("user", "Hello"),
+    @types.Message::new("assistant", "Hi there!"),
   ]
 
   // Record the messages
@@ -466,16 +466,16 @@ test "mock_llm_client_message_history" {
   let client = MockLLMClient::new(responses)
 
   // Record first conversation
-  let messages1 : Array[Message] = [Message::new("user", "First message")]
+  let messages1 : Array[@types.Message] = [@types.Message::new("user", "First message")]
   client.record_messages(messages1)
   inspect(client.last_messages.length(), content="1")
   let text1 = client.last_messages[0].get_text()
   inspect(text1, content="First message")
 
   // Record second conversation (should replace)
-  let messages2 : Array[Message] = [
-    Message::new("user", "Second message"),
-    Message::new("assistant", "Reply"),
+  let messages2 : Array[@types.Message] = [
+    @types.Message::new("user", "Second message"),
+    @types.Message::new("assistant", "Reply"),
   ]
   client.record_messages(messages2)
   inspect(client.last_messages.length(), content="2")

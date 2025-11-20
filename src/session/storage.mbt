@@ -1,13 +1,13 @@
 ///|
 /// Get .jarvis directory path
-fn get_jarvis_dir() -> String {
+pub fn get_jarvis_dir() -> String {
   let home = @sys.get_env_vars().get("HOME").unwrap_or(".")
   home + "/.jarvis"
 }
 
 ///|
 /// Ensure .jarvis directory exists
-async fn ensure_jarvis_dir() -> Unit {
+pub async fn ensure_jarvis_dir() -> Unit {
   let dir = get_jarvis_dir()
   let (_exit_code, _output) = @process.collect_output_merged("sh", [
     "-c",
@@ -18,7 +18,7 @@ async fn ensure_jarvis_dir() -> Unit {
 
 ///|
 /// Get the latest conversation file number
-async fn get_latest_conversation_number() -> Int {
+pub async fn get_latest_conversation_number() -> Int {
   let dir = get_jarvis_dir()
   // Find the highest numbered conv_XXX.json file
   let (exit_code, output) = @process.collect_output_merged("sh", [
@@ -37,7 +37,7 @@ async fn get_latest_conversation_number() -> Int {
 
 ///|
 /// Get the path for a conversation file by number
-fn get_conversation_file_path(number : Int) -> String {
+pub fn get_conversation_file_path(number : Int) -> String {
   let dir = get_jarvis_dir()
   // Format number as 3-digit with leading zeros
   let num_str = if number < 10 {
@@ -52,8 +52,8 @@ fn get_conversation_file_path(number : Int) -> String {
 
 ///|
 /// Create a new conversation file with initial messages
-async fn create_new_conversation_file(
-  initial_messages : Array[Message],
+pub async fn create_new_conversation_file(
+  initial_messages : Array[@types.Message],
   model : String,
   last_context_tokens : Int,
 ) -> Int {
@@ -69,14 +69,14 @@ async fn create_new_conversation_file(
   }
   let json_str = json_obj.stringify()
   @fs.write_file(path, json_str, create=0o644) catch {
-    e => system_error("Failed to create conversation file: \{e}")
+    e => @output.system_error("Failed to create conversation file: \{e}")
   }
   next_number
 }
 
 ///|
 /// Load the latest conversation file
-async fn load_latest_conversation() -> ChatHistory? {
+pub async fn load_latest_conversation() -> ChatHistory? {
   let latest_number = get_latest_conversation_number()
   if latest_number == 0 {
     return None // No conversation files exist
@@ -93,13 +93,13 @@ async fn load_latest_conversation() -> ChatHistory? {
 
 ///|
 /// Get user input history file path
-fn get_input_history_path() -> String {
+pub fn get_input_history_path() -> String {
   get_jarvis_dir() + "/input_history.txt"
 }
 
 ///|
 /// Load user input history from file
-async fn load_user_input_history() -> Array[String] {
+pub async fn load_user_input_history() -> Array[String] {
   let path = get_input_history_path()
   // Use sh to read file
   let (exit_code, output) = @process.collect_output_merged("sh", [
@@ -122,13 +122,13 @@ async fn load_user_input_history() -> Array[String] {
 
 ///|
 /// Save entire user input history to file
-async fn save_user_input_history(history : Array[String]) -> Unit {
+pub async fn save_user_input_history(history : Array[String]) -> Unit {
   let path = get_input_history_path()
   let mut content = ""
   for line in history {
     content = content + line + "\n"
   }
   @fs.write_file(path, content, create=0o644) catch {
-    e => system_error("Failed to save user input history: \{e}")
+    e => @output.system_error("Failed to save user input history: \{e}")
   }
 }

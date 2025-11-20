@@ -1,0 +1,15 @@
+{
+  "import": [
+    "moonbitlang/async",
+    "moonbitlang/async/fs",
+    "moonbitlang/async/process",
+    "moonbitlang/async/io",
+    "Milky2018/jarvis/types",
+    "Milky2018/jarvis/output",
+    "Milky2018/jarvis/session",
+    "Milky2018/jarvis/proxy",
+    "Milky2018/jarvis/diff",
+    "Milky2018/jarvis/api",
+    "Milky2018/jarvis/http"
+  ]
+}

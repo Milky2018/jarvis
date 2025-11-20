@@ -1,22 +1,22 @@
 ///|
 /// ToolImpl trait - defines interface for tool implementations
-trait ToolImpl {
+priv trait ToolImpl {
   name(Self) -> String
   description(Self) -> String
   input_schema(Self) -> Json
-  async execute(Self, Json, ChatHistory) -> String
+  async execute(Self, Json, @session.ChatHistory) -> String
 }
 
 ///|
 /// Helper function to report tool errors
 async fn tool_error(msg : String) -> String {
-  system_error(msg)
+  @output.system_error(msg)
   msg
 }
 
 ///|
-/// Execute Command Tool
-struct ExecuteCommandTool {} derive(Default)
+/// Execute Command @types.Tool
+priv struct ExecuteCommandTool {} derive(Default)
 
 ///|
 impl ToolImpl for ExecuteCommandTool with name(_self) {
@@ -48,7 +48,7 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
     Object(map) =>
       match map.get("command") {
         Some(String(cmd)) => {
-          tool_log("Execute", cmd)
+          @output.tool_log("Execute", cmd)
           execute_shell_command(cmd, chat_history)
         }
         Some(_) => tool_error("'command' must be a string")
@@ -62,7 +62,7 @@ impl ToolImpl for ExecuteCommandTool with execute(_self, input, chat_history) {
 /// Helper function for executing shell commands
 async fn execute_shell_command(
   command : String,
-  _chat_history : ChatHistory,
+  _chat_history : @session.ChatHistory,
 ) -> String {
   // Execute command directly without cd prefix
   let (exit_code, output) = @process.collect_output_merged("sh", ["-c", command])
@@ -80,7 +80,7 @@ async fn execute_shell_command(
 
 ///|
 async test "integration: execute_command_updates_chat_history" {
-  let history = ChatHistory::new()
+  let history = @session.ChatHistory::new()
 
   // Execute a simple echo command
   let tool = ExecuteCommandTool::default()
@@ -94,7 +94,7 @@ async test "integration: execute_command_updates_chat_history" {
 
 ///|
 async test "integration: execute_pwd_shows_current_dir" {
-  let history = ChatHistory::new()
+  let history = @session.ChatHistory::new()
   let tool = ExecuteCommandTool::default()
   let input : Json = { "command": "pwd" }
   let result = tool.execute(input, history)
@@ -105,8 +105,8 @@ async test "integration: execute_pwd_shows_current_dir" {
 }
 
 ///|
-/// Read File Tool
-struct ReadFileTool {} derive(Default)
+/// Read File @types.Tool
+priv struct ReadFileTool {} derive(Default)
 
 ///|
 impl ToolImpl for ReadFileTool with name(_self) {
@@ -146,7 +146,7 @@ impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match map.get("path") {
         Some(String(path)) => {
-          tool_log("Read", path)
+          @output.tool_log("Read", path)
           read_file_tool(path, input)
         }
         Some(_) => tool_error("'path' must be a string")
@@ -157,8 +157,8 @@ impl ToolImpl for ReadFileTool with execute(_self, input, _chat_history) {
 }
 
 ///|
-/// Write File Tool
-struct WriteFileTool {} derive(Default)
+/// Write File @types.Tool
+priv struct WriteFileTool {} derive(Default)
 
 ///|
 impl ToolImpl for WriteFileTool with name(_self) {
@@ -194,7 +194,7 @@ impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("content")) {
         (Some(String(path)), Some(String(content))) => {
-          tool_log("Write", path)
+          @output.tool_log("Write", path)
           write_file_tool(path, content)
         }
         (None, _) => tool_error("Missing 'path' argument")
@@ -206,8 +206,8 @@ impl ToolImpl for WriteFileTool with execute(_self, input, _chat_history) {
 }
 
 ///|
-/// Edit File Tool
-struct EditFileTool {} derive(Default)
+/// Edit File @types.Tool
+priv struct EditFileTool {} derive(Default)
 
 ///|
 impl ToolImpl for EditFileTool with name(_self) {
@@ -247,7 +247,7 @@ impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match (map.get("path"), map.get("old_string"), map.get("new_string")) {
         (Some(String(path)), Some(String(old)), Some(String(new))) => {
-          tool_log("Edit", path)
+          @output.tool_log("Edit", path)
           edit_file_tool(path, old, new)
         }
         (None, _, _) => tool_error("Missing 'path' argument")
@@ -260,8 +260,8 @@ impl ToolImpl for EditFileTool with execute(_self, input, _chat_history) {
 }
 
 ///|
-/// Grep Tool
-struct GrepTool {} derive(Default)
+/// Grep @types.Tool
+priv struct GrepTool {} derive(Default)
 
 ///|
 impl ToolImpl for GrepTool with name(_self) {
@@ -301,7 +301,7 @@ impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          tool_log("Grep", pattern)
+          @output.tool_log("Grep", pattern)
           grep_tool(pattern, path)
         }
         Some(_) => tool_error("'pattern' must be a string")
@@ -314,7 +314,7 @@ impl ToolImpl for GrepTool with execute(_self, input, _chat_history) {
 ///|
 async test "integration: grep_tool_with_test_file" {
   // Create a test file using shell command
-  let setup_history = ChatHistory::new()
+  let setup_history = @session.ChatHistory::new()
   let setup_tool = ExecuteCommandTool::default()
   let test_path = "/tmp/jarvis_grep_test.txt"
 
@@ -328,7 +328,7 @@ async test "integration: grep_tool_with_test_file" {
   |> ignore
 
   // Now test grep
-  let history = ChatHistory::new()
+  let history = @session.ChatHistory::new()
   let tool = GrepTool::default()
   let input : Json = { "pattern": "Hello", "path": test_path }
   let result = tool.execute(input, history)
@@ -345,8 +345,8 @@ async test "integration: grep_tool_with_test_file" {
 }
 
 ///|
-/// Glob Tool
-struct GlobTool {} derive(Default)
+/// Glob @types.Tool
+priv struct GlobTool {} derive(Default)
 
 ///|
 impl ToolImpl for GlobTool with name(_self) {
@@ -386,7 +386,7 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
             Some(String(p)) => p
             _ => "."
           }
-          tool_log("Glob", pattern)
+          @output.tool_log("Glob", pattern)
           glob_tool(pattern, path)
         }
         Some(_) => tool_error("'pattern' must be a string")
@@ -398,7 +398,7 @@ impl ToolImpl for GlobTool with execute(_self, input, _chat_history) {
 
 ///|
 async test "integration: glob_tool_finds_txt_files" {
-  let history = ChatHistory::new()
+  let history = @session.ChatHistory::new()
   let tool = GlobTool::default()
 
   // Search for .txt files in /tmp (should always exist)
@@ -413,8 +413,8 @@ async test "integration: glob_tool_finds_txt_files" {
 }
 
 ///|
-/// End Elaborate Tool - Signal that elaboration is complete
-struct EndElaborateTool {} derive(Default)
+/// End Elaborate @types.Tool - Signal that elaboration is complete
+priv struct EndElaborateTool {} derive(Default)
 
 ///|
 impl ToolImpl for EndElaborateTool with name(_self) {
@@ -456,7 +456,7 @@ impl ToolImpl for EndElaborateTool with execute(_self, input, _chat_history) {
 
 ///|
 async test "integration: end_elaborate_tool_returns_complete_marker" {
-  let history = ChatHistory::new()
+  let history = @session.ChatHistory::new()
   let tool = EndElaborateTool::default()
 
   // Test tool execution with a summary
@@ -470,7 +470,7 @@ async test "integration: end_elaborate_tool_returns_complete_marker" {
 
 ///|
 async test "integration: end_elaborate_tool_without_summary" {
-  let history = ChatHistory::new()
+  let history = @session.ChatHistory::new()
   let tool = EndElaborateTool::default()
 
   // Test tool execution without summary (should use default)
@@ -486,9 +486,9 @@ async test "integration: end_elaborate_tool_without_summary" {
 async test "integration: auto_continue_with_end_elaborate_flow" {
   // This test simulates the auto-continue workflow by executing multiple tools
   // in sequence, demonstrating the pattern that would occur in a real conversation:
-  // 1. Tool execution (execute_command) - simulates LLM's first action
-  // 2. Tool execution (read_file) - simulates LLM continuing work
-  // 3. Tool execution (end_elaborate) - simulates LLM signaling completion
+  // 1. @types.Tool execution (execute_command) - simulates LLM's first action
+  // 2. @types.Tool execution (read_file) - simulates LLM continuing work
+  // 3. @types.Tool execution (end_elaborate) - simulates LLM signaling completion
   //
   // In a real conversation with MockLLMClient, the system would:
   // - Receive LLM response with tool calls
@@ -499,7 +499,7 @@ async test "integration: auto_continue_with_end_elaborate_flow" {
   // This test verifies the tools work correctly in sequence and that
   // end_elaborate returns the proper completion marker.
 
-  let history = ChatHistory::new()
+  let history = @session.ChatHistory::new()
 
   // Simulate turn 1: execute a command
   let exec_tool = ExecuteCommandTool::default()
@@ -546,8 +546,8 @@ async test "integration: auto_continue_with_end_elaborate_flow" {
 }
 
 ///|
-/// End Play Mode Tool
-struct EndPlayModeTool {} derive(Default)
+/// End Play Mode @types.Tool
+priv struct EndPlayModeTool {} derive(Default)
 
 ///|
 impl ToolImpl for EndPlayModeTool with name(_self) {
@@ -583,15 +583,15 @@ impl ToolImpl for EndPlayModeTool with execute(_self, input, _chat_history) {
       }
     _ => "No reason provided"
   }
-  tool_log("EndElaborate", reason)
-  raise PlayModeEnded
+  @output.tool_log("EndElaborate", reason)
+  raise @types.PlayModeEnded
 }
 
 ///|
-/// Web Search Tool (uses Anthropic's built-in web search)
+/// Web Search @types.Tool (uses Anthropic's built-in web search)
 /// This tool is handled server-side by Anthropic, so we don't execute it locally.
 /// We just need to register it in the tools list with the special type.
-struct WebSearchTool {} derive(Default)
+priv struct WebSearchTool {} derive(Default)
 
 ///|
 impl ToolImpl for WebSearchTool with name(_self) {
@@ -626,7 +626,7 @@ impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
     Object(map) =>
       match map.get("query") {
         Some(String(query)) => {
-          tool_log("WebSearch", "\{query} [Anthropic]")
+          @output.tool_log("WebSearch", "\{query} [Anthropic]")
           "Web search is handled by Anthropic server-side and should not reach client execution"
         }
         _ => "Error: Invalid web_search input"
@@ -637,7 +637,7 @@ impl ToolImpl for WebSearchTool with execute(_self, input, _chat_history) {
 
 ///|
 /// WebFetch tool - Fetch and analyze web content
-struct WebFetchTool {} derive(Default)
+priv struct WebFetchTool {} derive(Default)
 
 ///|
 impl ToolImpl for WebFetchTool with name(_self) {
@@ -679,7 +679,7 @@ impl ToolImpl for WebFetchTool with execute(_self, input, chat_history) {
         Some(String(p)) => Some(p)
         _ => None
       }
-      tool_log("WebFetch", url)
+      @output.tool_log("WebFetch", url)
       web_fetch_tool(url, prompt, chat_history)
     }
     _ => tool_error("Invalid input format for web_fetch")
@@ -688,10 +688,10 @@ impl ToolImpl for WebFetchTool with execute(_self, input, chat_history) {
 
 ///|
 /// Execute tool with Claude API format (takes tool name and input JSON directly)
-async fn execute_tool_claude(
+pub async fn execute_tool_claude(
   tool_name : String,
   input : Json,
-  chat_history : ChatHistory,
+  chat_history : @session.ChatHistory,
 ) -> String {
   // Get all available tools (including end_play_mode if needed)
   let all_tools = get_all_tool_impls(in_play_mode=true)
@@ -703,7 +703,7 @@ async fn execute_tool_claude(
     }
   }
 
-  // Tool not found
+  // @types.Tool not found
   "Error: Unknown tool '\{tool_name}'"
 }
 
@@ -823,7 +823,7 @@ async fn write_file_tool(path : String, content : String) -> String {
       4
     }
     for i = 0; i < show_lines; i = i + 1 {
-      builder.write_string(COLOR_GREEN)
+      builder.write_string(@types.COLOR_GREEN)
       builder.write_string("+ ")
 
       // Add line number with padding
@@ -836,7 +836,7 @@ async fn write_file_tool(path : String, content : String) -> String {
       builder.write_string(num_str)
       builder.write_string(": ")
       builder.write_string(lines[i])
-      builder.write_string(COLOR_RESET)
+      builder.write_string(@types.COLOR_RESET)
       builder.write_string("\n")
     }
     if total_lines > show_lines {
@@ -847,11 +847,11 @@ async fn write_file_tool(path : String, content : String) -> String {
     builder.to_string()
   } else {
     // Existing file: show line-based diff
-    let (prefix, removed, added, suffix) = compute_line_diff(old_text, content)
-    format_diff(prefix, removed, added, suffix)
+    let (prefix, removed, added, suffix) = @diff.compute_line_diff(old_text, content)
+    @diff.format_diff(prefix, removed, added, suffix)
   }
   // Print the diff output
-  println_async(display)
+  @output.println_async(display)
   "Successfully wrote \{content.length()} bytes to \{path}"
 }
 
@@ -904,10 +904,10 @@ async fn edit_file_tool(
     old_lines.push(line.to_string())
   }
   for line in old_lines {
-    builder.write_string(COLOR_RED)
+    builder.write_string(@types.COLOR_RED)
     builder.write_string("- ")
     builder.write_string(line)
-    builder.write_string(COLOR_RESET)
+    builder.write_string(@types.COLOR_RESET)
     builder.write_string("\n")
   }
   // Show new content (green foreground)
@@ -917,14 +917,14 @@ async fn edit_file_tool(
     new_lines.push(line.to_string())
   }
   for line in new_lines {
-    builder.write_string(COLOR_GREEN)
+    builder.write_string(@types.COLOR_GREEN)
     builder.write_string("+ ")
     builder.write_string(line)
-    builder.write_string(COLOR_RESET)
+    builder.write_string(@types.COLOR_RESET)
     builder.write_string("\n")
   }
   // Print the diff output
-  println_async(builder.to_string())
+  @output.println_async(builder.to_string())
   "Successfully edited \{path}"
 }
 
@@ -992,9 +992,9 @@ fn get_all_tool_impls(in_play_mode? : Bool = false) -> Array[&ToolImpl] {
 }
 
 ///|
-fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
+pub fn get_available_tools(in_play_mode? : Bool = false) -> Array[@types.Tool] {
   let tool_impls = get_all_tool_impls(in_play_mode~)
-  let tools : Array[Tool] = []
+  let tools : Array[@types.Tool] = []
   for tool_impl in tool_impls {
     let tool_name = tool_impl.name()
     // Use Anthropic's built-in web_search tool type
@@ -1024,10 +1024,10 @@ fn get_available_tools(in_play_mode? : Bool = false) -> Array[Tool] {
 async fn web_fetch_tool(
   url : String,
   prompt : String?,
-  chat_history : ChatHistory,
+  chat_history : @session.ChatHistory,
 ) -> String {
   // Use GET request with proxy support
-  let (response, content_data) = get_with_proxy(url) catch {
+  let (response, content_data) = @proxy.get_with_proxy(url) catch {
     e => return tool_error("Failed to fetch \{url}: \{e}")
   }
   if response.code != 200 {
@@ -1038,14 +1038,14 @@ async fn web_fetch_tool(
   // If prompt is provided, use petite model to process content
   match prompt {
     Some(p) => {
-      let messages : Array[Message] = [
-        Message::new("user", "\{p}\n\nContent:\n\{content}"),
+      let messages : Array[@types.Message] = [
+        @types.Message::new("user", "\{p}\n\nContent:\n\{content}"),
       ]
-      let config = load_config() catch {
+      let config = @types.load_config() catch {
         _ => return tool_error("Failed to load config")
       }
       // Use non-streaming for tool internal processing (no need to show progress)
-      let response = send_chat_request_non_streaming(
+      let response = @api.send_chat_request_non_streaming(
         config,
         messages,
         [],

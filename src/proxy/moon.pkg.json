@@ -1,0 +1,7 @@
+{
+  "import": [
+    "moonbitlang/x/sys",
+    "moonbitlang/async/io",
+    "Milky2018/jarvis/http"
+  ]
+}

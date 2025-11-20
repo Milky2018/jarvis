@@ -3,9 +3,19 @@
 /// Provides line-based diff algorithms for displaying file changes
 
 ///|
+/// Color constants (duplicated for package independence)
+const COLOR_RED : String = "\u001b[31m"
+
+///|
+const COLOR_GREEN : String = "\u001b[32m"
+
+///|
+const COLOR_RESET : String = "\u001b[0m"
+
+///|
 /// Simple line-based diff algorithm
 /// Returns: (common_prefix_lines, removed_lines, added_lines, common_suffix_lines)
-fn compute_line_diff(
+pub fn compute_line_diff(
   old_text : String,
   new_text : String,
 ) -> (Array[String], Array[String], Array[String], Array[String]) {
@@ -60,7 +70,7 @@ fn compute_line_diff(
 ///|
 /// Format diff output with colors and context
 /// Shows 3 lines of context before/after changes
-fn format_diff(
+pub fn format_diff(
   prefix : Array[String],
   removed : Array[String],
   added : Array[String],

@@ -4,12 +4,16 @@
     "moonbitlang/async",
     "moonbitlang/async/stdio",
     "moonbitlang/async/io",
-    "moonbitlang/async/process",
-    "moonbitlang/async/fs",
     "moonbitlang/async/aqueue",
     "moonbitlang/x/sys",
     "TheWaWaR/clap",
-    "Milky2018/jarvis/http",
-    "Milky2018/jarvis/readline"
+    "Milky2018/jarvis/readline",
+    "Milky2018/jarvis/proxy",
+    "Milky2018/jarvis/types",
+    "Milky2018/jarvis/output",
+    "Milky2018/jarvis/session",
+    "Milky2018/jarvis/tools",
+    "Milky2018/jarvis/executor",
+    "Milky2018/jarvis/commands"
   ]
 }

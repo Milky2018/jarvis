@@ -1,18 +1,18 @@
 ///|
 async fn interact(
-  chat_history : ChatHistory,
+  chat_history : @session.ChatHistory,
   user_input : String,
-  config : Config,
+  config : @types.Config,
   command_history : Array[String],
 ) -> Unit {
   // Check for exit commands
   if is_exit_command(user_input) {
-    jarvis_says("Goodbye!")
-    raise ExitRequested
+    @output.jarvis_says("Goodbye!")
+    raise @types.ExitRequested
   }
 
   // Handle special commands
-  if handle_command(user_input, chat_history, config) {
+  if @commands.handle_command(user_input, chat_history, config) {
     return
   }
 

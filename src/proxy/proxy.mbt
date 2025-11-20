@@ -77,7 +77,7 @@ fn parse_proxy_url(proxy_url : String) -> (String, Int)? {
 ///|
 /// Get HTTP request with proxy support
 /// Uses proxy if configured via environment variables, otherwise uses direct connection
-async fn get_with_proxy(url : String) -> (@http.Response, &@io.Data) {
+pub async fn get_with_proxy(url : String) -> (@http.Response, &@io.Data) {
   match get_proxy_config() {
     Some(p) => @http.get(url, proxy=p)
     None => @http.get(url)
