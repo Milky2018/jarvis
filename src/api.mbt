@@ -476,6 +476,7 @@ struct SSELineResult {
   text_delta : String?
   finish_reason : String?
   block_start : ContentBlockStart?
+  block_stop : Bool // content_block_stop event
   input_json_delta : String?
   input_tokens : Int? // from message_start
   output_tokens : Int? // from message_delta
@@ -499,6 +500,7 @@ async fn process_sse_line(
     text_delta: None,
     finish_reason: None,
     block_start: None,
+    block_stop: false,
     input_json_delta: None,
     input_tokens: None,
     output_tokens: None,
@@ -546,6 +548,7 @@ async fn process_sse_line(
               text_delta: None,
               finish_reason: None,
               block_start: None,
+              block_stop: false,
               input_json_delta: None,
               input_tokens: Some(n.to_int()),
               output_tokens: None,
@@ -572,10 +575,22 @@ async fn process_sse_line(
           text_delta: None,
           finish_reason: None,
           block_start: Some({ type_, id, name }),
+          block_stop: false,
           input_json_delta: None,
           input_tokens: None,
           output_tokens: None,
         }
+      }
+    Some(String("content_block_stop")) =>
+      // Content block finished
+      return {
+        text_delta: None,
+        finish_reason: None,
+        block_start: None,
+        block_stop: true,
+        input_json_delta: None,
+        input_tokens: None,
+        output_tokens: None,
       }
     Some(String("content_block_delta")) =>
       // Content block delta
@@ -596,6 +611,7 @@ async fn process_sse_line(
                 text_delta: Some(text),
                 finish_reason: None,
                 block_start: None,
+                block_stop: false,
                 input_json_delta: None,
                 input_tokens: None,
                 output_tokens: None,
@@ -607,6 +623,7 @@ async fn process_sse_line(
                 text_delta: None,
                 finish_reason: None,
                 block_start: None,
+                block_stop: false,
                 input_json_delta: Some(json),
                 input_tokens: None,
                 output_tokens: None,
@@ -636,6 +653,7 @@ async fn process_sse_line(
             text_delta: None,
             finish_reason: reason,
             block_start: None,
+            block_stop: false,
             input_json_delta: None,
             input_tokens: None,
             output_tokens,
@@ -648,6 +666,7 @@ async fn process_sse_line(
     text_delta: None,
     finish_reason: None,
     block_start: None,
+    block_stop: false,
     input_json_delta: None,
     input_tokens: None,
     output_tokens: None,
@@ -794,6 +813,41 @@ async fn send_streaming_chat_request(
             _ => ()
           }
         None => ()
+      }
+
+      // Handle block stop - finalize current block before next one starts
+      if result.block_stop {
+        match current_block {
+          TextBlock(builder) =>
+            content_blocks.push({
+              type_: "text",
+              text: Some(builder.to_string()),
+              id: None,
+              name: None,
+              input: None,
+            })
+          ToolUseBlock(id, name, builder) => {
+            let json_str = builder.to_string()
+            let input_json = @json.parse(json_str) catch {
+              e => {
+                system_error(
+                  "Failed to parse tool_use input JSON: \{e}\nJSON: \{json_str}",
+                )
+                {}
+              }
+            }
+            content_blocks.push({
+              type_: "tool_use",
+              text: None,
+              id: Some(id),
+              name: Some(name),
+              input: Some(input_json),
+            })
+          }
+          ServerToolBlock(_, _) => () // Already logged at block start
+          NoBlock => ()
+        }
+        current_block = NoBlock
       }
 
       // Handle token counts
