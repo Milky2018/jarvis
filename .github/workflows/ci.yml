@@ -41,5 +41,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: jarvis-macos
-          path: target/native/release/build/cli/jarvis.exe
+          path: target/native/release/build/jarvis/jarvis.exe
           if-no-files-found: error
