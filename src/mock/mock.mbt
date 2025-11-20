@@ -8,7 +8,7 @@
 
 ///|
 /// Mock LLM response for testing
-struct MockLLMResponse {
+priv struct MockLLMResponse {
   text : String // Text content to return
   tool_calls : Array[(String, String, Json)] // (id, name, input)
   input_tokens : Int
@@ -17,7 +17,7 @@ struct MockLLMResponse {
 
 ///|
 /// Mock LLM client that returns pre-configured responses
-struct MockLLMClient {
+priv struct MockLLMClient {
   responses : Array[MockLLMResponse] // Queue of responses to return
   mut current_index : Int // Current position in response queue
   mut request_count : Int // Number of requests made
@@ -54,7 +54,7 @@ fn MockLLMClient::record_messages(
 
 ///|
 /// Mock file system for testing
-struct MockFileSystem {
+priv struct MockFileSystem {
   files : Map[String, String] // path -> content
 }
 
@@ -112,7 +112,7 @@ fn MockFileSystem::list_files(self : MockFileSystem) -> Array[String] {
 
 ///|
 /// Mock output capture for testing stdout/stderr
-struct MockOutputCapture {
+priv struct MockOutputCapture {
   mut stdout_lines : Array[String]
   mut stderr_lines : Array[String]
 }
@@ -223,7 +223,7 @@ fn mock_end_elaborate(summary : String) -> (String, String, Json) {
 
 ///|
 /// Integration test context that bundles all mocks together
-struct TestContext {
+priv struct TestContext {
   llm_client : MockLLMClient
   file_system : MockFileSystem
   output_capture : MockOutputCapture
