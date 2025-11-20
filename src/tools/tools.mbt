@@ -847,7 +847,9 @@ async fn write_file_tool(path : String, content : String) -> String {
     builder.to_string()
   } else {
     // Existing file: show line-based diff
-    let (prefix, removed, added, suffix) = @diff.compute_line_diff(old_text, content)
+    let (prefix, removed, added, suffix) = @diff.compute_line_diff(
+      old_text, content,
+    )
     @diff.format_diff(prefix, removed, added, suffix)
   }
   // Print the diff output

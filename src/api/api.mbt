@@ -201,7 +201,9 @@ pub async fn send_chat_request_non_streaming(
   let json_obj = body_data.json() catch {
     e => {
       let text = body_data.text() catch { _ => "[binary data]" }
-      raise @types.HttpError("Failed to parse JSON: \{e}\nResponse body: \{text}")
+      raise @types.HttpError(
+        "Failed to parse JSON: \{e}\nResponse body: \{text}",
+      )
     }
   }
 
@@ -245,7 +247,9 @@ fn build_request_body_non_streaming(
   model : String,
 ) -> String {
   // Build system content blocks array
-  let system_blocks : Array[Json] = [{ "type": "text", "text": @types.SYSTEM_PROMPT }]
+  let system_blocks : Array[Json] = [
+    { "type": "text", "text": @types.SYSTEM_PROMPT },
+  ]
   let non_system_messages : Array[@types.Message] = []
   for msg in messages {
     if msg.role == "system" {
@@ -291,7 +295,9 @@ fn build_request_body(
   model : String,
 ) -> String {
   // Build system content blocks array
-  let system_blocks : Array[Json] = [{ "type": "text", "text": @types.SYSTEM_PROMPT }]
+  let system_blocks : Array[Json] = [
+    { "type": "text", "text": @types.SYSTEM_PROMPT },
+  ]
   let non_system_messages : Array[@types.Message] = []
   for msg in messages {
     if msg.role == "system" {
@@ -348,7 +354,10 @@ fn get_post_headers() -> Map[String, String] {
 
 ///|
 /// Create HTTP client with authentication headers
-async fn create_http_client(host : String, config : @types.Config) -> @http.Client {
+async fn create_http_client(
+  host : String,
+  config : @types.Config,
+) -> @http.Client {
   let proxy = @proxy.get_proxy_config()
   match proxy {
     Some(p) =>
@@ -913,12 +922,10 @@ pub async fn send_streaming_chat_request(
 
   // Construct @types.ChatResponse from accumulated data
   let usage_info = if input_tokens_count > 0 || output_tokens_count > 0 {
-    Some(
-      @types.ResponseUsage::{
-        input_tokens: input_tokens_count,
-        output_tokens: output_tokens_count,
-      },
-    )
+    Some(@types.ResponseUsage::{
+      input_tokens: input_tokens_count,
+      output_tokens: output_tokens_count,
+    })
   } else {
     None
   }

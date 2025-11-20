@@ -48,7 +48,9 @@ async fn chat_loop(config : @types.Config) -> Unit {
   // Try to load the latest conversation using numbered files
   let chat_history = match @session.load_latest_conversation() {
     Some(loaded_history) => {
-      let num_str = @session.format_conv_number(loaded_history.current_file_number)
+      let num_str = @session.format_conv_number(
+        loaded_history.current_file_number,
+      )
       @output.system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }
@@ -86,7 +88,9 @@ async fn chat_loop(config : @types.Config) -> Unit {
 
         // Start readline task in background
         group.spawn_bg(fn() {
-          let rl = @readline.ReadlineInterface::with_history(100, command_history)
+          let rl = @readline.ReadlineInterface::with_history(
+            100, command_history,
+          )
           while rl.read_to_queue(input_queue) {
 
           }
@@ -147,7 +151,9 @@ async fn consult_prompt(config : @types.Config, prompt : String) -> Unit {
   // Load existing conversation or create new one (same as chat_loop)
   let chat_history = match @session.load_latest_conversation() {
     Some(loaded_history) => {
-      let num_str = @session.format_conv_number(loaded_history.current_file_number)
+      let num_str = @session.format_conv_number(
+        loaded_history.current_file_number,
+      )
       @output.system_info("Loaded conversation from conv_\{num_str}.json")
       loaded_history
     }

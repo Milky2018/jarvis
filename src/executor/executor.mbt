@@ -224,9 +224,11 @@ pub async fn handle_tool_calls(
       @output.system_error("Maximum tool calling iterations reached")
     }
   } catch {
-    @types.EnvVarNotSet(msg) => @output.system_error("Environment variable not set: \{msg}")
+    @types.EnvVarNotSet(msg) =>
+      @output.system_error("Environment variable not set: \{msg}")
     @types.HttpError(msg) => @output.system_error("HTTP error: \{msg}")
-    @types.StringViewError(msg) => @output.system_error("String view error: \{msg}")
+    @types.StringViewError(msg) =>
+      @output.system_error("String view error: \{msg}")
     e => raise e
   }
 }

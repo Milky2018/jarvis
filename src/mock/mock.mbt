@@ -466,7 +466,9 @@ test "mock_llm_client_message_history" {
   let client = MockLLMClient::new(responses)
 
   // Record first conversation
-  let messages1 : Array[@types.Message] = [@types.Message::new("user", "First message")]
+  let messages1 : Array[@types.Message] = [
+    @types.Message::new("user", "First message"),
+  ]
   client.record_messages(messages1)
   inspect(client.last_messages.length(), content="1")
   let text1 = client.last_messages[0].get_text()

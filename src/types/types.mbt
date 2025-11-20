@@ -132,14 +132,12 @@ pub fn UsageStats::add_request(
   self.total_requests = self.total_requests + 1
   self.total_input_tokens = self.total_input_tokens + input_tokens
   self.total_output_tokens = self.total_output_tokens + output_tokens
-
   let (input_price, output_price) = match get_model_info(model) {
     Some(info) => (info.input_price, info.output_price)
     None => (3.0, 15.0)
   }
   let cost = input_tokens.to_double() / 1000000.0 * input_price +
     output_tokens.to_double() / 1000000.0 * output_price
-
   let current_cost = self.cost_by_model.get(model).unwrap_or(0.0)
   self.cost_by_model.set(model, current_cost + cost)
 }

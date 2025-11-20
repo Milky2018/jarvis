@@ -27,16 +27,30 @@ pub let debug_mode : Ref[Bool] = { val: false }
 ///|
 /// Color constants
 pub const COLOR_CYAN : String = "\u001b[36m"
+
+///|
 pub const COLOR_RESET : String = "\u001b[0m"
+
+///|
 pub const COLOR_BOLD : String = "\u001b[1m"
+
+///|
 pub const COLOR_RED : String = "\u001b[31m"
+
+///|
 pub const COLOR_GREEN : String = "\u001b[32m"
+
+///|
 pub const COLOR_GRAY : String = "\u001b[38;2;90;90;90m"
 
 ///|
 /// Summarization configuration
 pub const SUMMARIZE_KEEP_RECENT : Int = 8
+
+///|
 pub const SUMMARIZE_THRESHOLD_PERCENT : Int = 80
+
+///|
 pub const MAX_SUMMARY_TOKENS : Int = 40000
 
 ///|
@@ -99,9 +113,17 @@ pub fn get_model_info(model_id : String) -> ModelInfo? {
 ///|
 /// API configuration
 pub const MAX_CONTEXT_TOKENS : Int = 200000
+
+///|
 pub const MAX_RESPONSE_TOKENS : Int = 32000
+
+///|
 pub const MAX_TOOL_ITERATIONS : Int = 200
+
+///|
 pub const MAX_PLAY_ITERATIONS : Int = 100
+
+///|
 pub const DEFAULT_PLAY_BUDGET : Double = 10.0
 
 ///|

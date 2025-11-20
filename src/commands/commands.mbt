@@ -559,12 +559,16 @@ async fn start_play_mode(
     let spent = current_cost - start_cost
     let remaining = budget - spent
     if remaining <= 0.0 {
-      @output.jarvis_says("Budget exhausted! Spent: $\{spent}\nPlay mode ended.")
+      @output.jarvis_says(
+        "Budget exhausted! Spent: $\{spent}\nPlay mode ended.",
+      )
       break
     }
 
     // Show remaining budget
-    @output.jarvis_says("Budget remaining: $\{remaining} (iteration \{iterations})")
+    @output.jarvis_says(
+      "Budget remaining: $\{remaining} (iteration \{iterations})",
+    )
 
     // Get response and handle tool calls
     try {

@@ -90,7 +90,7 @@ pub async fn get_with_proxy(url : String) -> (@http.Response, &@io.Data) {
 pub async fn post_with_proxy(
   url : String,
   body : String,
-  headers~ : Map[String, String] = {},
+  headers? : Map[String, String] = {},
 ) -> (@http.Response, &@io.Data) {
   match get_proxy_config() {
     Some(p) => @http.post(url, body, headers~, proxy=p)

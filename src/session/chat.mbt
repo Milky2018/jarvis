@@ -77,7 +77,9 @@ pub fn format_conv_number(num : Int) -> String {
 
 ///|
 /// Create new conversation file after summarization and print notifications
-pub async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit {
+pub async fn ChatHistory::create_new_file_after_summary(
+  self : ChatHistory,
+) -> Unit {
   let old_number = self.current_file_number
   let old_num_str = format_conv_number(old_number)
 
@@ -93,7 +95,9 @@ pub async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> U
   // Print notifications
   @output.system_info("Created new conversation file: conv_\{num_str}.json")
   if old_number > 0 {
-    @output.system_info("(Previous conversation archived in conv_\{old_num_str}.json)")
+    @output.system_info(
+      "(Previous conversation archived in conv_\{old_num_str}.json)",
+    )
   }
 }
 
@@ -188,7 +192,9 @@ pub async fn summarize_messages(
     )
     builder.to_string()
   }
-  let summary_messages : Array[@types.Message] = [@types.Message::new("user", summary_prompt)]
+  let summary_messages : Array[@types.Message] = [
+    @types.Message::new("user", summary_prompt),
+  ]
   // Use non-streaming without tools for summary (we only need text output, no need to show progress)
   let response = @api.send_chat_request_non_streaming(
     config,
@@ -201,7 +207,8 @@ pub async fn summarize_messages(
       // Truncate if exceeds the character limit
       if text.length() > max_summary_chars {
         let truncated = text[:max_summary_chars].to_string() catch { _ => text }
-        truncated + "\n\n(Summary truncated at \{@types.MAX_SUMMARY_TOKENS} tokens)"
+        truncated +
+        "\n\n(Summary truncated at \{@types.MAX_SUMMARY_TOKENS} tokens)"
       } else {
         text
       }
