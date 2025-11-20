@@ -233,7 +233,7 @@ async fn newline_async() -> Unit {
 ///|
 /// Print horizontal separator line
 async fn print_separator() -> Unit {
-  let size = window_size()
+  let size = @readline.window_size()
   ignore(size.row)
   let builder = StringBuilder::new()
   for i = 0; i < size.col; i = i + 1 {

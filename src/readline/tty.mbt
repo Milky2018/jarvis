@@ -10,7 +10,7 @@ extern "c" fn tty_set_raw_mode(fd : Int) -> Int = "moonbit_jarvis_tty_set_raw_mo
 extern "c" fn tty_get_win_size(size : FixedArray[Int]) -> Int = "moonbit_jarvis_tty_get_win_size"
 
 ///|
-fn set_raw_mode(fd : Int) -> Unit {
+pub fn set_raw_mode(fd : Int) -> Unit {
   let result = tty_set_raw_mode(fd)
   if result != 0 {
     abort("Failed to set raw mode, error code: \{result}")
@@ -19,13 +19,13 @@ fn set_raw_mode(fd : Int) -> Unit {
 
 ///|
 /// Terminal window size
-struct Size {
+pub struct Size {
   row : Int
   col : Int
 }
 
 ///|
-fn window_size() -> Size {
+pub fn window_size() -> Size {
   let buf : FixedArray[Int] = [0, 0]
   let result = tty_get_win_size(buf)
   if result != 0 {

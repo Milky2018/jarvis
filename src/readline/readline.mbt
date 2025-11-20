@@ -11,15 +11,42 @@
 /// - Communicates with main coroutine via async queue
 
 ///|
+/// Readline signals
+pub suberror InterruptByUser
+
+///|
+/// Start interrupt monitor that raises InterruptByUser on Ctrl+C
+pub async fn start_interrupt_monitor() -> Unit {
+  for {
+    let keypress = parse_keypress()
+    if keypress is Some(CtrlC) {
+      raise InterruptByUser
+    }
+  }
+}
+
+///|
+/// Print a separator line
+pub async fn print_separator() -> Unit {
+  let size = window_size()
+  ignore(size.row)
+  let builder = StringBuilder::new()
+  for i = 0; i < size.col; i = i + 1 {
+    builder.write_string("─")
+  }
+  @stdio.stdout.write(builder.to_string() + "\n")
+}
+
+///|
 /// Readline interface for direct use in main loop
-struct ReadlineInterface {
+pub struct ReadlineInterface {
   mut prompt : String
   history : CommandHistory
 }
 
 ///|
 /// Create a new readline interface with pre-populated history
-fn ReadlineInterface::with_history(
+pub fn ReadlineInterface::with_history(
   history_size : Int,
   initial_history : Array[String],
 ) -> ReadlineInterface {
@@ -47,7 +74,7 @@ async fn ReadlineInterface::read_line(self : ReadlineInterface) -> String? {
 
 ///|
 /// Key press events
-enum KeyPress {
+pub enum KeyPress {
   Char(Char)
   Enter
   Backspace
@@ -177,7 +204,7 @@ fn CommandHistory::next(self : CommandHistory) -> String? {
 
 ///|
 /// Line Editor
-struct LineEditor {
+priv struct LineEditor {
   mut buffer : String
   mut cursor_pos : Int
   history : CommandHistory
@@ -633,7 +660,7 @@ async fn read_escape_sequence() -> KeyPress? {
 
 ///|
 /// Parse a byte into a KeyPress event
-async fn parse_keypress() -> KeyPress? {
+pub async fn parse_keypress() -> KeyPress? {
   let buf = FixedArray::make(1, b'\x00')
   let n = @stdio.stdin.read(buf)
   if n == 0 {
@@ -950,7 +977,7 @@ async fn readline_simple(prompt : String, history : CommandHistory) -> String? {
 }
 
 ///|
-async fn ReadlineInterface::read_to_queue(
+pub async fn ReadlineInterface::read_to_queue(
   self : ReadlineInterface,
   queue : @async.Queue[String],
 ) -> Bool {

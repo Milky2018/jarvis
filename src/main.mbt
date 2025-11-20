@@ -1,6 +1,5 @@
 ///|
 suberror JarvisSignal {
-  InterruptByUser
   ActionFinished
   PlayModeEnded
 }
@@ -325,7 +324,7 @@ async fn chat_loop(config : Config) -> Unit {
 
         // Start readline task in background
         group.spawn_bg(fn() {
-          let rl = ReadlineInterface::with_history(100, command_history)
+          let rl = @readline.ReadlineInterface::with_history(100, command_history)
           while rl.read_to_queue(input_queue) {
 
           }
@@ -340,7 +339,7 @@ async fn chat_loop(config : Config) -> Unit {
       continue
     } catch {
       ExitRequested => break
-      InterruptByUser => {
+      @readline.InterruptByUser => {
         system_error("Interrupted by user")
         continue
       }
@@ -361,25 +360,18 @@ async fn execute_prompt(config : Config, prompt : String) -> Unit {
   let chat_history = ChatHistory::new()
 
   // Enable raw mode for Ctrl+C detection
-  set_raw_mode(@stdio.stdin.fd())
+  @readline.set_raw_mode(@stdio.stdin.fd())
 
   // Run with Ctrl+C handling
   @async.with_task_group(fn(group) {
     // Spawn background task to monitor Ctrl+C
-    group.spawn_bg(fn() {
-      for {
-        let keypress = parse_keypress()
-        if keypress is Some(CtrlC) {
-          raise InterruptByUser
-        }
-      }
-    })
+    group.spawn_bg(@readline.start_interrupt_monitor)
 
     // Execute the prompt
     handle_user_input(prompt, chat_history, config)
     raise ActionFinished
   }) catch {
-    InterruptByUser => system_error("Interrupted by user")
+    @readline.InterruptByUser => system_error("Interrupted by user")
     ActionFinished => ()
     e => system_error("Fatal: \{e}")
   }
@@ -416,25 +408,18 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
   newline_async()
 
   // Enable raw mode for Ctrl+C detection
-  set_raw_mode(@stdio.stdin.fd())
+  @readline.set_raw_mode(@stdio.stdin.fd())
 
   // Run with Ctrl+C handling
   @async.with_task_group(fn(group) {
     // Spawn background task to monitor Ctrl+C
-    group.spawn_bg(fn() {
-      for {
-        let keypress = parse_keypress()
-        if keypress is Some(CtrlC) {
-          raise InterruptByUser
-        }
-      }
-    })
+    group.spawn_bg(@readline.start_interrupt_monitor)
 
     // Execute the prompt
     handle_user_input(prompt, chat_history, config)
     raise ActionFinished
   }) catch {
-    InterruptByUser => system_error("Interrupted by user")
+    @readline.InterruptByUser => system_error("Interrupted by user")
     ActionFinished => ()
     e => system_error("Fatal: \{e}")
   }

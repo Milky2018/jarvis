@@ -1,0 +1,9 @@
+{
+  "import": [
+    "moonbitlang/async",
+    "moonbitlang/async/stdio",
+    "moonbitlang/async/io",
+    "moonbitlang/async/aqueue"
+  ],
+  "native-stub": ["tty.c"]
+}

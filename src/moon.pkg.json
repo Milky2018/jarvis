@@ -9,7 +9,7 @@
     "moonbitlang/async/aqueue",
     "moonbitlang/x/sys",
     "TheWaWaR/clap",
-    "Milky2018/jarvis/http"
-  ],
-  "native-stub": ["tty.c"]
+    "Milky2018/jarvis/http",
+    "Milky2018/jarvis/readline"
+  ]
 }
