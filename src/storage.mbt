@@ -55,6 +55,7 @@ fn get_conversation_file_path(number : Int) -> String {
 async fn create_new_conversation_file(
   initial_messages : Array[Message],
   model : String,
+  last_context_tokens : Int,
 ) -> Int {
   ensure_jarvis_dir()
   let next_number = get_latest_conversation_number() + 1
@@ -64,6 +65,7 @@ async fn create_new_conversation_file(
   let json_obj : Json = {
     "messages": initial_messages.to_json(),
     "model": model,
+    "last_context_tokens": last_context_tokens,
   }
   let json_str = json_obj.stringify()
   @fs.write_file(path, json_str, create=0o644) catch {

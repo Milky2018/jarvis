@@ -148,27 +148,31 @@ async fn send_chat_request_non_streaming(
   system_debug("====================================")
 
   // Send POST request with proxy support
-  let (response, body_data) = post_with_proxy("https://\{host}\{path}", json_body, headers={
-    "Authorization": "Bearer \{config.auth_token()}",
-    "x-api-key": config.auth_token(),
-    "anthropic-version": "2023-06-01",
-    "anthropic-dangerous-direct-browser-access": "true",
-    "Accept": "application/json",
-    "x-app": "cli",
-    "User-Agent": "jarvis/1.0.0",
-    "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-    "accept-language": "*",
-    "sec-fetch-mode": "cors",
-    "Content-Type": "application/json",
-    "X-Stainless-Retry-Count": "0",
-    "X-Stainless-Timeout": "600",
-    "X-Stainless-Lang": "js",
-    "X-Stainless-Package-Version": "0.60.0",
-    "X-Stainless-OS": "MacOS",
-    "X-Stainless-Arch": "arm64",
-    "X-Stainless-Runtime": "node",
-    "X-Stainless-Runtime-Version": "v24.8.0",
-  })
+  let (response, body_data) = post_with_proxy(
+    "https://\{host}\{path}",
+    json_body,
+    headers={
+      "Authorization": "Bearer \{config.auth_token()}",
+      "x-api-key": config.auth_token(),
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+      "Accept": "application/json",
+      "x-app": "cli",
+      "User-Agent": "jarvis/1.0.0",
+      "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+      "accept-language": "*",
+      "sec-fetch-mode": "cors",
+      "Content-Type": "application/json",
+      "X-Stainless-Retry-Count": "0",
+      "X-Stainless-Timeout": "600",
+      "X-Stainless-Lang": "js",
+      "X-Stainless-Package-Version": "0.60.0",
+      "X-Stainless-OS": "MacOS",
+      "X-Stainless-Arch": "arm64",
+      "X-Stainless-Runtime": "node",
+      "X-Stainless-Runtime-Version": "v24.8.0",
+    },
+  )
 
   // Debug: print response status
   system_debug("=== HTTP RESPONSE (NON-STREAMING) ===")
@@ -339,18 +343,22 @@ async fn create_http_client(host : String, config : Config) -> @http.Client {
   let proxy = get_proxy_config()
   match proxy {
     Some(p) =>
-      @http.Client::connect(host, headers={
-        "Authorization": "Bearer \{config.auth_token()}",
-        "x-api-key": config.auth_token(),
-        "anthropic-version": "2023-06-01",
-        "anthropic-dangerous-direct-browser-access": "true",
-        "Accept": "application/json",
-        "x-app": "cli",
-        "User-Agent": "jarvis/1.0.0",
-        "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-        "accept-language": "*",
-        "sec-fetch-mode": "cors",
-      }, proxy=p)
+      @http.Client::connect(
+        host,
+        headers={
+          "Authorization": "Bearer \{config.auth_token()}",
+          "x-api-key": config.auth_token(),
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+          "Accept": "application/json",
+          "x-app": "cli",
+          "User-Agent": "jarvis/1.0.0",
+          "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+          "accept-language": "*",
+          "sec-fetch-mode": "cors",
+        },
+        proxy=p,
+      )
     None =>
       @http.Client::connect(host, headers={
         "Authorization": "Bearer \{config.auth_token()}",
@@ -638,84 +646,6 @@ async fn process_sse_line(
 }
 
 ///|
-/// Count tokens for current conversation context
-async fn count_context_tokens(
-  config : Config,
-  messages : Array[Message],
-  model : String,
-) -> Int {
-  // Parse URL
-  let url = config.base_url()
-  let (host, base_path) = parse_url(url)
-  let path = base_path + "/v1/messages/count_tokens"
-
-  // Build system content blocks array (same as in build_request_body)
-  let system_blocks : Array[Json] = [{ "type": "text", "text": SYSTEM_PROMPT }]
-  let non_system_messages : Array[Message] = []
-  for msg in messages {
-    if msg.role == "system" {
-      let text = msg.get_text()
-      if !text.is_empty() {
-        system_blocks.push({ "type": "text", "text": text })
-      }
-    } else {
-      non_system_messages.push(msg)
-    }
-  }
-
-  // Build request body
-  let request_body : Json = {
-    "model": model,
-    "system": system_blocks.to_json(),
-    "messages": non_system_messages.to_json(),
-  }
-  let json_body = request_body.stringify()
-
-  // Send POST request with proxy support
-  let (response, body_data) = post_with_proxy("https://\{host}\{path}", json_body, headers={
-    "Authorization": "Bearer \{config.auth_token()}",
-    "x-api-key": config.auth_token(),
-    "anthropic-version": "2023-06-01",
-    "Content-Type": "application/json",
-  }) catch {
-    e => {
-      system_error("Failed to count tokens: \{e}")
-      return 0 // Return 0 on failure, will fallback to estimate
-    }
-  }
-
-  if response.code != 200 {
-    let error_text = body_data.text() catch { _ => "[Failed to read error body]" }
-    system_error("Count tokens API returned status \{response.code}: \{error_text}")
-    return 0
-  }
-
-  // Parse JSON response
-  let json_obj = body_data.json() catch {
-    e => {
-      system_error("Failed to parse count_tokens response: \{e}")
-      return 0
-    }
-  }
-
-  // Extract input_tokens from response
-  match json_obj {
-    Object(map) =>
-      match map.get("input_tokens") {
-        Some(Number(n, ..)) => n.to_int()
-        _ => {
-          system_error("Count tokens response missing input_tokens field")
-          0
-        }
-      }
-    _ => {
-      system_error("Count tokens response is not a JSON object")
-      0
-    }
-  }
-}
-
-///|
 /// Send streaming chat request (outputs content in real-time)
 async fn send_streaming_chat_request(
   config : Config,
@@ -769,6 +699,7 @@ async fn send_streaming_chat_request(
   let content_blocks : Array[ContentBlock] = []
   let mut current_text_builder : StringBuilder? = None
   let mut current_tool_use : (String, String, StringBuilder)? = None // (id, name, json_builder)
+  let mut current_server_tool : (String, StringBuilder)? = None // (name, json_builder) for server tools like web_search
   let mut finish_reason = ""
   let mut total_chunks = 0
   let mut input_tokens_count = 0
@@ -817,6 +748,15 @@ async fn send_streaming_chat_request(
                 current_tool_use = Some((id, name, StringBuilder::new()))
               _ => ()
             }
+          } else if block_start.type_ == "server_tool_use" {
+            match block_start.name {
+              Some(name) => {
+                // Immediately log server tool usage (query will be shown later if needed)
+                tool_log(name, "")
+                current_server_tool = Some((name, StringBuilder::new()))
+              }
+              None => ()
+            }
           }
         None => ()
       }
@@ -839,11 +779,16 @@ async fn send_streaming_chat_request(
 
       // Handle input_json delta
       match result.input_json_delta {
-        Some(json) =>
+        Some(json) => {
           match current_tool_use {
             Some((_id, _name, builder)) => builder.write_string(json)
             None => ()
           }
+          match current_server_tool {
+            Some((_name, builder)) => builder.write_string(json)
+            None => ()
+          }
+        }
         None => ()
       }
 
@@ -880,7 +825,9 @@ async fn send_streaming_chat_request(
               let json_str = builder.to_string()
               let input_json = @json.parse(json_str) catch {
                 e => {
-                  system_error("Failed to parse tool_use input JSON: \{e}\nJSON: \{json_str}")
+                  system_error(
+                    "Failed to parse tool_use input JSON: \{e}\nJSON: \{json_str}",
+                  )
                   {}
                 }
               }
@@ -895,11 +842,14 @@ async fn send_streaming_chat_request(
             }
             None => ()
           }
+          // Clear server tool tracking (already logged at block start)
+          current_server_tool = None
         }
         None => ()
       }
     }
   }
+  newline_async()
 
   // Debug: streaming summary
   system_debug("=== STREAMING END ===")

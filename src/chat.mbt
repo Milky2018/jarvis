@@ -40,6 +40,7 @@ async fn ChatHistory::save(self : ChatHistory, filename : String) -> Unit {
   let json_obj : Json = {
     "messages": self.messages.to_json(),
     "model": self.current_model,
+    "last_context_tokens": self.last_context_tokens,
   }
   let json_str = json_obj.stringify()
 
@@ -84,6 +85,7 @@ async fn ChatHistory::create_new_file_after_summary(self : ChatHistory) -> Unit 
   let next_number = create_new_conversation_file(
     self.messages,
     self.current_model,
+    self.last_context_tokens,
   )
   self.current_file_number = next_number
   let num_str = format_conv_number(next_number)
@@ -118,6 +120,10 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         Some(String(s)) => s
         _ => default_model()
       }
+      let last_context_tokens = match map.get("last_context_tokens") {
+        Some(Number(n, ..)) => n.to_int()
+        _ => 0 // Old files may not have this field
+      }
       Some({
         messages,
         max_context_tokens: MAX_CONTEXT_TOKENS,
@@ -125,7 +131,7 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
         petite_model: default_petite_model(),
         usage_stats: UsageStats::new(),
         current_file_number: 0, // Will be set by caller
-        last_context_tokens: 0, // Will be updated after first API call
+        last_context_tokens,
       })
     }
     _ => None
@@ -133,75 +139,10 @@ async fn ChatHistory::load(filename : String) -> ChatHistory? {
 }
 
 ///|
-/// Estimate token count for a message (rough approximation: 1 token ≈ 4 chars)
-fn estimate_tokens(message : Message) -> Int {
-  guard message.content is Some(content) else { return 10 }
-  content.length() / 4 + 10
-}
-
-///|
-/// Estimate total tokens for a message array
-fn estimate_total_tokens(messages : Array[Message]) -> Int {
-  let mut total = 0
-  for msg in messages {
-    total = total + estimate_tokens(msg)
-  }
-  total
-}
-
-///|
-test "estimate_total_tokens: empty array" {
-  let messages : Array[Message] = []
-  let total = estimate_total_tokens(messages)
-  inspect(total, content="0")
-}
-
-///|
-test "estimate_total_tokens: single message" {
-  // "Hello, world!" has 13 chars
-  // estimate_tokens = 13 / 4 + 10 = 3 + 10 = 13
-  let messages : Array[Message] = [Message::new("user", "Hello, world!")]
-  let total = estimate_total_tokens(messages)
-  inspect(total, content="13")
-}
-
-///|
-test "estimate_total_tokens: multiple messages" {
-  // Message 1: "Hi" (2 chars) -> 2/4 + 10 = 0 + 10 = 10
-  // Message 2: "How are you?" (12 chars) -> 12/4 + 10 = 3 + 10 = 13
-  // Message 3: "I am fine, thank you!" (21 chars) -> 21/4 + 10 = 5 + 10 = 15
-  // Total: 10 + 13 + 15 = 38
-  let messages : Array[Message] = [
-    Message::new("user", "Hi"),
-    Message::new("assistant", "How are you?"),
-    Message::new("user", "I am fine, thank you!"),
-  ]
-  let total = estimate_total_tokens(messages)
-  inspect(total, content="38")
-}
-
-///|
-test "estimate_total_tokens: large message" {
-  // 400 character message
-  // 400 / 4 + 10 = 100 + 10 = 110
-  let long_text = "a".repeat(400)
-  let messages : Array[Message] = [Message::new("user", long_text)]
-  let total = estimate_total_tokens(messages)
-  inspect(total, content="110")
-}
-
-///|
 /// Print token usage status with color coding
 async fn ChatHistory::print_token_usage(self : ChatHistory) -> Unit {
-  // Use accurate token count from last API call, fallback to estimate if not available
-  let total = if self.last_context_tokens > 0 {
-    self.last_context_tokens
-  } else {
-    // Estimate includes messages + SYSTEM_PROMPT
-    let messages_tokens = estimate_total_tokens(self.messages)
-    let system_prompt_tokens = SYSTEM_PROMPT.length() / 4 + 10
-    messages_tokens + system_prompt_tokens
-  }
+  // Use accurate token count from last API call (persisted in conversation file)
+  let total = self.last_context_tokens
   let percent = total * 100 / self.max_context_tokens
 
   // Color code based on usage
@@ -275,16 +216,9 @@ async fn ChatHistory::manage_history(
   self : ChatHistory,
   config : Config,
 ) -> Bool {
-  // Use accurate token count from last API call, fallback to estimate
+  // Use accurate token count from last API call (persisted in conversation file)
   // Note: Add buffer for newly added user message (not yet counted by API)
-  let total_tokens = if self.last_context_tokens > 0 {
-    self.last_context_tokens + 100 // rough buffer for new user input
-  } else {
-    // Fallback: estimate including SYSTEM_PROMPT
-    let messages_tokens = estimate_total_tokens(self.messages)
-    let system_prompt_tokens = SYSTEM_PROMPT.length() / 4 + 10
-    messages_tokens + system_prompt_tokens
-  }
+  let total_tokens = self.last_context_tokens + 100 // rough buffer for new user input
   let max_tokens = self.max_context_tokens
 
   // If under threshold, no need to manage

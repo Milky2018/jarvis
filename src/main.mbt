@@ -299,6 +299,7 @@ async fn chat_loop(config : Config) -> Unit {
       let file_num = create_new_conversation_file(
         history.messages,
         history.current_model,
+        history.last_context_tokens,
       )
       history.current_file_number = file_num
       system_info("Created new conversation: conv_001.json")
@@ -311,18 +312,6 @@ async fn chat_loop(config : Config) -> Unit {
       #|(Type 'exit' or 'quit' to end the conversation)
     ),
   )
-
-  // Get accurate token count for loaded conversation
-  if chat_history.messages.length() > 0 {
-    let token_count = count_context_tokens(
-      config,
-      chat_history.messages,
-      chat_history.current_model,
-    )
-    if token_count > 0 {
-      chat_history.last_context_tokens = token_count
-    }
-  }
 
   // Load user input history from file (at the beginning of chat_loop)
   let command_history = load_user_input_history()
@@ -416,6 +405,7 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
       let file_num = create_new_conversation_file(
         history.messages,
         history.current_model,
+        history.last_context_tokens,
       )
       history.current_file_number = file_num
       system_info("Created new conversation: conv_001.json")
