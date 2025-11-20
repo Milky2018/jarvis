@@ -442,6 +442,9 @@ async fn consult_prompt(config : Config, prompt : String) -> Unit {
 
 ///|
 async fn main {
+  // Initialize proxy configuration from environment variables
+  init_proxy_config()
+
   // Parse command line arguments using clap
   let parser = @clap.Parser::new(
     prog="jarvis",

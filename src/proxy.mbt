@@ -3,6 +3,39 @@
 /// Provides simple HTTP proxy support
 
 ///|
+/// Global proxy configuration (initialized once at startup)
+let proxy_config : Ref[@http.Proxy?] = { val: None }
+
+///|
+/// Initialize proxy configuration from environment variables
+pub fn init_proxy_config() -> Unit {
+  let env_vars = @sys.get_env_vars()
+  let http_proxy = (match env_vars.get("HTTP_PROXY") {
+    Some(v) => Some(v)
+    None => env_vars.get("http_proxy")
+  }).bind(parse_proxy_url)
+  let https_proxy = (match env_vars.get("HTTPS_PROXY") {
+    Some(v) => Some(v)
+    None => env_vars.get("https_proxy")
+  }).bind(parse_proxy_url)
+
+  // Build proxy configuration
+  proxy_config.val = match (http_proxy, https_proxy) {
+    (Some((h1, p1)), Some((h2, p2))) =>
+      Some(@http.Proxy::custom(h1, http_port=p1, h2, https_port=p2))
+    (Some((h, p)), None) => Some(@http.Proxy::http(h, port=p))
+    (None, Some((h, p))) => Some(@http.Proxy::https(h, port=p))
+    (None, None) => None
+  }
+}
+
+///|
+/// Get the global proxy configuration
+pub fn get_proxy_config() -> @http.Proxy? {
+  proxy_config.val
+}
+
+///|
 /// Parse proxy URL to get host and port
 /// Format: http://host:port or https://host:port
 fn parse_proxy_url(proxy_url : String) -> (String, Int)? {
@@ -39,29 +72,6 @@ fn parse_proxy_url(proxy_url : String) -> (String, Int)? {
 
   // No port specified, use default
   Some((url, 8080))
-}
-
-///|
-/// Get proxy configuration from environment variables
-fn get_proxy_config() -> @http.Proxy? {
-  let env_vars = @sys.get_env_vars()
-  let http_proxy = (match env_vars.get("HTTP_PROXY") {
-    Some(v) => Some(v)
-    None => env_vars.get("http_proxy")
-  }).bind(parse_proxy_url)
-  let https_proxy = (match env_vars.get("HTTPS_PROXY") {
-    Some(v) => Some(v)
-    None => env_vars.get("https_proxy")
-  }).bind(parse_proxy_url)
-
-  // Build proxy configuration
-  match (http_proxy, https_proxy) {
-    (Some((h1, p1)), Some((h2, p2))) =>
-      Some(@http.Proxy::custom(h1, http_port=p1, h2, https_port=p2))
-    (Some((h, p)), None) => Some(@http.Proxy::http(h, port=p))
-    (None, Some((h, p))) => Some(@http.Proxy::https(h, port=p))
-    (None, None) => None
-  }
 }
 
 ///|
