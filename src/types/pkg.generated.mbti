@@ -1,0 +1,171 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis/types"
+
+import(
+  "moonbitlang/core/hashmap"
+  "moonbitlang/core/json"
+)
+
+// Values
+const COLOR_BOLD : String = "\x1b[1m"
+
+const COLOR_CYAN : String = "\x1b[36m"
+
+const COLOR_GRAY : String = "\x1b[38;2;90;90;90m"
+
+const COLOR_GREEN : String = "\x1b[32m"
+
+const COLOR_RED : String = "\x1b[31m"
+
+const COLOR_RESET : String = "\x1b[0m"
+
+const DEFAULT_PLAY_BUDGET : Double = 10.0
+
+const MAX_CONTEXT_TOKENS : Int = 200000
+
+const MAX_PLAY_ITERATIONS : Int = 100
+
+const MAX_RESPONSE_TOKENS : Int = 32000
+
+const MAX_SUMMARY_TOKENS : Int = 40000
+
+const MAX_TOOL_ITERATIONS : Int = 200
+
+const SUMMARIZE_KEEP_RECENT : Int = 8
+
+const SUMMARIZE_THRESHOLD_PERCENT : Int = 80
+
+const SYSTEM_PROMPT : String = "You are Jarvis, an AI assistant for software development and system operations.\n\nBEHAVIOR: Be disciplined, skeptical, and correctness-driven. Verify assumptions before executing commands. Admit uncertainty rather than guessing.\n\nTOOLS: You have access to various tools for file operations, command execution, and information retrieval. Use them appropriately based on the task.\n\nBEST PRACTICES:\n- Investigate ideas with a durable playground directory `$HOME/.jarvis/playground`\n- Read files before editing them\n- Use edit_file for small changes, write_file for large ones\n- Verify paths and commands for safety\n- Call end_elaborate when task is fully complete\n\nTONE & STYLE:\n- No emojis unless the user asks.\n- Output is shown in a terminal; keep responses concise.\n- GitHub-flavored Markdown is allowed.\n- Only communicate via plain text output; use tools only to execute tasks.\n\nOBJECTIVITY:\n- Provide accurate, objective technical info.\n- Do not validate incorrect assumptions.\n- When uncertain, investigate rather than agree blindly.\n\nTASK MANAGEMENT:\n- Break down complex tasks into smaller todos.\n- Mark todos as completed immediately when done located at `$HOME/.jarvis/playground`.\n- Do not batch completions."
+
+fn available_models() -> Array[ModelInfo]
+
+let debug_mode : Ref[Bool]
+
+fn default_model() -> String
+
+fn default_petite_model() -> String
+
+fn get_model_info(String) -> ModelInfo?
+
+fn load_config() -> Config raise JarvisError
+
+// Errors
+pub(all) suberror JarvisError {
+  EnvVarNotSet(String)
+  HttpError(String)
+  StringViewError(String)
+  ExitRequested
+}
+impl Show for JarvisError
+
+pub(all) suberror JarvisSignal {
+  ActionFinished
+  PlayModeEnded
+}
+
+// Types and methods
+pub(all) struct ChatResponse {
+  id : String
+  type_ : String
+  role : String
+  content : Array[ContentBlock]
+  model : String
+  stop_reason : String?
+  usage : ResponseUsage?
+}
+fn ChatResponse::get_text_content(Self) -> String?
+fn ChatResponse::get_tool_uses(Self) -> Array[(String, String, Json)]
+impl ToJson for ChatResponse
+impl @json.FromJson for ChatResponse
+
+pub(all) struct Config {
+  base_url : String
+  auth_token : String
+}
+fn Config::auth_token(Self) -> String
+fn Config::base_url(Self) -> String
+fn Config::new(String, String) -> Self
+impl Show for Config
+
+pub(all) struct ContentBlock {
+  type_ : String
+  text : String?
+  id : String?
+  name : String?
+  input : Json?
+}
+impl ToJson for ContentBlock
+impl @json.FromJson for ContentBlock
+
+pub(all) struct ContentBlockItem {
+  type_ : String
+  text : String
+}
+impl ToJson for ContentBlockItem
+impl @json.FromJson for ContentBlockItem
+
+pub(all) struct FunctionCall {
+  name : String
+  arguments : String
+}
+impl ToJson for FunctionCall
+impl @json.FromJson for FunctionCall
+
+pub(all) struct Message {
+  role : String
+  content : Array[ContentBlockItem]?
+  tool_calls : Array[ToolCall]?
+  tool_call_id : String?
+  name : String?
+}
+fn Message::get_text(Self) -> String
+fn Message::new(String, String) -> Self
+impl ToJson for Message
+impl @json.FromJson for Message
+
+pub(all) struct ModelInfo {
+  id : String
+  name : String
+  description : String
+  input_price : Double
+  output_price : Double
+}
+
+pub(all) struct ResponseUsage {
+  input_tokens : Int
+  output_tokens : Int
+}
+impl ToJson for ResponseUsage
+impl @json.FromJson for ResponseUsage
+
+pub(all) struct Tool {
+  name : String
+  description : String
+  input_schema : Json
+  type_ : String?
+  max_uses : Int?
+}
+impl ToJson for Tool
+
+pub(all) struct ToolCall {
+  id : String
+  type_ : String
+  function : FunctionCall
+}
+impl ToJson for ToolCall
+impl @json.FromJson for ToolCall
+
+pub(all) struct UsageStats {
+  mut total_requests : Int
+  mut total_input_tokens : Int
+  mut total_output_tokens : Int
+  cost_by_model : @hashmap.HashMap[String, Double]
+}
+fn UsageStats::add_request(Self, Int, Int, Int, String) -> Unit
+fn UsageStats::new() -> Self
+fn UsageStats::total_cost(Self) -> Double
+
+// Type aliases
+
+// Traits
+

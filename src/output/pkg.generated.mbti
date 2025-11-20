@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis/output"
+
+// Values
+async fn jarvis_says(String) -> Unit
+
+async fn newline_async() -> Unit
+
+async fn print_jarvis_prefix() -> Unit
+
+async fn print_separator() -> Unit
+
+async fn println_async(String) -> Unit
+
+async fn system_debug(String) -> Unit
+
+async fn system_error(String) -> Unit
+
+async fn system_info(String) -> Unit
+
+async fn tool_log(String, String) -> Unit
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

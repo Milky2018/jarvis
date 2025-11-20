@@ -1,0 +1,68 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis/readline"
+
+import(
+  "moonbitlang/async/aqueue"
+)
+
+// Values
+async fn parse_keypress() -> KeyPress?
+
+async fn print_separator() -> Unit
+
+fn set_raw_mode(Int) -> Unit
+
+async fn start_interrupt_monitor() -> Unit
+
+fn window_size() -> Size
+
+// Errors
+pub suberror InterruptByUser
+
+// Types and methods
+type CommandHistory
+
+pub enum KeyPress {
+  Char(Char)
+  Enter
+  Backspace
+  Delete
+  CtrlC
+  CtrlD
+  CtrlU
+  CtrlW
+  CtrlA
+  CtrlE
+  Up
+  Down
+  Left
+  Right
+  Home
+  End
+  OptionLeft
+  OptionRight
+  OptionDelete
+  CmdLeft
+  CmdRight
+  CmdDelete
+  PasteStart
+  PasteEnd
+  Unknown
+}
+
+pub struct ReadlineInterface {
+  mut prompt : String
+  history : CommandHistory
+}
+async fn ReadlineInterface::read_to_queue(Self, @aqueue.Queue[String]) -> Bool
+fn ReadlineInterface::with_history(Int, Array[String]) -> Self
+
+pub struct Size {
+  row : Int
+  col : Int
+}
+
+// Type aliases
+
+// Traits
+

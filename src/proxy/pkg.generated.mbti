@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis/proxy"
+
+import(
+  "Milky2018/jarvis/http"
+  "moonbitlang/async/io"
+)
+
+// Values
+fn get_proxy_config() -> @http.Proxy?
+
+async fn get_with_proxy(String) -> (@http.Response, &@io.Data)
+
+fn init_proxy_config() -> Unit
+
+async fn post_with_proxy(String, String, headers? : Map[String, String]) -> (@http.Response, &@io.Data)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

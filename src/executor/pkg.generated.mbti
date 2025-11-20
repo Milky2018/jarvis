@@ -1,0 +1,25 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis/executor"
+
+import(
+  "Milky2018/jarvis/session"
+  "Milky2018/jarvis/types"
+)
+
+// Values
+async fn execute_tools_and_collect_results(Array[(String, String, Json)], @session.ChatHistory) -> (Array[Json], Bool)
+
+fn format_tool_results_as_text(Array[(String, String, Json)], Array[Json]) -> String
+
+async fn handle_tool_calls(@types.Config, @session.ChatHistory, Array[@types.Tool]) -> Unit
+
+async fn send_chat_request(@types.Config, @session.ChatHistory, Array[@types.Tool]) -> (@types.ChatResponse, Bool)
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

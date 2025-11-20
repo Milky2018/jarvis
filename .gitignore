@@ -2,5 +2,3 @@
 target/
 .mooncakes/
 .moonagent/
-debug-proxy
-*.mbti

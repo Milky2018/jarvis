@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis/api"
+
+import(
+  "Milky2018/jarvis/types"
+)
+
+// Values
+async fn send_chat_request_non_streaming(@types.Config, Array[@types.Message], Array[@types.Tool], String) -> @types.ChatResponse
+
+async fn send_streaming_chat_request(@types.Config, Array[@types.Message], Array[@types.Tool], String) -> @types.ChatResponse
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

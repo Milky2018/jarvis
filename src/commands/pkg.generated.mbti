@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "Milky2018/jarvis/commands"
+
+import(
+  "Milky2018/jarvis/session"
+  "Milky2018/jarvis/types"
+)
+
+// Values
+async fn handle_command(String, @session.ChatHistory, @types.Config) -> Bool
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
