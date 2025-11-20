@@ -1,4 +1,13 @@
 ///|
+/// Current block being built during streaming
+enum StreamingBlock {
+  NoBlock
+  TextBlock(StringBuilder)
+  ToolUseBlock(String, String, StringBuilder) // (id, name, json_builder)
+  ServerToolBlock(String, StringBuilder) // (name, json_builder)
+}
+
+///|
 /// Parse URL into host and path components.
 /// Returns (host, path) where path is empty string if no path is provided in URL.
 /// Examples:
@@ -697,9 +706,7 @@ async fn send_streaming_chat_request(
 
   // Read streaming response (SSE format)
   let content_blocks : Array[ContentBlock] = []
-  let mut current_text_builder : StringBuilder? = None
-  let mut current_tool_use : (String, String, StringBuilder)? = None // (id, name, json_builder)
-  let mut current_server_tool : (String, StringBuilder)? = None // (name, json_builder) for server tools like web_search
+  let mut current_block : StreamingBlock = NoBlock
   let mut finish_reason = ""
   let mut total_chunks = 0
   let mut input_tokens_count = 0
@@ -741,11 +748,11 @@ async fn send_streaming_chat_request(
       match result.block_start {
         Some(block_start) =>
           if block_start.type_ == "text" {
-            current_text_builder = Some(StringBuilder::new())
+            current_block = TextBlock(StringBuilder::new())
           } else if block_start.type_ == "tool_use" {
             match (block_start.id, block_start.name) {
               (Some(id), Some(name)) =>
-                current_tool_use = Some((id, name, StringBuilder::new()))
+                current_block = ToolUseBlock(id, name, StringBuilder::new())
               _ => ()
             }
           } else if block_start.type_ == "server_tool_use" {
@@ -753,7 +760,7 @@ async fn send_streaming_chat_request(
               Some(name) => {
                 // Immediately log server tool usage (query will be shown later if needed)
                 tool_log(name, "")
-                current_server_tool = Some((name, StringBuilder::new()))
+                current_block = ServerToolBlock(name, StringBuilder::new())
               }
               None => ()
             }
@@ -764,12 +771,13 @@ async fn send_streaming_chat_request(
       // Handle text delta
       match result.text_delta {
         Some(text) => {
-          match current_text_builder {
-            Some(builder) => builder.write_string(text)
-            None => {
+          match current_block {
+            TextBlock(builder) => builder.write_string(text)
+            _ => {
+              // Text delta without block start - create new text block
               let builder = StringBuilder::new()
               builder.write_string(text)
-              current_text_builder = Some(builder)
+              current_block = TextBlock(builder)
             }
           }
           total_chunks = total_chunks + 1
@@ -779,16 +787,12 @@ async fn send_streaming_chat_request(
 
       // Handle input_json delta
       match result.input_json_delta {
-        Some(json) => {
-          match current_tool_use {
-            Some((_id, _name, builder)) => builder.write_string(json)
-            None => ()
+        Some(json) =>
+          match current_block {
+            ToolUseBlock(_, _, builder) => builder.write_string(json)
+            ServerToolBlock(_, builder) => builder.write_string(json)
+            _ => ()
           }
-          match current_server_tool {
-            Some((_name, builder)) => builder.write_string(json)
-            None => ()
-          }
-        }
         None => ()
       }
 
@@ -806,9 +810,9 @@ async fn send_streaming_chat_request(
       match result.finish_reason {
         Some(reason) => {
           finish_reason = reason
-          // Finalize current blocks
-          match current_text_builder {
-            Some(builder) => {
+          // Finalize current block
+          match current_block {
+            TextBlock(builder) =>
               content_blocks.push({
                 type_: "text",
                 text: Some(builder.to_string()),
@@ -816,12 +820,7 @@ async fn send_streaming_chat_request(
                 name: None,
                 input: None,
               })
-              current_text_builder = None
-            }
-            None => ()
-          }
-          match current_tool_use {
-            Some((id, name, builder)) => {
+            ToolUseBlock(id, name, builder) => {
               let json_str = builder.to_string()
               let input_json = @json.parse(json_str) catch {
                 e => {
@@ -838,12 +837,11 @@ async fn send_streaming_chat_request(
                 name: Some(name),
                 input: Some(input_json),
               })
-              current_tool_use = None
             }
-            None => ()
+            ServerToolBlock(_, _) => () // Already logged at block start
+            NoBlock => ()
           }
-          // Clear server tool tracking (already logged at block start)
-          current_server_tool = None
+          current_block = NoBlock
         }
         None => ()
       }
