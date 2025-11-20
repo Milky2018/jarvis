@@ -4,7 +4,7 @@ enum StreamingBlock {
   NoBlock
   TextBlock(StringBuilder)
   ToolUseBlock(String, String, StringBuilder) // (id, name, json_builder)
-  ServerToolBlock(String, StringBuilder) // (name, json_builder)
+  ServerToolBlock(StringBuilder) // json_builder for server tools like web_search
 }
 
 ///|
@@ -779,7 +779,7 @@ async fn send_streaming_chat_request(
               Some(name) => {
                 // Immediately log server tool usage (query will be shown later if needed)
                 tool_log(name, "")
-                current_block = ServerToolBlock(name, StringBuilder::new())
+                current_block = ServerToolBlock(StringBuilder::new())
               }
               None => ()
             }
@@ -809,7 +809,7 @@ async fn send_streaming_chat_request(
         Some(json) =>
           match current_block {
             ToolUseBlock(_, _, builder) => builder.write_string(json)
-            ServerToolBlock(_, builder) => builder.write_string(json)
+            ServerToolBlock(builder) => builder.write_string(json)
             _ => ()
           }
         None => ()
@@ -844,7 +844,7 @@ async fn send_streaming_chat_request(
               input: Some(input_json),
             })
           }
-          ServerToolBlock(_, _) => () // Already logged at block start
+          ServerToolBlock(_) => () // Already logged at block start
           NoBlock => ()
         }
         current_block = NoBlock
@@ -892,7 +892,7 @@ async fn send_streaming_chat_request(
                 input: Some(input_json),
               })
             }
-            ServerToolBlock(_, _) => () // Already logged at block start
+            ServerToolBlock(_) => () // Already logged at block start
             NoBlock => ()
           }
           current_block = NoBlock
